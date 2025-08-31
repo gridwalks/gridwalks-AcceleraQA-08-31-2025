@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, BookOpen, Download, Clock, MessageSquare, Search, FileText, ExternalLink, ChevronRight } from 'lucide-react';
+import { Send, BookOpen, Download, Clock, MessageSquare, Search, FileText, ChevronRight } from 'lucide-react';
 
 // Mock ChatGPT integration (replace with actual OpenAI API)
 const mockChatGPTResponse = async (message) => {
