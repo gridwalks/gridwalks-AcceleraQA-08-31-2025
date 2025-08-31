@@ -299,7 +299,8 @@ Date: ${new Date().toLocaleString()}
       <div className="max-w-7xl mx-auto px-6 py-20">
         <div className="max-w-4xl">
           <h1 className="text-6xl lg:text-8xl font-bold mb-8 leading-tight">
-            AcceleraQA The Future of
+            AcceleraQA 
+            The Future of
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
               Pharmaceutical QA
             </span>
