@@ -1,53 +1,115 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, BookOpen, Download, Clock, MessageSquare, Search, FileText, ChevronRight } from 'lucide-react';
 
-// Mock ChatGPT integration (replace with actual OpenAI API)
-const mockChatGPTResponse = async (message) => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1500));
+// NEW - Real ChatGPT Integration
+const getChatGPTResponse = async (message) => {
+  const API_KEY = process.env.REACT_APP_OPENAI_API_KEY;
   
-  // Mock responses based on pharma topics
-  const responses = {
-    gmp: {
-      answer: "Good Manufacturing Practice (GMP) is a system for ensuring that products are consistently produced and controlled according to quality standards. It's designed to minimize risks involved in pharmaceutical production that cannot be eliminated through testing the final product alone.",
-      resources: [
-        { title: "FDA GMP Guidelines", type: "Regulation", url: "https://www.fda.gov/drugs/pharmaceutical-quality-resources/current-good-manufacturing-practice-cgmp-regulations" },
-        { title: "ICH Q7 Good Manufacturing Practice Guide", type: "Guideline", url: "https://database.ich.org/sites/default/files/Q7%20Guideline.pdf" },
-        { title: "GMP Training Course - Pharmaceutical Quality", type: "Training", url: "https://www.fda.gov/drugs/guidance-compliance-regulatory-information/pharmaceutical-cgmps" },
-        { title: "Common GMP Deficiencies and Prevention", type: "Article", url: "https://www.ispe.org/pharmaceutical-engineering/ispeak/common-gmp-deficiencies" }
-      ]
-    },
-    validation: {
-      answer: "Process validation is establishing documented evidence that provides a high degree of assurance that a specific process will consistently produce a product meeting its pre-determined specifications and quality characteristics.",
-      resources: [
-        { title: "FDA Process Validation Guidance", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/process-validation-general-principles-and-practices" },
-        { title: "ICH Q8-Q12 Implementation Strategy", type: "Guideline", url: "https://database.ich.org/sites/default/files/ICH_Q8-Q12_Guideline_Step4_2019_1119.pdf" },
-        { title: "Validation Master Plan Template", type: "Template", url: "https://www.ispe.org/pharmaceutical-engineering/validation-master-plan-template" },
-        { title: "Statistical Methods for Process Validation", type: "Article", url: "https://www.pharmtech.com/view/statistical-methods-process-validation" },
-        { title: "Continuous Process Verification Best Practices", type: "Whitepaper", url: "https://www.ispe.org/pharmaceutical-engineering/continuous-process-verification" }
-      ]
-    },
-    capa: {
-      answer: "Corrective and Preventive Actions (CAPA) is a systematic approach to investigation, corrective action, and preventive action in response to complaints, product non-conformances, and other quality issues.",
-      resources: [
-        { title: "FDA CAPA System Guidance", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/quality-systems-approach-pharmaceutical-cgmp-regulations" },
-        { title: "Root Cause Analysis in CAPA", type: "Training", url: "https://www.ispe.org/pharmaceutical-engineering/root-cause-analysis-capa" },
-        { title: "CAPA Effectiveness Assessment", type: "Article", url: "https://www.pharmtech.com/view/capa-effectiveness-assessment-best-practices" },
-        { title: "Digital CAPA Management Systems", type: "Technology", url: "https://www.mastercontrol.com/quality-management/capa-management/" },
-        { title: "Risk-Based CAPA Approach", type: "Methodology", url: "https://www.ispe.org/pharmaceutical-engineering/risk-based-capa" }
-      ]
-    },
-    default: {
-      answer: "Pharmaceutical quality and compliance encompasses several critical areas that ensure drug safety and efficacy. The foundation includes Good Manufacturing Practice (GMP) which governs how products are produced and controlled, process validation to demonstrate consistent manufacturing, and Corrective and Preventive Actions (CAPA) systems for addressing quality issues. Regulatory compliance involves adherence to FDA, EMA, and ICH guidelines, while quality risk management uses tools like FMEA and risk assessments to identify and mitigate potential issues throughout the product lifecycle.",
-      resources: [
-        { title: "FDA Quality System Regulation", type: "Regulation", url: "https://www.fda.gov/drugs/pharmaceutical-quality-resources/quality-system-regulation" },
-        { title: "ICH Quality Guidelines Overview", type: "Guideline", url: "https://www.ich.org/page/quality-guidelines" },
-        { title: "Pharmaceutical Quality Management", type: "Course", url: "https://www.ispe.org/education/pharmaceutical-quality-management" },
-        { title: "Industry Best Practices Repository", type: "Database", url: "https://www.parenteral.org/best-practices/" }
-      ]
-    }
-  };
+  if (!API_KEY) {
+    throw new Error('OpenAI API key not configured');
+  }
 
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4", // or "gpt-3.5-turbo" for lower cost
+        messages: [
+          {
+            role: "system",
+            content: `You are AcceleraQA, an AI assistant specialized in pharmaceutical quality and compliance. 
+            
+            Your expertise includes:
+            - Good Manufacturing Practice (GMP)
+            - Process Validation & Qualification
+            - Corrective and Preventive Actions (CAPA)
+            - Regulatory Compliance (FDA, EMA, ICH)
+            - Quality Risk Management
+            - Documentation & Records Management
+            
+            Always provide accurate, professional responses with relevant regulatory references when possible. 
+            Keep responses concise but comprehensive. Focus on practical implementation and current best practices.`
+          },
+          {
+            role: "user",
+            content: message
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices[0].message.content;
+
+    // Generate relevant resources based on the response content
+    const resources = generateResources(message, aiResponse);
+
+    return {
+      answer: aiResponse,
+      resources: resources
+    };
+
+  } catch (error) {
+    console.error('ChatGPT API Error:', error);
+    throw error;
+  }
+};
+
+// Smart resource generation based on topic detection
+const generateResources = (query, response) => {
+  const lowerQuery = query.toLowerCase();
+  const lowerResponse = response.toLowerCase();
+  
+  let resources = [];
+  
+  // GMP Resources
+  if (lowerQuery.includes('gmp') || lowerResponse.includes('manufacturing') || lowerResponse.includes('gmp')) {
+    resources.push(
+      { title: "FDA GMP Guidelines", type: "Regulation", url: "https://www.fda.gov/drugs/pharmaceutical-quality-resources/current-good-manufacturing-practice-cgmp-regulations" },
+      { title: "ICH Q7 Good Manufacturing Practice Guide", type: "Guideline", url: "https://database.ich.org/sites/default/files/Q7%20Guideline.pdf" },
+      { title: "GMP Training Course - Pharmaceutical Quality", type: "Training", url: "https://www.fda.gov/drugs/guidance-compliance-regulatory-information/pharmaceutical-cgmps" }
+    );
+  }
+  
+  // Validation Resources
+  if (lowerQuery.includes('validation') || lowerQuery.includes('qualify') || lowerResponse.includes('validation')) {
+    resources.push(
+      { title: "FDA Process Validation Guidance", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/process-validation-general-principles-and-practices" },
+      { title: "ICH Q8-Q12 Implementation Strategy", type: "Guideline", url: "https://database.ich.org/sites/default/files/ICH_Q8-Q12_Guideline_Step4_2019_1119.pdf" },
+      { title: "Validation Master Plan Template", type: "Template", url: "https://www.ispe.org/pharmaceutical-engineering/validation-master-plan-template" }
+    );
+  }
+  
+  // CAPA Resources
+  if (lowerQuery.includes('capa') || lowerQuery.includes('corrective') || lowerResponse.includes('capa')) {
+    resources.push(
+      { title: "FDA CAPA System Guidance", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/quality-systems-approach-pharmaceutical-cgmp-regulations" },
+      { title: "Root Cause Analysis in CAPA", type: "Training", url: "https://www.ispe.org/pharmaceutical-engineering/root-cause-analysis-capa" },
+      { title: "CAPA Effectiveness Assessment", type: "Article", url: "https://www.pharmtech.com/view/capa-effectiveness-assessment-best-practices" }
+    );
+  }
+  
+  // Default pharmaceutical resources
+  if (resources.length === 0) {
+    resources.push(
+      { title: "FDA Quality System Regulation", type: "Regulation", url: "https://www.fda.gov/drugs/pharmaceutical-quality-resources/quality-system-regulation" },
+      { title: "ICH Quality Guidelines Overview", type: "Guideline", url: "https://www.ich.org/page/quality-guidelines" },
+      { title: "Pharmaceutical Quality Management", type: "Course", url: "https://www.ispe.org/education/pharmaceutical-quality-management" }
+    );
+  }
+  
+  return resources.slice(0, 6); // Limit to 6 resources max
+};
   // Simple keyword matching for demo
   const lowerMessage = message.toLowerCase();
   let response = responses.default;
@@ -115,7 +177,7 @@ const AcceleraQA = () => {
     setIsLoading(true);
 
     try {
-      const response = await mockChatGPTResponse(inputMessage);
+      const response = await getChatGPTResponse(inputMessage);
       
       const aiMessage = {
         id: Date.now() + 1,
