@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Recovery - AcceleraQA</title>
+    <style>
+        /* Reset styles for email clients */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .tagline {
+            font-size: 14px;
+            color: #9ca3af;
+            font-weight: 400;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .greeting {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 20px;
+        }
+        
+        .message {
+            font-size: 16px;
+            color: #4b5563;
+            margin-bottom: 30px;
+            line-height: 1.7;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+            text-decoration: none;
+            padding: 16px 32px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            margin: 20px 0 30px 0;
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+            transition: all 0.2s ease;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        }
+        
+        .security-note {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 6px;
+        }
+        
+        .security-note h3 {
+            color: #92400e;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .security-note p {
+            color: #78350f;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .expiry-info {
+            background-color: #f3f4f6;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .expiry-info p {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .expiry-time {
+            color: #dc2626;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .help-section {
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .help-section h3 {
+            color: #1f2937;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        
+        .help-section p {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .footer {
+            background-color: #1f2937;
+            color: #9ca3af;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .footer p {
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .footer .company {
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        
+        /* Mobile responsive */
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                margin: 0;
+                border-radius: 0;
+            }
+            
+            .header, .content, .footer {
+                padding: 30px 20px;
+            }
+            
+            .logo {
+                font-size: 28px;
+            }
+            
+            .greeting {
+                font-size: 18px;
+            }
+            
+            .message {
+                font-size: 15px;
+            }
+            
+            .cta-button {
+                display: block;
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">AcceleraQA</div>
+            <div class="tagline">Pharmaceutical Quality & Compliance AI</div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="content">
+            <div class="greeting">Password Reset Request</div>
+            
+            <p class="message">
+                Hello,<br><br>
+                We received a request to reset your password for your AcceleraQA account. 
+                If you made this request, click the button below to create a new password.
+            </p>
+            
+            <!-- CTA Button -->
+            <a href="{{ .ConfirmationURL }}" class="cta-button">
+                Reset My Password
+            </a>
+            
+            <!-- Expiry Information -->
+            <div class="expiry-info">
+                <p>This password reset link will expire in:</p>
+                <div class="expiry-time">24 hours</div>
+            </div>
+            
+            <!-- Security Note -->
+            <div class="security-note">
+                <h3>🔐 Security Notice</h3>
+                <p><strong>If you didn't request this password reset:</strong></p>
+                <p>• You can safely ignore this email</p>
+                <p>• Your password will remain unchanged</p>
+                <p>• Consider securing your account if you suspect unauthorized access</p>
+            </div>
+            
+            <!-- Alternative Link -->
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+                If the button above doesn't work, copy and paste this link into your browser:<br>
+                <span style="word-break: break-all; color: #3b82f6;">{{ .ConfirmationURL }}</span>
+            </p>
+            
+            <!-- Help Section -->
+            <div class="help-section">
+                <h3>Need Help?</h3>
+                <p>
+                    If you're having trouble with your AcceleraQA account or didn't request this 
+                    password reset, please contact our support team. We're here to help ensure 
+                    your pharmaceutical quality and compliance workflows remain secure and efficient.
+                </p>
+                <p style="margin-top: 15px;">
+                    <strong>Support:</strong> Reach out through your AcceleraQA dashboard or 
+                    contact your system administrator.
+                </p>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <div class="company">AcceleraQA</div>
+            <p>AI-powered learning assistant for pharmaceutical quality and compliance professionals</p>
+            <p style="margin-top: 15px; font-size: 12px;">
+                This email was sent to {{ .Email }} because you requested a password reset.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
