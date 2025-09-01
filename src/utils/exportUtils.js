@@ -15,14 +15,15 @@ function getRecentMessages(messages) {
 }
 
 /**
- * Sanitizes text for CSV export by escaping commas and newlines
+ * Sanitizes text for CSV export by escaping commas, newlines and quotes
  * @param {string} text - Text to sanitize
  * @returns {string} - Sanitized text
  */
 function sanitizeForCSV(text) {
-  if (!text) return '';
-  
-  return text
+  if (text === undefined || text === null) return '';
+
+  return String(text)
+    .replace(/"/g, '""')
     .replace(/,/g, ';')
     .replace(/\n/g, ' ')
     .replace(/\r/g, ' ')
@@ -90,14 +91,14 @@ export function exportNotebook(messages) {
     const rows = recentMessages.map(msg => [
       msg.timestamp || '',
       msg.type || '',
-      sanitizeForCSV(msg.content),
+      msg.content || '',
       formatResourcesForExport(msg.resources),
       msg.isStudyNotes ? 'Yes' : 'No'
     ]);
 
-    // Combine headers and rows
+    // Combine headers and rows, escaping each cell and wrapping in quotes
     const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .map(row => row.map(cell => `"${sanitizeForCSV(cell)}"`).join(','))
       .join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
