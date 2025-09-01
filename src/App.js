@@ -6,6 +6,7 @@ let netlifyIdentity = null;
 if (typeof window !== 'undefined' && window.netlifyIdentity) {
   netlifyIdentity = window.netlifyIdentity;
 }
+// ChatGPT Intgreation
 
 // Mock ChatGPT integration (replace with actual OpenAI API)
 const mockChatGPTResponse = async (message) => {
@@ -67,7 +68,9 @@ const mockChatGPTResponse = async (message) => {
   }
 
   return response;
-};
+}; 
+
+// End Chat GPT Integration
 
 const AcceleraQA = () => {
   const [messages, setMessages] = useState([]);
