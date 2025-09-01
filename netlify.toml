@@ -5,16 +5,11 @@
 [build.environment]
   NODE_VERSION = "18"
   NPM_VERSION = "8"
+  CI = "false"
 
 # Redirect rules for SPA routing
 [[redirects]]
   from = "/*"
-  to = "/index.html"
-  status = 200
-
-# Auth0 callback handling
-[[redirects]]
-  from = "/callback"
   to = "/index.html"
   status = 200
 
@@ -26,11 +21,12 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.auth0.com https://openai.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.openai.com https://*.auth0.com;"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://*.auth0.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.openai.com https://*.auth0.com; font-src 'self';"
 
 # Environment variable handling for different deploy contexts
 [context.production.environment]
   NODE_ENV = "production"
+  GENERATE_SOURCEMAP = "false"
 
 [context.deploy-preview.environment]
   NODE_ENV = "development"
