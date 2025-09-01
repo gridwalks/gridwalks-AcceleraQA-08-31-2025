@@ -6,35 +6,9 @@
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="AI learning assistant for pharmaceutical quality and compliance professionals" />
     <title>AcceleraQA - Pharmaceutical Quality & Compliance AI</title>
-    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-<!-- Replace the script section in your public/index.html -->
-<script>
-  if (window.netlifyIdentity) {
-    window.netlifyIdentity.on("init", user => {
-      if (!user) {
-        // Check for password recovery tokens in URL
-        const hash = window.location.hash;
-        if (hash && (hash.includes('recovery_token') || hash.includes('invite_token') || hash.includes('confirmation_token'))) {
-          // Auto-open the identity modal for password reset
-          window.netlifyIdentity.open();
-        } else {
-          // Normal login redirect
-          window.netlifyIdentity.on("login", () => {
-            document.location.href = "/";
-          });
-        }
-      }
-    });
-    
-    // Handle successful password recovery
-    window.netlifyIdentity.on("recovery", () => {
-      console.log("Password recovery successful");
-    });
-  }
-</script>
   </body>
 </html>
