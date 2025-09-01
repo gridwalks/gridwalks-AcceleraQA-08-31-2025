@@ -36,17 +36,17 @@ const AuthScreen = () => {
           </p>
 
           <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-8 rounded-lg mb-16">
-            <h2 className="text-2xl font-bold mb-4">Sign In Required</h2>
+            <h2 className="text-2xl font-bold mb-4">Secure Auth0 Authentication</h2>
             <p className="text-lg text-blue-100 mb-6">
-              Access AcceleraQA's advanced pharmaceutical AI assistant with personalized learning resources, 
-              conversation history, and study note generation.
+              Access AcceleraQA's advanced pharmaceutical AI assistant with enterprise-grade security through Auth0. 
+              Get personalized learning resources, conversation history, and study note generation.
             </p>
             <button
               onClick={handleLogin}
               className="group inline-flex items-center space-x-3 bg-white text-black px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-all duration-300"
             >
               <User className="h-5 w-5" />
-              <span>Sign In to Continue</span>
+              <span>Sign In with Auth0</span>
               <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
