@@ -1,61 +1,181 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, BookOpen, Download, Clock, MessageSquare, Search, FileText, ChevronRight, LogOut, User } from 'lucide-react';
-
-//import React, { useState, useEffect, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-//import { Send, BookOpen, Download, Clock, MessageSquare, Search, FileText, ExternalLink, ChevronRight, LogOut, User } from 'lucide-react';
 
-// Mock ChatGPT responses
-const mockChatGPTResponse = async (message) => {
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  
-  const responses = {
-    gmp: {
-      answer: "Good Manufacturing Practice (GMP) is a system for ensuring that products are consistently produced and controlled according to quality standards. It's designed to minimize risks involved in pharmaceutical production that cannot be eliminated through testing the final product alone.",
-      resources: [
-        { title: "FDA GMP Guidelines", type: "Regulation", url: "https://www.fda.gov/drugs/pharmaceutical-quality-resources/current-good-manufacturing-practice-cgmp-regulations" },
-        { title: "ICH Q7 Good Manufacturing Practice Guide", type: "Guideline", url: "https://database.ich.org/sites/default/files/Q7%20Guideline.pdf" }
-      ]
-    },
-    validation: {
-      answer: "Process validation is establishing documented evidence that provides a high degree of assurance that a specific process will consistently produce a product meeting its pre-determined specifications and quality characteristics.",
-      resources: [
-        { title: "FDA Process Validation Guidance", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/process-validation-general-principles-and-practices" },
-        { title: "ICH Q8-Q12 Implementation Strategy", type: "Guideline", url: "https://database.ich.org/sites/default/files/ICH_Q8-Q12_Guideline_Step4_2019_1119.pdf" }
-      ]
-    },
-    capa: {
-      answer: "Corrective and Preventive Actions (CAPA) is a systematic approach to investigation, corrective action, and preventive action in response to complaints, product non-conformances, and other quality issues.",
-      resources: [
-        { title: "FDA CAPA System Guidance", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/quality-systems-approach-pharmaceutical-cgmp-regulations" },
-        { title: "Root Cause Analysis in CAPA", type: "Training", url: "https://www.ispe.org/pharmaceutical-engineering/root-cause-analysis-capa" }
-      ]
-    },
-    default: {
-      answer: "I can help you with pharmaceutical quality and compliance topics including GMP, validation, CAPA, regulatory requirements, and quality risk management.",
-      resources: [
-        { title: "FDA Quality System Regulation", type: "Regulation", url: "https://www.fda.gov/drugs/pharmaceutical-quality-resources/quality-system-regulation" },
-        { title: "ICH Quality Guidelines Overview", type: "Guideline", url: "https://www.ich.org/page/quality-guidelines" }
-      ]
-    }
-  };
+// Initialize Netlify Identity
+let netlifyIdentity = null;
+if (typeof window !== 'undefined' && window.netlifyIdentity) {
+  netlifyIdentity = window.netlifyIdentity;
+}
 
-  const lowerMessage = message.toLowerCase();
-  let response = responses.default;
+// Real ChatGPT integration
+const getChatGPTResponse = async (message) => {
+  const API_KEY = process.env.REACT_APP_OPENAI_API_KEY;
   
-  if (lowerMessage.includes('gmp') || lowerMessage.includes('manufacturing')) {
-    response = responses.gmp;
-  } else if (lowerMessage.includes('validation') || lowerMessage.includes('qualify')) {
-    response = responses.validation;
-  } else if (lowerMessage.includes('capa') || lowerMessage.includes('corrective')) {
-    response = responses.capa;
+  if (!API_KEY) {
+    throw new Error('OpenAI API key not configured. Please add REACT_APP_OPENAI_API_KEY to your environment variables.');
   }
 
-  return response;
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4", // or "gpt-3.5-turbo" for lower cost
+        messages: [
+          {
+            role: "system",
+            content: `You are AcceleraQA, an AI assistant specialized in pharmaceutical quality and compliance. 
+
+Your expertise includes:
+- Good Manufacturing Practice (GMP) and cGMP regulations
+- Process Validation & Qualification (PQ, IQ, OQ)
+- Corrective and Preventive Actions (CAPA) systems
+- Regulatory Compliance (FDA, EMA, ICH guidelines)
+- Quality Risk Management (ICH Q9, QRM principles)
+- Documentation & Records Management (batch records, SOPs)
+- Pharmaceutical Quality Systems (ICH Q10)
+- Change Control and Configuration Management
+- Supplier Quality Management
+- Validation of computerized systems (CSV)
+- Cleaning validation and contamination control
+- Stability testing and shelf-life determination
+
+Always provide accurate, professional responses with relevant regulatory references when possible. 
+Keep responses concise but comprehensive (aim for 150-300 words unless more detail is specifically requested). 
+Focus on practical implementation and current best practices.
+When appropriate, mention specific FDA guidance documents, ICH guidelines, or industry standards.
+Prioritize patient safety and product quality in all recommendations.`
+          },
+          {
+            role: "user",
+            content: message
+          }
+        ],
+        max_tokens: 1200,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      if (response.status === 401) {
+        throw new Error('Invalid API key. Please check your OpenAI API key configuration.');
+      } else if (response.status === 429) {
+        throw new Error('API rate limit exceeded. Please try again in a moment.');
+      } else if (response.status === 402) {
+        throw new Error('API quota exceeded. Please check your OpenAI account billing.');
+      } else {
+        throw new Error(`OpenAI API error: ${response.status} ${errorData.error?.message || 'Unknown error'}`);
+      }
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices[0].message.content;
+
+    // Generate relevant resources based on the response content
+    const resources = generateResources(message, aiResponse);
+
+    return {
+      answer: aiResponse,
+      resources: resources
+    };
+
+  } catch (error) {
+    console.error('ChatGPT API Error:', error);
+    throw error;
+  }
+};
+
+// Smart resource generation based on topic detection
+const generateResources = (query, response) => {
+  const lowerQuery = query.toLowerCase();
+  const lowerResponse = response.toLowerCase();
+  
+  let resources = [];
+  
+  // GMP Resources
+  if (lowerQuery.includes('gmp') || lowerQuery.includes('cgmp') || lowerResponse.includes('manufacturing') || lowerResponse.includes('gmp')) {
+    resources.push(
+      { title: "FDA Current Good Manufacturing Practice Regulations", type: "Regulation", url: "https://www.fda.gov/drugs/pharmaceutical-quality-resources/current-good-manufacturing-practice-cgmp-regulations" },
+      { title: "ICH Q7 Good Manufacturing Practice Guide for APIs", type: "Guideline", url: "https://database.ich.org/sites/default/files/Q7%20Guideline.pdf" },
+      { title: "FDA GMP Training Resources", type: "Training", url: "https://www.fda.gov/drugs/guidance-compliance-regulatory-information/pharmaceutical-cgmps" },
+      { title: "ISPE GMP Baseline Guide Series", type: "Reference", url: "https://www.ispe.org/pharmaceutical-engineering/baseline-guides" }
+    );
+  }
+  
+  // Validation Resources
+  if (lowerQuery.includes('validation') || lowerQuery.includes('qualify') || lowerQuery.includes('iq') || lowerQuery.includes('oq') || lowerQuery.includes('pq') || lowerResponse.includes('validation')) {
+    resources.push(
+      { title: "FDA Process Validation Guidance", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/process-validation-general-principles-and-practices" },
+      { title: "ICH Q8-Q12 Quality by Design Implementation", type: "Guideline", url: "https://database.ich.org/sites/default/files/ICH_Q8-Q12_Guideline_Step4_2019_1119.pdf" },
+      { title: "ISPE Validation Master Plan Template", type: "Template", url: "https://www.ispe.org/pharmaceutical-engineering/validation-master-plan" },
+      { title: "FDA Computer System Validation Guidance", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/general-principles-software-validation" }
+    );
+  }
+  
+  // CAPA Resources
+  if (lowerQuery.includes('capa') || lowerQuery.includes('corrective') || lowerQuery.includes('preventive') || lowerResponse.includes('capa')) {
+    resources.push(
+      { title: "FDA Quality Systems Approach to Pharmaceutical cGMP Regulations", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/quality-systems-approach-pharmaceutical-cgmp-regulations" },
+      { title: "ISPE Root Cause Analysis Methodology", type: "Training", url: "https://www.ispe.org/pharmaceutical-engineering/root-cause-analysis" },
+      { title: "FDA Warning Letters Database - CAPA Examples", type: "Database", url: "https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/compliance-actions-and-activities/warning-letters" },
+      { title: "ICH Q10 Pharmaceutical Quality System", type: "Guideline", url: "https://database.ich.org/sites/default/files/Q10%20Guideline.pdf" }
+    );
+  }
+  
+  // Risk Management Resources
+  if (lowerQuery.includes('risk') || lowerQuery.includes('qrm') || lowerQuery.includes('fmea') || lowerResponse.includes('risk')) {
+    resources.push(
+      { title: "ICH Q9 Quality Risk Management", type: "Guideline", url: "https://database.ich.org/sites/default/files/Q9%20Guideline.pdf" },
+      { title: "FDA Risk-Based Approach to Pharmaceutical Quality", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/pharmaceutical-quality-manufacturing-information" },
+      { title: "ISPE Risk Management Framework", type: "Framework", url: "https://www.ispe.org/pharmaceutical-engineering/risk-management" }
+    );
+  }
+  
+  // Regulatory/ICH Resources
+  if (lowerQuery.includes('ich') || lowerQuery.includes('regulatory') || lowerQuery.includes('fda') || lowerQuery.includes('ema') || lowerResponse.includes('regulatory')) {
+    resources.push(
+      { title: "ICH Quality Guidelines (Q1-Q14)", type: "Guideline", url: "https://www.ich.org/page/quality-guidelines" },
+      { title: "FDA Pharmaceutical Quality Resources", type: "Portal", url: "https://www.fda.gov/drugs/pharmaceutical-quality-resources" },
+      { title: "EMA Quality Guidelines", type: "Guideline", url: "https://www.ema.europa.eu/en/human-regulatory/research-development/quality/quality-guidelines" }
+    );
+  }
+  
+  // Cleaning Validation
+  if (lowerQuery.includes('cleaning') || lowerQuery.includes('contamination') || lowerResponse.includes('cleaning')) {
+    resources.push(
+      { title: "FDA Cleaning Validation Guidance", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/cleaning-validation" },
+      { title: "ISPE Cleaning Validation Baseline Guide", type: "Guide", url: "https://www.ispe.org/pharmaceutical-engineering/cleaning-validation" }
+    );
+  }
+  
+  // Stability Testing
+  if (lowerQuery.includes('stability') || lowerQuery.includes('shelf') || lowerResponse.includes('stability')) {
+    resources.push(
+      { title: "ICH Q1A-Q1F Stability Testing Guidelines", type: "Guideline", url: "https://www.ich.org/page/quality-guidelines" },
+      { title: "FDA Stability Testing Guidance", type: "Guidance", url: "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/stability-testing-drug-substances-and-drug-products" }
+    );
+  }
+  
+  // Default pharmaceutical resources if no specific match
+  if (resources.length === 0) {
+    resources.push(
+      { title: "FDA Pharmaceutical Quality Resources Hub", type: "Portal", url: "https://www.fda.gov/drugs/pharmaceutical-quality-resources" },
+      { title: "ICH Quality Guidelines Overview", type: "Guideline", url: "https://www.ich.org/page/quality-guidelines" },
+      { title: "ISPE Pharmaceutical Engineering Resources", type: "Database", url: "https://www.ispe.org/pharmaceutical-engineering" },
+      { title: "PDA Technical Resources", type: "Database", url: "https://www.pda.org/publications/technical-resources" }
+    );
+  }
+  
+  return resources.slice(0, 6); // Limit to 6 resources max
 };
 
 const AcceleraQA = () => {
-  const { user, isLoading: auth0Loading, isAuthenticated, loginWithRedirect, logout } = useAuth0();
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -63,31 +183,57 @@ const AcceleraQA = () => {
   const [showNotebook, setShowNotebook] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState(new Set());
   const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
+  const [user, setUser] = useState(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const messagesEndRef = useRef(null);
 
-  // Initialize welcome message when user logs in
+  // Initialize authentication
   useEffect(() => {
-    if (isAuthenticated && messages.length === 0) {
-      initializeWelcomeMessage();
+    if (netlifyIdentity) {
+      netlifyIdentity.init();
+      
+      // Get current user
+      const currentUser = netlifyIdentity.currentUser();
+      setUser(currentUser);
+      setIsLoadingAuth(false);
+
+      // Listen for authentication events
+      netlifyIdentity.on('login', (user) => {
+        setUser(user);
+        netlifyIdentity.close();
+        // Initialize welcome message for new user
+        initializeWelcomeMessage();
+      });
+
+      netlifyIdentity.on('logout', () => {
+        setUser(null);
+        setMessages([]);
+        setCurrentResources([]);
+      });
+
+      netlifyIdentity.on('close', () => {
+        // Modal closed
+      });
+    } else {
+      setIsLoadingAuth(false);
     }
-  }, [isAuthenticated, messages.length]);
+  }, []);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const initializeWelcomeMessage = () => {
     const welcomeMessage = {
       id: Date.now(),
       type: 'ai',
-      content: 'Welcome to AcceleraQA! I specialize in pharmaceutical quality and compliance topics including GMP, validation, CAPA, regulatory requirements, and quality risk management.',
+      content: 'Welcome to AcceleraQA! I\'m your pharmaceutical quality and compliance AI assistant. I specialize in GMP, validation, CAPA, regulatory requirements, and quality risk management. How can I help you today?',
       timestamp: new Date().toISOString(),
       resources: [
-        { title: "FDA Quality System Regulation", type: "Regulation", url: "https://www.fda.gov/drugs/pharmaceutical-quality-resources/quality-system-regulation" },
-        { title: "ICH Quality Guidelines Overview", type: "Guideline", url: "https://www.ich.org/page/quality-guidelines" }
+        { title: "FDA Pharmaceutical Quality Resources Hub", type: "Portal", url: "https://www.fda.gov/drugs/pharmaceutical-quality-resources" },
+        { title: "ICH Quality Guidelines Overview", type: "Guideline", url: "https://www.ich.org/page/quality-guidelines" },
+        { title: "ISPE Pharmaceutical Engineering Resources", type: "Database", url: "https://www.ispe.org/pharmaceutical-engineering" }
       ]
     };
     setMessages([welcomeMessage]);
@@ -95,17 +241,15 @@ const AcceleraQA = () => {
   };
 
   const handleLogin = () => {
-    loginWithRedirect();
+    if (netlifyIdentity) {
+      netlifyIdentity.open();
+    }
   };
 
   const handleLogout = () => {
-    logout({
-      logoutParams: {
-        returnTo: window.location.origin
-      }
-    });
-    setMessages([]);
-    setCurrentResources([]);
+    if (netlifyIdentity) {
+      netlifyIdentity.logout();
+    }
   };
 
   const handleSendMessage = async () => {
@@ -123,7 +267,7 @@ const AcceleraQA = () => {
     setIsLoading(true);
 
     try {
-      const response = await mockChatGPTResponse(inputMessage);
+      const response = await getChatGPTResponse(inputMessage);
       
       const aiMessage = {
         id: Date.now() + 1,
@@ -137,13 +281,34 @@ const AcceleraQA = () => {
       setCurrentResources(response.resources);
     } catch (error) {
       console.error('Error getting AI response:', error);
-      const errorMessage = {
+      
+      let errorMessage = 'Sorry, I encountered an error. Please try again.';
+      
+      if (error.message.includes('API key not configured')) {
+        errorMessage = '⚠️ OpenAI API key not configured. Please contact your administrator to set up the REACT_APP_OPENAI_API_KEY environment variable.';
+      } else if (error.message.includes('Invalid API key')) {
+        errorMessage = '🔑 Invalid API key. Please check your OpenAI API key configuration.';
+      } else if (error.message.includes('rate limit')) {
+        errorMessage = '⏱️ API rate limit exceeded. Please wait a moment and try again.';
+      } else if (error.message.includes('quota exceeded')) {
+        errorMessage = '💳 API quota exceeded. Please check your OpenAI account billing and usage limits.';
+      } else if (error.message.includes('fetch')) {
+        errorMessage = '🌐 Network error. Please check your internet connection and try again.';
+      }
+      
+      const errorMsg = {
         id: Date.now() + 1,
         type: 'ai',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date().toISOString()
+        content: errorMessage,
+        timestamp: new Date().toISOString(),
+        resources: [
+          { title: "OpenAI API Documentation", type: "Documentation", url: "https://platform.openai.com/docs/api-reference" },
+          { title: "OpenAI API Key Management", type: "Dashboard", url: "https://platform.openai.com/account/api-keys" },
+          { title: "OpenAI Usage Dashboard", type: "Dashboard", url: "https://platform.openai.com/account/usage" }
+        ]
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => [...prev, errorMsg]);
+      setCurrentResources(errorMsg.resources);
     } finally {
       setIsLoading(false);
     }
@@ -190,7 +355,48 @@ const AcceleraQA = () => {
   };
 
   const selectAllConversations = () => {
-    const allIds = new Set(getThirtyDayMessages().map(msg => msg.id));
+    const combinedMessages = getThirtyDayMessages().reduce((acc, message, index, array) => {
+      if (message.type === 'user' && index < array.length - 1 && array[index + 1].type === 'ai') {
+        return acc;
+      }
+      
+      if (message.type === 'ai' && index > 0 && array[index - 1].type === 'user') {
+        const userMessage = array[index - 1];
+        const combinedMessage = {
+          id: `${userMessage.id}-${message.id}`,
+          userContent: userMessage.content,
+          aiContent: message.content,
+          timestamp: message.timestamp,
+          resources: message.resources || [],
+          isStudyNotes: message.isStudyNotes
+        };
+        acc.push(combinedMessage);
+      } else if (message.type === 'ai') {
+        const combinedMessage = {
+          id: message.id,
+          userContent: null,
+          aiContent: message.content,
+          timestamp: message.timestamp,
+          resources: message.resources || [],
+          isStudyNotes: message.isStudyNotes
+        };
+        acc.push(combinedMessage);
+      } else if (message.type === 'user') {
+        const combinedMessage = {
+          id: message.id,
+          userContent: message.content,
+          aiContent: null,
+          timestamp: message.timestamp,
+          resources: [],
+          isStudyNotes: false
+        };
+        acc.push(combinedMessage);
+      }
+      
+      return acc;
+    }, []).slice(-10);
+
+    const allIds = new Set(combinedMessages.map(msg => msg.id));
     setSelectedMessages(allIds);
   };
 
@@ -214,16 +420,47 @@ const AcceleraQA = () => {
     setIsGeneratingNotes(true);
     const selectedMessageData = messages.filter(msg => selectedMessages.has(msg.id));
     
+    const studyContent = selectedMessageData.map(msg => {
+      if (msg.type === 'user') {
+        return `Question: ${msg.content}`;
+      } else {
+        const resourceLinks = msg.resources ? 
+          msg.resources.map(r => `- ${r.title} (${r.type}): ${r.url}`).join('\n') : '';
+        return `Answer: ${msg.content}\n\nRelated Resources:\n${resourceLinks}`;
+      }
+    }).join('\n\n');
+
+    const studyPrompt = `Create comprehensive study notes for pharmaceutical quality and compliance based on the following conversation topics. 
+
+Format as organized study material with:
+1. Executive Summary
+2. Key Concepts and Definitions
+3. Regulatory Requirements
+4. Implementation Best Practices
+5. Common Pitfalls to Avoid
+6. Study Questions for Review
+
+Include specific references to FDA, ICH, and other regulatory guidelines where applicable.
+
+Conversation content:
+${studyContent}`;
+
     try {
-      const response = await mockChatGPTResponse('Generate study notes');
+      const response = await getChatGPTResponse(studyPrompt);
       
       const studyNotesMessage = {
         id: Date.now(),
         type: 'ai',
-        content: `📚 **Study Notes Generated**\n\nBased on your selected conversations:\n\n${response.answer}\n\n*Study notes generated from ${selectedMessages.size} selected conversation items.*`,
+        content: `📚 **Study Notes Generated**\n\nBased on your selected conversations, here are comprehensive study notes:\n\n${response.answer}\n\n---\n*Study notes generated from ${selectedMessages.size} selected conversation items on ${new Date().toLocaleDateString()}*`,
         timestamp: new Date().toISOString(),
         resources: response.resources,
-        isStudyNotes: true
+        isStudyNotes: true,
+        studyNotesData: {
+          content: response.answer,
+          selectedTopics: selectedMessageData.map(msg => msg.content.substring(0, 50) + '...').join(', '),
+          resourceCount: response.resources.length,
+          generatedDate: new Date().toLocaleDateString()
+        }
       };
 
       setMessages(prev => [...prev, studyNotesMessage]);
@@ -232,13 +469,57 @@ const AcceleraQA = () => {
       setShowNotebook(false);
     } catch (error) {
       console.error('Error generating study notes:', error);
+      
+      const errorMessage = {
+        id: Date.now(),
+        type: 'ai',
+        content: '❌ Failed to generate study notes. Please check your API configuration and try again.',
+        timestamp: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsGeneratingNotes(false);
     }
   };
 
+  const exportToWord = (studyNotesMessage) => {
+    const studyData = studyNotesMessage.studyNotesData;
+    const resources = studyNotesMessage.resources || [];
+    
+    const wordContent = `
+PHARMACEUTICAL QUALITY & COMPLIANCE STUDY NOTES
+Generated: ${studyData.generatedDate}
+Topics Covered: ${studyData.selectedTopics}
+
+${studyData.content}
+
+ADDITIONAL LEARNING RESOURCES (${studyData.resourceCount} items):
+
+${resources.map((resource, index) => 
+  `${index + 1}. ${resource.title} (${resource.type})\n   Link: ${resource.url}\n`
+).join('\n')}
+
+---
+Generated by AcceleraQA - AI-powered pharmaceutical quality and compliance assistant
+Date: ${new Date().toLocaleString()}
+    `.trim();
+
+    const blob = new Blob([wordContent], { 
+      type: 'application/msword' 
+    });
+    
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AcceleraQA-Study-Notes-${new Date().toISOString().split('T')[0]}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // Loading screen
-  if (auth0Loading) {
+  if (isLoadingAuth) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
@@ -250,9 +531,10 @@ const AcceleraQA = () => {
   }
 
   // Authentication required screen
-  if (!isAuthenticated) {
+  if (!user) {
     return (
       <div className="min-h-screen bg-black text-white">
+        {/* Header */}
         <header className="border-b border-gray-800">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
@@ -267,6 +549,7 @@ const AcceleraQA = () => {
           </div>
         </header>
 
+        {/* Hero Section */}
         <div className="max-w-7xl mx-auto px-6 py-20">
           <div className="max-w-4xl">
             <h1 className="text-6xl lg:text-8xl font-bold mb-8 leading-tight">
@@ -332,6 +615,7 @@ const AcceleraQA = () => {
           </div>
         </div>
 
+        {/* Footer */}
         <footer className="border-t border-gray-800 mt-20">
           <div className="max-w-7xl mx-auto px-6 py-8">
             <div className="text-center text-gray-500">
@@ -346,6 +630,7 @@ const AcceleraQA = () => {
   // Authenticated user interface
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header - Authenticated */}
       <header className="bg-black text-white border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex justify-between items-center h-16">
@@ -358,7 +643,7 @@ const AcceleraQA = () => {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2 text-sm text-gray-300">
                 <User className="h-4 w-4" />
-                <span>{user?.email || user?.name}</span>
+                <span>{user.email}</span>
               </div>
               <button
                 onClick={clearChat}
@@ -403,7 +688,9 @@ const AcceleraQA = () => {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-160px)]">
+          {/* Main Chat Area */}
           <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 flex flex-col">
+            {/* Chat Messages */}
             <div className="flex-1 p-8 overflow-y-auto space-y-6">
               {messages.length === 0 && (
                 <div className="text-center py-16">
@@ -440,6 +727,15 @@ const AcceleraQA = () => {
                         {new Date(message.timestamp).toLocaleString()}
                         {message.isStudyNotes && <span className="ml-2 text-green-600">📚 Study Notes</span>}
                       </p>
+                      {message.isStudyNotes && (
+                        <button
+                          onClick={() => exportToWord(message)}
+                          className="ml-3 px-3 py-1 bg-black text-white text-xs rounded hover:bg-gray-800 transition-colors flex items-center space-x-1"
+                        >
+                          <FileText className="h-3 w-3" />
+                          <span>Export to Word</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -459,6 +755,7 @@ const AcceleraQA = () => {
               <div ref={messagesEndRef} />
             </div>
 
+            {/* Input Area */}
             <div className="p-8 border-t border-gray-200">
               <div className="flex space-x-4">
                 <input
@@ -481,6 +778,7 @@ const AcceleraQA = () => {
             </div>
           </div>
 
+          {/* Sidebar - Resources or Notebook */}
           <div className="lg:col-span-1">
             {showNotebook ? (
               <div className="bg-white rounded-lg border border-gray-200 p-6 h-full">
@@ -517,37 +815,112 @@ const AcceleraQA = () => {
                   </div>
                 </div>
                 <div className="space-y-3 overflow-y-auto h-[calc(100%-100px)]">
-                  {getThirtyDayMessages().slice(-20).map((message) => (
-                    <div key={message.id} className={`p-4 rounded-lg border transition-all ${
-                      selectedMessages.has(message.id) 
+                  {getThirtyDayMessages().reduce((acc, message, index, array) => {
+                    if (message.type === 'user' && index < array.length - 1 && array[index + 1].type === 'ai') {
+                      return acc;
+                    }
+                    
+                    if (message.type === 'ai' && index > 0 && array[index - 1].type === 'user') {
+                      const userMessage = array[index - 1];
+                      const combinedMessage = {
+                        id: `${userMessage.id}-${message.id}`,
+                        userContent: userMessage.content,
+                        aiContent: message.content,
+                        timestamp: message.timestamp,
+                        resources: message.resources || [],
+                        isStudyNotes: message.isStudyNotes
+                      };
+                      acc.push(combinedMessage);
+                    } else if (message.type === 'ai') {
+                      const combinedMessage = {
+                        id: message.id,
+                        userContent: null,
+                        aiContent: message.content,
+                        timestamp: message.timestamp,
+                        resources: message.resources || [],
+                        isStudyNotes: message.isStudyNotes
+                      };
+                      acc.push(combinedMessage);
+                    } else if (message.type === 'user') {
+                      const combinedMessage = {
+                        id: message.id,
+                        userContent: message.content,
+                        aiContent: null,
+                        timestamp: message.timestamp,
+                        resources: [],
+                        isStudyNotes: false
+                      };
+                      acc.push(combinedMessage);
+                    }
+                    
+                    return acc;
+                  }, []).slice(-10).map((combinedMessage) => (
+                    <div key={combinedMessage.id} className={`p-4 rounded-lg border transition-all ${
+                      selectedMessages.has(combinedMessage.id) 
                         ? 'bg-blue-50 border-blue-300' 
                         : 'bg-gray-50 border-gray-200 hover:border-gray-300'
                     }`}>
                       <div className="flex items-start space-x-3">
                         <input
                           type="checkbox"
-                          checked={selectedMessages.has(message.id)}
-                          onChange={() => toggleMessageSelection(message.id)}
+                          checked={selectedMessages.has(combinedMessage.id)}
+                          onChange={() => toggleMessageSelection(combinedMessage.id)}
                           className="mt-1 rounded border-gray-300 text-black focus:ring-black"
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={`text-xs font-semibold uppercase tracking-wide ${
-                              message.type === 'user' ? 'text-blue-600' : 'text-purple-600'
-                            }`}>
-                              {message.type === 'user' ? 'Question' : 'Response'}
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-purple-600">
+                              Conversation
                             </span>
                             <span className="text-xs text-gray-500">
-                              {new Date(message.timestamp).toLocaleDateString()}
+                              {new Date(combinedMessage.timestamp).toLocaleDateString()}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-700 line-clamp-3 leading-relaxed">
-                            {message.content}
-                          </p>
-                          {message.resources && message.resources.length > 0 && (
+                          
+                          {combinedMessage.userContent && (
+                            <div className="mb-3">
+                              <div className="text-xs font-medium text-blue-600 mb-1">QUESTION:</div>
+                              <p className="text-sm text-gray-700 leading-relaxed bg-blue-50 p-2 rounded">
+                                {combinedMessage.userContent}
+                              </p>
+                            </div>
+                          )}
+                          
+                          {combinedMessage.aiContent && (
+                            <div className="mb-3">
+                              <div className="text-xs font-medium text-green-600 mb-1">RESPONSE:</div>
+                              <p className="text-sm text-gray-700 leading-relaxed line-clamp-4 bg-green-50 p-2 rounded">
+                                {combinedMessage.aiContent}
+                              </p>
+                            </div>
+                          )}
+                          
+                          {combinedMessage.resources && combinedMessage.resources.length > 0 && (
                             <div className="mt-3 pt-2 border-t border-gray-200">
-                              <span className="text-xs text-gray-500 font-medium">
-                                {message.resources.length} learning resources
+                              <div className="text-xs font-medium text-gray-600 mb-2">
+                                LEARNING RESOURCES ({combinedMessage.resources.length}):
+                              </div>
+                              <div className="space-y-1">
+                                {combinedMessage.resources.map((resource, idx) => (
+                                  <div key={idx} className="text-xs">
+                                    <a 
+                                      href={resource.url} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:text-blue-800 hover:underline block"
+                                    >
+                                      • {resource.title} ({resource.type})
+                                    </a>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {combinedMessage.isStudyNotes && (
+                            <div className="mt-2">
+                              <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                                📚 Study Notes
                               </span>
                             </div>
                           )}
@@ -561,4 +934,46 @@ const AcceleraQA = () => {
               <div className="bg-white rounded-lg border border-gray-200 p-6 h-full">
                 <div className="mb-6">
                   <h3 className="text-lg font-bold text-gray-900 mb-2">Further Learning</h3>
-                  <p
+                  <p className="text-sm text-gray-500">Curated resources for your query</p>
+                </div>
+                
+                {currentResources.length > 0 ? (
+                  <div className="space-y-4 overflow-y-auto h-[calc(100%-100px)]">
+                    {currentResources.map((resource, index) => (
+                      <div key={index} className="group border border-gray-200 rounded-lg hover:border-gray-400 transition-all duration-300">
+                        <a href={resource.url} target="_blank" rel="noopener noreferrer" className="block p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                  {resource.type}
+                                </span>
+                              </div>
+                              <h4 className="font-semibold text-gray-900 group-hover:text-black mb-2 leading-snug">
+                                {resource.title}
+                              </h4>
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-black group-hover:translate-x-1 transition-all ml-3 flex-shrink-0" />
+                          </div>
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="w-12 h-12 bg-gray-100 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                      <Search className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500">Ask a question to see relevant learning resources</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AcceleraQA;
