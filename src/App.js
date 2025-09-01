@@ -187,36 +187,74 @@ const AcceleraQA = () => {
   const messagesEndRef = useRef(null);
 
   // Initialize authentication
-  useEffect(() => {
-    if (netlifyIdentity) {
-      netlifyIdentity.init();
-      
-      // Get current user
-      const currentUser = netlifyIdentity.currentUser();
-      setUser(currentUser);
-      setIsLoadingAuth(false);
+  // Add this to your App.js - Replace the existing useEffect for authentication
 
-      // Listen for authentication events
-      netlifyIdentity.on('login', (user) => {
-        setUser(user);
-        netlifyIdentity.close();
-        // Initialize welcome message for new user
-        initializeWelcomeMessage();
-      });
+// Initialize authentication
+useEffect(() => {
+  if (netlifyIdentity) {
+    netlifyIdentity.init();
+    
+    // Get current user
+    const currentUser = netlifyIdentity.currentUser();
+    setUser(currentUser);
+    setIsLoadingAuth(false);
 
-      netlifyIdentity.on('logout', () => {
-        setUser(null);
-        setMessages([]);
-        setCurrentResources([]);
-      });
+    // Handle password recovery from email links
+    netlifyIdentity.on('init', user => {
+      if (!user) {
+        // Check if this is a recovery or invite link
+        if (window.location.hash) {
+          const hash = window.location.hash;
+          if (hash.includes('recovery_token') || hash.includes('invite_token') || hash.includes('confirmation_token')) {
+            // Open the modal to handle the token
+            netlifyIdentity.open();
+          }
+        }
+      }
+    });
 
-      netlifyIdentity.on('close', () => {
-        // Modal closed
-      });
-    } else {
-      setIsLoadingAuth(false);
-    }
-  }, []);
+    // Listen for authentication events
+    netlifyIdentity.on('login', (user) => {
+      setUser(user);
+      netlifyIdentity.close();
+      // Clear any hash from URL
+      if (window.location.hash) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+      // Initialize welcome message for new user
+      initializeWelcomeMessage();
+    });
+
+    netlifyIdentity.on('logout', () => {
+      setUser(null);
+      setMessages([]);
+      setCurrentResources([]);
+    });
+
+    netlifyIdentity.on('close', () => {
+      // Modal closed - clear hash if present
+      if (window.location.hash) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    });
+
+    // Handle password recovery success
+    netlifyIdentity.on('recovery', () => {
+      alert('Password updated successfully! Please log in with your new password.');
+      netlifyIdentity.close();
+    });
+
+    // Handle errors
+    netlifyIdentity.on('error', (err) => {
+      console.error('Netlify Identity error:', err);
+      alert('Authentication error: ' + err.message);
+    });
+
+  } else {
+    setIsLoadingAuth(false);
+  }
+}, []);
+            , []);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
