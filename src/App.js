@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, BookOpen, Download, Clock, MessageSquare, Search, FileText, ExternalLink, ChevronRight, LogOut, User } from 'lucide-react';
+//import { Send, BookOpen, Download, Clock, MessageSquare, Search, FileText, ExternalLink, ChevronRight, LogOut, User } from 'lucide-react';
+import { Send, BookOpen, Download, Clock, MessageSquare, Search, FileText, ChevronRight, LogOut, User } from 'lucide-react';
 
 // Initialize Netlify Identity
 let netlifyIdentity = null;
