@@ -1,5 +1,3 @@
-//import { useAuth0 } from '@auth0/auth0-react';
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, BookOpen, Download, Clock, MessageSquare, LogOut, User } from 'lucide-react';
 
