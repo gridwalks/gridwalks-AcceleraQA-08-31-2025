@@ -217,10 +217,29 @@ export function sanitizeMessageContent(content) {
     return '';
   }
 
-  return content
-    .trim()
-    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-    .replace(/\n\s*\n\s*\n/g, '\n\n'); // Replace multiple newlines with double newline
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(content, 'text/html');
+
+  // Remove script and other potentially dangerous elements
+  const removableElements = doc.querySelectorAll('script, style, iframe, object, embed');
+  removableElements.forEach(el => el.remove());
+
+  // Strip dangerous attributes like event handlers and javascript: URLs
+  Array.from(doc.body.getElementsByTagName('*')).forEach(el => {
+    Array.from(el.attributes).forEach(attr => {
+      const name = attr.name;
+      const value = attr.value;
+      if (
+        /^on/i.test(name) ||
+        name === 'srcdoc' ||
+        (['href', 'src'].includes(name) && value.trim().toLowerCase().startsWith('javascript:'))
+      ) {
+        el.removeAttribute(name);
+      }
+    });
+  });
+
+  return doc.body.innerHTML.trim();
 }
 
 /**

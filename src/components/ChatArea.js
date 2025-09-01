@@ -61,12 +61,14 @@ const ChatArea = memo(({
                     ? 'bg-gradient-to-r from-green-50 to-blue-50 border border-green-200'
                     : 'bg-gray-50 border border-gray-200'
               }`}>
-                <div 
+                <div
                   className="whitespace-pre-wrap text-base leading-relaxed"
                   dangerouslySetInnerHTML={{
-                    __html: sanitizeMessageContent(message.content)
-                      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    __html: sanitizeMessageContent(
+                      message.content
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    )
                   }}
                 />
                 
