@@ -16,7 +16,7 @@ const Header = ({ user, showNotebook, setShowNotebook, clearChat, exportNotebook
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2 text-sm text-gray-300">
               <User className="h-4 w-4" />
-              <span>{user.email}</span>
+              <span>{user.email || user.name}</span>
             </div>
             <button
               onClick={clearChat}
