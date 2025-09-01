@@ -125,9 +125,27 @@ const AuthScreen = memo(() => {
               Built for pharmaceutical quality and compliance professionals worldwide
             </div>
             <div className="flex items-center space-x-6 text-sm text-gray-400">
-              <a href="#" className="hover:text-gray-300 transition-colors">Privacy Policy</a>
-              <a href="#" className="hover:text-gray-300 transition-colors">Terms of Service</a>
-              <a href="#" className="hover:text-gray-300 transition-colors">Support</a>
+              <a
+                href="/privacy"
+                className="hover:text-gray-300 transition-colors"
+                aria-label="Privacy Policy"
+              >
+                Privacy Policy
+              </a>
+              <a
+                href="/terms"
+                className="hover:text-gray-300 transition-colors"
+                aria-label="Terms of Service"
+              >
+                Terms of Service
+              </a>
+              <a
+                href="/support"
+                className="hover:text-gray-300 transition-colors"
+                aria-label="Support"
+              >
+                Support
+              </a>
             </div>
           </div>
         </div>
