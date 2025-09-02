@@ -31,91 +31,93 @@ const ChatArea = memo(({
   };
 
   return (
-    <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 flex flex-col shadow-sm">
-      {/* Chat Messages */}
-      <div className="flex-1 p-8 overflow-y-auto space-y-6">
-        {messages.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg mx-auto mb-6 flex items-center justify-center">
-              <MessageSquare className="h-8 w-8 text-white" />
+    <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 flex flex-col shadow-sm h-full">
+      {/* Chat Messages - Fixed height with scroll */}
+      <div className="flex-1 min-h-0">
+        <div className="h-full overflow-y-auto p-8 space-y-6">
+          {messages.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg mx-auto mb-6 flex items-center justify-center">
+                <MessageSquare className="h-8 w-8 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">Welcome to AcceleraQA</h3>
+              <p className="text-gray-600 mb-8 text-lg">
+                Ask questions about pharmaceutical quality and compliance topics
+              </p>
+              <div className="flex flex-wrap justify-center gap-3">
+                <span className="px-4 py-2 bg-blue-50 text-blue-700 rounded-full font-medium">GMP</span>
+                <span className="px-4 py-2 bg-purple-50 text-purple-700 rounded-full font-medium">Validation</span>
+                <span className="px-4 py-2 bg-green-50 text-green-700 rounded-full font-medium">CAPA</span>
+                <span className="px-4 py-2 bg-orange-50 text-orange-700 rounded-full font-medium">Regulatory</span>
+                <span className="px-4 py-2 bg-pink-50 text-pink-700 rounded-full font-medium">Risk Management</span>
+              </div>
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">Welcome to AcceleraQA</h3>
-            <p className="text-gray-600 mb-8 text-lg">
-              Ask questions about pharmaceutical quality and compliance topics
-            </p>
-            <div className="flex flex-wrap justify-center gap-3">
-              <span className="px-4 py-2 bg-blue-50 text-blue-700 rounded-full font-medium">GMP</span>
-              <span className="px-4 py-2 bg-purple-50 text-purple-700 rounded-full font-medium">Validation</span>
-              <span className="px-4 py-2 bg-green-50 text-green-700 rounded-full font-medium">CAPA</span>
-              <span className="px-4 py-2 bg-orange-50 text-orange-700 rounded-full font-medium">Regulatory</span>
-              <span className="px-4 py-2 bg-pink-50 text-pink-700 rounded-full font-medium">Risk Management</span>
-            </div>
-          </div>
-        ) : (
-          messages.map((message) => (
-            <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-3xl px-6 py-4 rounded-lg ${
-                message.type === 'user' 
-                  ? 'bg-black text-white' 
-                  : message.isStudyNotes
-                    ? 'bg-gradient-to-r from-green-50 to-blue-50 border border-green-200'
-                    : 'bg-gray-50 border border-gray-200'
-              }`}>
-                <div 
-                  className="whitespace-pre-wrap text-base leading-relaxed"
-                  dangerouslySetInnerHTML={{
-                    __html: sanitizeMessageContent(message.content)
-                      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                  }}
-                />
-                
-                <div className={`flex items-center justify-between mt-3 pt-3 border-t ${
-                  message.type === 'user' ? 'border-gray-700 text-gray-300' : 'border-gray-200 text-gray-500'
+          ) : (
+            messages.map((message) => (
+              <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-3xl px-6 py-4 rounded-lg ${
+                  message.type === 'user' 
+                    ? 'bg-black text-white' 
+                    : message.isStudyNotes
+                      ? 'bg-gradient-to-r from-green-50 to-blue-50 border border-green-200'
+                      : 'bg-gray-50 border border-gray-200'
                 }`}>
-                  <div className="flex items-center space-x-3">
-                    <time className="text-xs" dateTime={message.timestamp}>
-                      {new Date(message.timestamp).toLocaleString()}
-                    </time>
+                  <div 
+                    className="whitespace-pre-wrap text-base leading-relaxed"
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeMessageContent(message.content)
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    }}
+                  />
+                  
+                  <div className={`flex items-center justify-between mt-3 pt-3 border-t ${
+                    message.type === 'user' ? 'border-gray-700 text-gray-300' : 'border-gray-200 text-gray-500'
+                  }`}>
+                    <div className="flex items-center space-x-3">
+                      <time className="text-xs" dateTime={message.timestamp}>
+                        {new Date(message.timestamp).toLocaleString()}
+                      </time>
+                      {message.isStudyNotes && (
+                        <span className="text-xs text-green-600 font-medium">
+                          📚 Study Notes
+                        </span>
+                      )}
+                    </div>
+                    
                     {message.isStudyNotes && (
-                      <span className="text-xs text-green-600 font-medium">
-                        📚 Study Notes
-                      </span>
+                      <button
+                        onClick={() => handleExportStudyNotes(message)}
+                        className="ml-3 px-3 py-1 bg-black text-white text-xs rounded hover:bg-gray-800 transition-colors flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-gray-600"
+                        aria-label="Export study notes to Word document"
+                      >
+                        <FileText className="h-3 w-3" />
+                        <span>Export to Word</span>
+                      </button>
                     )}
                   </div>
-                  
-                  {message.isStudyNotes && (
-                    <button
-                      onClick={() => handleExportStudyNotes(message)}
-                      className="ml-3 px-3 py-1 bg-black text-white text-xs rounded hover:bg-gray-800 transition-colors flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-gray-600"
-                      aria-label="Export study notes to Word document"
-                    >
-                      <FileText className="h-3 w-3" />
-                      <span>Export to Word</span>
-                    </button>
-                  )}
+                </div>
+              </div>
+            ))
+          )}
+
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-gray-50 border border-gray-200 px-6 py-4 rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black" />
+                  <span className="text-gray-700">Analyzing your question...</span>
                 </div>
               </div>
             </div>
-          ))
-        )}
+          )}
 
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-gray-50 border border-gray-200 px-6 py-4 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black" />
-                <span className="text-gray-700">Analyzing your question...</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} aria-hidden="true" />
+          <div ref={messagesEndRef} aria-hidden="true" />
+        </div>
       </div>
 
-      {/* Input Area */}
-      <div className="p-8 border-t border-gray-200 bg-gray-50">
+      {/* Input Area - Fixed at bottom */}
+      <div className="flex-shrink-0 p-8 border-t border-gray-200 bg-gray-50">
         <form onSubmit={handleSubmit} className="flex space-x-4">
           <div className="flex-1 relative">
             <textarea
