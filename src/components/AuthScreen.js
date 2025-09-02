@@ -13,23 +13,31 @@ const AuthScreen = memo(() => {
   };
 
   const handleEvaluationClick = () => {
+    console.log('Evaluation button clicked');
+    
     // Check if the modal function exists (from index.html)
-    if (window.openEvaluationModal) {
+    if (typeof window.openEvaluationModal === 'function') {
+      console.log('Calling window.openEvaluationModal');
       window.openEvaluationModal();
     } else {
+      console.log('window.openEvaluationModal not found, trying direct approach');
       // Fallback: try to find and show the modal directly
       const modal = document.getElementById('evaluationModal');
       if (modal) {
+        console.log('Modal found, showing it');
         modal.classList.add('show');
         // Focus on first input for accessibility
         setTimeout(() => {
           const firstInput = document.getElementById('firstName');
-          if (firstInput) firstInput.focus();
+          if (firstInput) {
+            firstInput.focus();
+            console.log('Focused on first input');
+          }
         }, 100);
         // Prevent body scroll when modal is open
         document.body.style.overflow = 'hidden';
       } else {
-        console.error('Evaluation modal not found');
+        console.error('Modal element not found in DOM');
         // Ultimate fallback - redirect to contact
         alert('We\'d love to help you evaluate AcceleraQA! Please contact us at support@acceleraqa.atlassian.net');
       }
