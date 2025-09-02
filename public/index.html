@@ -374,10 +374,12 @@
         console.log('Submitting evaluation request...');
         
         const submitBtn = document.getElementById('submitBtn');
-        const originalText = submitBtn.textContent;
+        const originalText = submitBtn ? submitBtn.textContent : 'Request Evaluation Access';
         
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="loading-spinner"></span>Submitting Request...';
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span class="loading-spinner"></span>Submitting Request...';
+        }
         
         try {
           const formData = new FormData(event.target);
@@ -390,10 +392,16 @@
 
           console.log('Form data:', data);
 
+          // Validate required fields
+          if (!data.firstName || !data.lastName || !data.email) {
+            throw new Error('Please fill in all required fields');
+          }
+
           const emailSubject = encodeURIComponent('AcceleraQA Evaluation Request - ' + data.firstName + ' ' + data.lastName);
           const emailBody = encodeURIComponent('Hello AcceleraQA Team,\n\nA new evaluation request has been submitted through the landing page:\n\nCONTACT INFORMATION:\nName: ' + data.firstName + ' ' + data.lastName + '\nEmail: ' + data.email + '\nCompany: ' + data.company + '\nRequest Date: ' + new Date().toLocaleString() + '\nSource: AcceleraQA Landing Page\n\nREQUEST DETAILS:\nThe user has expressed interest in evaluating AcceleraQA for their pharmaceutical quality and compliance team.\n\nNEXT STEPS:\n1. Create evaluation account access\n2. Schedule personalized demo\n3. Provide onboarding materials\n4. Follow up within 1-2 business days\n\nPlease process this evaluation request and reach out to the prospect.\n\nBest regards,\nAcceleraQA System');
 
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Simulate processing time
+          await new Promise(resolve => setTimeout(resolve, 1500));
           
           const mailtoLink = 'mailto:support@acceleraqa.atlassian.net?subject=' + emailSubject + '&body=' + emailBody;
           
@@ -409,21 +417,37 @@
             formData: data
           });
           
+          // Show success message
           const modalForm = document.getElementById('modalForm');
           const successMessage = document.getElementById('successMessage');
-          if (modalForm) modalForm.style.display = 'none';
-          if (successMessage) successMessage.style.display = 'block';
           
+          if (modalForm) {
+            modalForm.style.display = 'none';
+            console.log('Hiding form');
+          }
+          
+          if (successMessage) {
+            successMessage.style.display = 'block';
+            console.log('Showing success message');
+          } else {
+            console.error('Success message element not found');
+          }
+          
+          // Auto-close modal after 4 seconds
           setTimeout(() => {
+            console.log('Auto-closing modal');
             closeEvaluationModal();
-          }, 5000);
+          }, 4000);
 
         } catch (error) {
           console.error('Error submitting evaluation request:', error);
           alert('There was an error submitting your request. Please try again or contact support@acceleraqa.atlassian.net directly.');
           
-          submitBtn.disabled = false;
-          submitBtn.textContent = originalText;
+          // Reset button
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+          }
         }
       };
 
