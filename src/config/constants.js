@@ -33,7 +33,7 @@ When appropriate, mention specific FDA guidance documents, ICH guidelines, or in
 Prioritize patient safety and product quality in all recommendations.`
 };
 
-// Auth0 Configuration
+// Auth0 Configuration with enhanced validation
 export const AUTH0_CONFIG = {
   DOMAIN: process.env.REACT_APP_AUTH0_DOMAIN,
   CLIENT_ID: process.env.REACT_APP_AUTH0_CLIENT_ID,
@@ -51,16 +51,123 @@ export const UI_CONFIG = {
   PAGINATION_SIZE: 20
 };
 
-// Error Messages
+// Enhanced Error Messages with troubleshooting
 export const ERROR_MESSAGES = {
-  API_KEY_NOT_CONFIGURED: '⚠️ OpenAI API key not configured. Please contact your administrator to set up the REACT_APP_OPENAI_API_KEY environment variable.',
-  INVALID_API_KEY: '🔑 Invalid API key. Please check your OpenAI API key configuration.',
+  API_KEY_NOT_CONFIGURED: `⚠️ OpenAI API key not configured. 
+
+TROUBLESHOOTING STEPS:
+1. Check that REACT_APP_OPENAI_API_KEY is set in your environment
+2. If deploying to Netlify, add the variable in Site Settings > Environment Variables
+3. Get your API key from: https://platform.openai.com/account/api-keys
+4. Contact your administrator if you need access`,
+
+  INVALID_API_KEY: `🔑 Invalid OpenAI API key. 
+
+TROUBLESHOOTING STEPS:
+1. Verify your API key is correct and active
+2. Check your OpenAI account billing status
+3. Generate a new API key if needed: https://platform.openai.com/account/api-keys`,
+
   RATE_LIMIT_EXCEEDED: '⏱️ API rate limit exceeded. Please wait a moment and try again.',
-  QUOTA_EXCEEDED: '💳 API quota exceeded. Please check your OpenAI account billing and usage limits.',
+  
+  QUOTA_EXCEEDED: `💳 OpenAI API quota exceeded. 
+
+TROUBLESHOOTING STEPS:
+1. Check your usage: https://platform.openai.com/account/usage
+2. Review your billing: https://platform.openai.com/account/billing
+3. Upgrade your plan if needed`,
+
   NETWORK_ERROR: '🌐 Network error. Please check your internet connection and try again.',
   GENERIC_ERROR: 'Sorry, I encountered an error. Please try again.',
-  AUTH_ERROR: 'Authentication error occurred. Please try signing in again.',
+  
+  AUTH_ERROR: `🔐 Authentication error occurred. 
+
+TROUBLESHOOTING STEPS:
+1. Check that all Auth0 environment variables are set correctly
+2. Verify your Auth0 application configuration
+3. Try signing out and signing in again
+4. Contact support if the problem persists`,
+
   STUDY_NOTES_GENERATION_FAILED: '❌ Failed to generate study notes. Please check your API configuration and try again.'
+};
+
+// Enhanced environment variable validation with detailed feedback
+export const validateEnvironment = () => {
+  const requiredVars = [
+    'REACT_APP_AUTH0_DOMAIN',
+    'REACT_APP_AUTH0_CLIENT_ID', 
+    'REACT_APP_OPENAI_API_KEY'
+  ];
+  
+  const missing = requiredVars.filter(varName => {
+    const value = process.env[varName];
+    return !value || value.trim() === '' || value === 'your_value_here';
+  });
+  
+  if (missing.length > 0) {
+    console.error('❌ CONFIGURATION ERROR: Missing required environment variables:');
+    missing.forEach(varName => {
+      console.error(`   • ${varName}`);
+    });
+    
+    console.error('\n📋 SETUP INSTRUCTIONS:');
+    console.error('1. Copy .env.example to .env');
+    console.error('2. Replace placeholder values with real credentials');
+    console.error('3. For Netlify: Add variables in Site Settings > Environment Variables');
+    console.error('4. Ensure variable names start with REACT_APP_');
+    console.error('\n🔗 HELPFUL LINKS:');
+    console.error('• OpenAI API Keys: https://platform.openai.com/account/api-keys');
+    console.error('• Auth0 Dashboard: https://manage.auth0.com/');
+    console.error('• Netlify Environment Variables: https://docs.netlify.com/configure-builds/environment-variables/');
+    
+    return false;
+  }
+  
+  // Validate Auth0 domain format
+  if (AUTH0_CONFIG.DOMAIN && !AUTH0_CONFIG.DOMAIN.includes('.auth0.com')) {
+    console.error('❌ CONFIGURATION ERROR: Invalid Auth0 domain format');
+    console.error('   Expected format: your-tenant.auth0.com or your-tenant.us.auth0.com');
+    return false;
+  }
+  
+  // Validate OpenAI API key format
+  const apiKey = process.env.REACT_APP_OPENAI_API_KEY;
+  if (apiKey && !apiKey.startsWith('sk-')) {
+    console.error('❌ CONFIGURATION ERROR: Invalid OpenAI API key format');
+    console.error('   Expected format: sk-proj-... or sk-...');
+    return false;
+  }
+  
+  console.log('✅ Environment validation passed');
+  return true;
+};
+
+// Additional validation helper for deployment
+export const validateDeploymentEnvironment = () => {
+  const issues = [];
+  
+  // Check if we're in a build environment
+  const isBuild = process.env.NODE_ENV === 'production' || process.env.CI;
+  
+  if (isBuild) {
+    // Additional production checks
+    if (!process.env.REACT_APP_OPENAI_API_KEY) {
+      issues.push('OpenAI API key not set for production build');
+    }
+    
+    if (!process.env.REACT_APP_AUTH0_DOMAIN) {
+      issues.push('Auth0 domain not set for production build');
+    }
+    
+    if (!process.env.REACT_APP_AUTH0_CLIENT_ID) {
+      issues.push('Auth0 client ID not set for production build');
+    }
+  }
+  
+  return {
+    isValid: issues.length === 0,
+    issues
+  };
 };
 
 // Default Resources
@@ -69,21 +176,3 @@ export const DEFAULT_RESOURCES = [
   { title: "ICH Quality Guidelines Overview", type: "Guideline", url: "https://www.ich.org/page/quality-guidelines" },
   { title: "ISPE Pharmaceutical Engineering Resources", type: "Database", url: "https://www.ispe.org/pharmaceutical-engineering" }
 ];
-
-// Validate environment variables
-export const validateEnvironment = () => {
-  const requiredVars = [
-    'REACT_APP_AUTH0_DOMAIN',
-    'REACT_APP_AUTH0_CLIENT_ID',
-    'REACT_APP_OPENAI_API_KEY'
-  ];
-  
-  const missing = requiredVars.filter(varName => !process.env[varName]);
-  
-  if (missing.length > 0) {
-    console.error('Missing required environment variables:', missing);
-    return false;
-  }
-  
-  return true;
-};
