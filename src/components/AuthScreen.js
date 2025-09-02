@@ -17,7 +17,22 @@ const AuthScreen = memo(() => {
     if (window.openEvaluationModal) {
       window.openEvaluationModal();
     } else {
-      console.error('Evaluation modal not available');
+      // Fallback: try to find and show the modal directly
+      const modal = document.getElementById('evaluationModal');
+      if (modal) {
+        modal.classList.add('show');
+        // Focus on first input for accessibility
+        setTimeout(() => {
+          const firstInput = document.getElementById('firstName');
+          if (firstInput) firstInput.focus();
+        }, 100);
+        // Prevent body scroll when modal is open
+        document.body.style.overflow = 'hidden';
+      } else {
+        console.error('Evaluation modal not found');
+        // Ultimate fallback - redirect to contact
+        alert('We\'d love to help you evaluate AcceleraQA! Please contact us at support@acceleraqa.atlassian.net');
+      }
     }
   };
 
