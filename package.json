@@ -14,12 +14,11 @@
     "postcss": "^8.4.14",
     "tailwindcss": "^3.1.6"
   },
+
   "scripts": {
-    "start": "react-scripts start",
-    "build": "CI=false react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
+    "build": "react-scripts build"
+  }
+ 
   "browserslist": {
     "production": [
       ">0.2%",
