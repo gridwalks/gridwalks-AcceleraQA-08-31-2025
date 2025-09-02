@@ -124,27 +124,77 @@ class OpenAIService {
       throw new Error('No messages selected for study notes generation');
     }
 
-    const studyContent = selectedMessages.map(msg => {
-      if (msg.type === 'user') {
-        return `Question: ${msg.content}`;
-      } else {
-        const resourceLinks = msg.resources ? 
-          msg.resources.map(r => `- ${r.title} (${r.type}): ${r.url}`).join('\n') : '';
-        return `Answer: ${msg.content}\n\nRelated Resources:\n${resourceLinks}`;
-      }
-    }).join('\n\n');
+    console.log('Generating study notes for messages:', selectedMessages);
+
+    // Group messages by conversation pairs (user question + AI response)
+    const conversationPairs = [];
+    let currentPair = {};
+
+    selectedMessages
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+      .forEach(msg => {
+        if (msg.type === 'user') {
+          // Start new conversation pair
+          if (currentPair.question || currentPair.answer) {
+            conversationPairs.push(currentPair);
+          }
+          currentPair = { question: msg.content };
+        } else if (msg.type === 'ai' && !msg.isStudyNotes) {
+          // Add AI response to current pair
+          currentPair.answer = msg.content;
+          currentPair.resources = msg.resources || [];
+        }
+      });
+
+    // Don't forget the last pair
+    if (currentPair.question || currentPair.answer) {
+      conversationPairs.push(currentPair);
+    }
+
+    if (conversationPairs.length === 0) {
+      throw new Error('No valid conversation pairs found for study notes generation');
+    }
+
+    // Create study content from conversation pairs
+    const studyContent = conversationPairs
+      .map((pair, index) => {
+        let content = `\n=== CONVERSATION ${index + 1} ===\n`;
+        
+        if (pair.question) {
+          content += `QUESTION: ${pair.question}\n\n`;
+        }
+        
+        if (pair.answer) {
+          content += `ANSWER: ${pair.answer}\n`;
+        }
+        
+        if (pair.resources && pair.resources.length > 0) {
+          content += `\nRELATED RESOURCES:\n`;
+          content += pair.resources
+            .map(r => `• ${r.title} (${r.type}): ${r.url}`)
+            .join('\n');
+          content += '\n';
+        }
+        
+        return content;
+      })
+      .join('\n');
 
     const studyPrompt = `Create comprehensive study notes for pharmaceutical quality and compliance based on the following conversation topics. 
 
 Format as organized study material with:
-1. Executive Summary
-2. Key Concepts and Definitions
-3. Regulatory Requirements
-4. Implementation Best Practices
-5. Common Pitfalls to Avoid
-6. Study Questions for Review
+1. **Executive Summary** - Key takeaways from all conversations
+2. **Core Topics Covered** - Main pharmaceutical quality areas discussed
+3. **Key Concepts and Definitions** - Important terms and their meanings
+4. **Regulatory Requirements** - Specific FDA, ICH, or other regulatory guidance mentioned
+5. **Implementation Best Practices** - Practical recommendations from the discussions
+6. **Common Pitfalls to Avoid** - Warnings and cautions identified
+7. **Study Questions for Review** - Questions to test understanding
 
 Include specific references to FDA, ICH, and other regulatory guidelines where applicable.
+Make this comprehensive but well-organized for study purposes.
+
+Number of conversations analyzed: ${conversationPairs.length}
 
 Conversation content:
 ${studyContent}`;
