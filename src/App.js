@@ -294,9 +294,9 @@ const AcceleraQA = () => {
           exportNotebook={handleExport}
         />
 
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-160px)]">
-            <ChatArea 
+        <div className="max-w-7xl mx-auto px-6 py-8 h-[calc(100vh-160px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full min-h-0 overflow-hidden">
+            <ChatArea
               messages={messages}
               inputMessage={inputMessage}
               setInputMessage={setInputMessage}
