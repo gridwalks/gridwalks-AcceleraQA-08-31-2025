@@ -1,278 +1,246 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+// Updated App.js - Fixed generateStudyNotes function
 
-// Components
-import Header from './components/Header';
-import ChatArea from './components/ChatArea';
-import Sidebar from './components/Sidebar';
-import AuthScreen from './components/AuthScreen';
-import LoadingScreen from './components/LoadingScreen';
-import ErrorBoundary from './components/ErrorBoundary';
+// Generate study notes from selected messages
+const generateStudyNotes = useCallback(async () => {
+  if (selectedMessages.size === 0 || isGeneratingNotes) return;
 
-// Services
-import openaiService from './services/openaiService';
-import { initializeAuth } from './services/authService';
+  setIsGeneratingNotes(true);
+  setError(null);
 
-// Utils
-import { exportNotebook } from './utils/exportUtils';
-import { getMessagesByDays, createMessage } from './utils/messageUtils';
-import { validateEnvironment, DEFAULT_RESOURCES } from './config/constants';
-
-const AcceleraQA = () => {
-  // State management
-  const [messages, setMessages] = useState([]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [currentResources, setCurrentResources] = useState([]);
-  const [showNotebook, setShowNotebook] = useState(false);
-  const [selectedMessages, setSelectedMessages] = useState(new Set());
-  const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
-  const [user, setUser] = useState(null);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [error, setError] = useState(null);
-  
-  const messagesEndRef = useRef(null);
-
-  // Memoized values
-  const thirtyDayMessages = useMemo(() => 
-    getMessagesByDays(messages), 
-    [messages]
-  );
-
-  // Initialize environment and authentication
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        // Validate environment variables
-        if (!validateEnvironment()) {
-          setError('Application configuration is incomplete. Please check environment variables.');
-          setIsLoadingAuth(false);
-          return;
-        }
-
-        // Initialize authentication
-        await initializeAuth(setUser, setIsLoadingAuth, initializeWelcomeMessage);
-      } catch (error) {
-        console.error('Initialization failed:', error);
-        setError('Failed to initialize application. Please refresh the page.');
-        setIsLoadingAuth(false);
+  try {
+    // Get selected conversation data from thirtyDayMessages based on selected IDs
+    const selectedConversationData = thirtyDayMessages.filter(msg => {
+      // Check if this message's ID is in selectedMessages
+      if (selectedMessages.has(msg.id)) {
+        return true;
       }
+      
+      // For combined conversations, check if the combined ID is selected
+      const combinedId = `${msg.id}-combined`;
+      if (selectedMessages.has(combinedId)) {
+        return true;
+      }
+      
+      return false;
+    });
+
+    // Also check for combined conversations from the notebook view
+    const thirtyDayConversations = combineMessagesIntoConversations(thirtyDayMessages);
+    const selectedCombinedConversations = thirtyDayConversations.filter(conv => 
+      selectedMessages.has(conv.id)
+    );
+
+    // Flatten combined conversations back to individual messages
+    const messagesFromCombined = selectedCombinedConversations.flatMap(conv => {
+      const messages = [];
+      if (conv.originalUserMessage) {
+        messages.push(conv.originalUserMessage);
+      }
+      if (conv.originalAiMessage) {
+        messages.push(conv.originalAiMessage);
+      }
+      return messages;
+    });
+
+    // Combine all selected message data
+    const allSelectedMessages = [
+      ...selectedConversationData,
+      ...messagesFromCombined
+    ];
+
+    // Remove duplicates based on message ID
+    const uniqueSelectedMessages = allSelectedMessages.reduce((acc, msg) => {
+      if (!acc.find(existing => existing.id === msg.id)) {
+        acc.push(msg);
+      }
+      return acc;
+    }, []);
+
+    console.log('Selected messages for study notes:', uniqueSelectedMessages);
+    
+    if (uniqueSelectedMessages.length === 0) {
+      throw new Error('No valid messages found in selection. Please ensure you have selected conversations from the notebook.');
+    }
+
+    const response = await openaiService.generateStudyNotes(uniqueSelectedMessages);
+    
+    const studyNotesMessage = createMessage(
+      'ai',
+      `📚 **Study Notes Generated**\n\nBased on your selected conversations, here are comprehensive study notes:\n\n${response.answer}\n\n---\n*Study notes generated from ${selectedMessages.size} selected conversation items on ${new Date().toLocaleDateString()}*`,
+      response.resources,
+      true
+    );
+
+    // Add study notes data for export
+    studyNotesMessage.studyNotesData = {
+      content: response.answer,
+      selectedTopics: uniqueSelectedMessages
+        .filter(msg => msg.content && msg.type === 'user')
+        .map(msg => msg.content.substring(0, 50) + '...')
+        .join(', '),
+      resourceCount: response.resources.length,
+      generatedDate: new Date().toLocaleDateString()
     };
 
-    initialize();
-  }, []);
+    setMessages(prev => [...prev, studyNotesMessage]);
+    setCurrentResources(response.resources);
+    setSelectedMessages(new Set());
+    setShowNotebook(false);
 
-  // Auto-scroll to bottom of messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // Initialize welcome message for authenticated users
-  const initializeWelcomeMessage = useCallback(() => {
-    const welcomeMessage = createMessage(
+  } catch (error) {
+    console.error('Error generating study notes:', error);
+    
+    const errorMessage = createMessage(
       'ai',
-      'Welcome to AcceleraQA! I\'m your pharmaceutical quality and compliance AI assistant. I specialize in GMP, validation, CAPA, regulatory requirements, and quality risk management. How can I help you today?',
-      DEFAULT_RESOURCES
+      error.message || 'Failed to generate study notes. Please try again.'
     );
     
-    setMessages([welcomeMessage]);
-    setCurrentResources(DEFAULT_RESOURCES);
-  }, []);
+    setMessages(prev => [...prev, errorMessage]);
+  } finally {
+    setIsGeneratingNotes(false);
+  }
+}, [selectedMessages, thirtyDayMessages, isGeneratingNotes, openaiService, setMessages, setCurrentResources, setSelectedMessages, setShowNotebook, setError, createMessage, combineMessagesIntoConversations]);
 
-  // Handle sending messages
-  const handleSendMessage = useCallback(async () => {
-    if (!inputMessage.trim() || isLoading) return;
+// Updated OpenAI Service - Fixed generateStudyNotes method
 
-    const userMessage = createMessage('user', inputMessage);
-    const currentInput = inputMessage.trim();
+async generateStudyNotes(selectedMessages) {
+  if (!selectedMessages || selectedMessages.length === 0) {
+    throw new Error('No messages selected for study notes generation');
+  }
 
-    setMessages(prev => [...prev, userMessage]);
-    setInputMessage('');
-    setIsLoading(true);
-    setError(null);
+  console.log('Generating study notes for messages:', selectedMessages);
 
-    try {
-      const response = await openaiService.getChatResponse(currentInput);
-      
-      const aiMessage = createMessage(
-        'ai',
-        response.answer,
-        response.resources
-      );
+  // Group messages by conversation pairs (user question + AI response)
+  const conversationPairs = [];
+  let currentPair = {};
 
-      setMessages(prev => [...prev, aiMessage]);
-      setCurrentResources(response.resources);
-
-    } catch (error) {
-      console.error('Error getting AI response:', error);
-      
-      const errorMessage = createMessage(
-        'ai',
-        error.message,
-        [
-          { title: "OpenAI API Documentation", type: "Documentation", url: "https://platform.openai.com/docs/api-reference" },
-          { title: "OpenAI API Key Management", type: "Dashboard", url: "https://platform.openai.com/account/api-keys" },
-          { title: "OpenAI Usage Dashboard", type: "Dashboard", url: "https://platform.openai.com/account/usage" }
-        ]
-      );
-      
-      setMessages(prev => [...prev, errorMessage]);
-      setCurrentResources(errorMessage.resources);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [inputMessage, isLoading]);
-
-  // Handle input key press
-  const handleKeyPress = useCallback((event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      handleSendMessage();
-    }
-  }, [handleSendMessage]);
-
-  // Clear chat history
-  const clearChat = useCallback(() => {
-    setMessages([]);
-    setCurrentResources([]);
-    setSelectedMessages(new Set());
-    setError(null);
-  }, []);
-
-  // Generate study notes from selected messages
-  const generateStudyNotes = useCallback(async () => {
-    if (selectedMessages.size === 0 || isGeneratingNotes) return;
-
-    setIsGeneratingNotes(true);
-    setError(null);
-
-    try {
-      const selectedMessageData = messages.filter(msg => selectedMessages.has(msg.id));
-      
-      if (selectedMessageData.length === 0) {
-        throw new Error('No valid messages selected');
+  selectedMessages
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    .forEach(msg => {
+      if (msg.type === 'user') {
+        // Start new conversation pair
+        if (currentPair.question || currentPair.answer) {
+          conversationPairs.push(currentPair);
+        }
+        currentPair = { question: msg.content };
+      } else if (msg.type === 'ai' && !msg.isStudyNotes) {
+        // Add AI response to current pair
+        currentPair.answer = msg.content;
+        currentPair.resources = msg.resources || [];
       }
+    });
 
-      const response = await openaiService.generateStudyNotes(selectedMessageData);
+  // Don't forget the last pair
+  if (currentPair.question || currentPair.answer) {
+    conversationPairs.push(currentPair);
+  }
+
+  if (conversationPairs.length === 0) {
+    throw new Error('No valid conversation pairs found for study notes generation');
+  }
+
+  // Create study content from conversation pairs
+  const studyContent = conversationPairs
+    .map((pair, index) => {
+      let content = `\n=== CONVERSATION ${index + 1} ===\n`;
       
-      const studyNotesMessage = createMessage(
-        'ai',
-        `📚 **Study Notes Generated**\n\nBased on your selected conversations, here are comprehensive study notes:\n\n${response.answer}\n\n---\n*Study notes generated from ${selectedMessages.size} selected conversation items on ${new Date().toLocaleDateString()}*`,
-        response.resources,
-        true
-      );
+      if (pair.question) {
+        content += `QUESTION: ${pair.question}\n\n`;
+      }
+      
+      if (pair.answer) {
+        content += `ANSWER: ${pair.answer}\n`;
+      }
+      
+      if (pair.resources && pair.resources.length > 0) {
+        content += `\nRELATED RESOURCES:\n`;
+        content += pair.resources
+          .map(r => `• ${r.title} (${r.type}): ${r.url}`)
+          .join('\n');
+        content += '\n';
+      }
+      
+      return content;
+    })
+    .join('\n');
 
-      // Add study notes data for export
-      studyNotesMessage.studyNotesData = {
-        content: response.answer,
-        selectedTopics: selectedMessageData
-          .filter(msg => msg.content)
-          .map(msg => msg.content.substring(0, 50) + '...')
-          .join(', '),
-        resourceCount: response.resources.length,
-        generatedDate: new Date().toLocaleDateString()
+  const studyPrompt = `Create comprehensive study notes for pharmaceutical quality and compliance based on the following conversation topics. 
+
+Format as organized study material with:
+1. **Executive Summary** - Key takeaways from all conversations
+2. **Core Topics Covered** - Main pharmaceutical quality areas discussed
+3. **Key Concepts and Definitions** - Important terms and their meanings
+4. **Regulatory Requirements** - Specific FDA, ICH, or other regulatory guidance mentioned
+5. **Implementation Best Practices** - Practical recommendations from the discussions
+6. **Common Pitfalls to Avoid** - Warnings and cautions identified
+7. **Study Questions for Review** - Questions to test understanding
+
+Include specific references to FDA, ICH, and other regulatory guidelines where applicable.
+Make this comprehensive but well-organized for study purposes.
+
+Number of conversations analyzed: ${conversationPairs.length}
+
+Conversation content:
+${studyContent}`;
+
+  return await this.getChatResponse(studyPrompt);
+}
+
+// Updated messageUtils.js - Fixed combineMessagesIntoConversations function
+
+export function combineMessagesIntoConversations(messages) {
+  if (!messages || !Array.isArray(messages)) {
+    return [];
+  }
+
+  return messages.reduce((acc, message, index, array) => {
+    // Skip user messages that have a following AI message (they'll be combined)
+    if (message.type === 'user' && index < array.length - 1 && array[index + 1].type === 'ai') {
+      return acc;
+    }
+    
+    // Combine AI message with preceding user message
+    if (message.type === 'ai' && index > 0 && array[index - 1].type === 'user') {
+      const userMessage = array[index - 1];
+      const combinedMessage = {
+        id: `${userMessage.id}-${message.id}`, // Use both IDs for unique identification
+        userContent: userMessage.content,
+        aiContent: message.content,
+        timestamp: message.timestamp,
+        resources: message.resources || [],
+        isStudyNotes: message.isStudyNotes || false,
+        originalUserMessage: userMessage,
+        originalAiMessage: message
       };
-
-      setMessages(prev => [...prev, studyNotesMessage]);
-      setCurrentResources(response.resources);
-      setSelectedMessages(new Set());
-      setShowNotebook(false);
-
-    } catch (error) {
-      console.error('Error generating study notes:', error);
-      
-      const errorMessage = createMessage(
-        'ai',
-        error.message || 'Failed to generate study notes. Please try again.'
-      );
-      
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsGeneratingNotes(false);
+      acc.push(combinedMessage);
+    } 
+    // Handle standalone AI messages (like welcome messages)
+    else if (message.type === 'ai') {
+      const combinedMessage = {
+        id: message.id,
+        userContent: null,
+        aiContent: message.content,
+        timestamp: message.timestamp,
+        resources: message.resources || [],
+        isStudyNotes: message.isStudyNotes || false,
+        originalAiMessage: message
+      };
+      acc.push(combinedMessage);
+    } 
+    // Handle standalone user messages (unlikely but possible)
+    else if (message.type === 'user') {
+      const combinedMessage = {
+        id: message.id,
+        userContent: message.content,
+        aiContent: null,
+        timestamp: message.timestamp,
+        resources: [],
+        isStudyNotes: false,
+        originalUserMessage: message
+      };
+      acc.push(combinedMessage);
     }
-  }, [selectedMessages, messages, isGeneratingNotes]);
-
-  // Handle export
-  const handleExport = useCallback(() => {
-    try {
-      exportNotebook(messages);
-    } catch (error) {
-      console.error('Export failed:', error);
-      setError('Failed to export notebook. Please try again.');
-    }
-  }, [messages]);
-
-  // Loading screen
-  if (isLoadingAuth) {
-    return <LoadingScreen />;
-  }
-
-  // Error screen
-  if (error) {
-    return (
-      <div className="min-h-screen bg-red-50 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <div className="text-red-600 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Application Error</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-          >
-            Reload Application
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Authentication required screen
-  if (!user) {
-    return <AuthScreen />;
-  }
-
-  // Main authenticated interface
-  return (
-    <ErrorBoundary>
-      <div className="min-h-screen bg-gray-50">
-        <Header 
-          user={user}
-          showNotebook={showNotebook}
-          setShowNotebook={setShowNotebook}
-          clearChat={clearChat}
-          exportNotebook={handleExport}
-        />
-
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-160px)]">
-            <ChatArea 
-              messages={messages}
-              inputMessage={inputMessage}
-              setInputMessage={setInputMessage}
-              isLoading={isLoading}
-              handleSendMessage={handleSendMessage}
-              handleKeyPress={handleKeyPress}
-              messagesEndRef={messagesEndRef}
-            />
-            
-            <Sidebar 
-              showNotebook={showNotebook}
-              messages={messages}
-              thirtyDayMessages={thirtyDayMessages}
-              selectedMessages={selectedMessages}
-              setSelectedMessages={setSelectedMessages}
-              generateStudyNotes={generateStudyNotes}
-              isGeneratingNotes={isGeneratingNotes}
-              currentResources={currentResources}
-            />
-          </div>
-        </div>
-      </div>
-    </ErrorBoundary>
-  );
-};
-
-export default AcceleraQA;
+    
+    return acc;
+  }, []);
+}
