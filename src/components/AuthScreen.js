@@ -12,6 +12,15 @@ const AuthScreen = memo(() => {
     }
   };
 
+  const handleEvaluationClick = () => {
+    // Check if the modal function exists (from index.html)
+    if (window.openEvaluationModal) {
+      window.openEvaluationModal();
+    } else {
+      console.error('Evaluation modal not available');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
@@ -19,13 +28,23 @@ const AuthScreen = memo(() => {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="text-2xl font-bold tracking-tight">AcceleraQA</div>
-            <button
-              onClick={handleLoginClick}
-              className="px-6 py-2 bg-white text-black font-medium rounded hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
-              aria-label="Sign in to AcceleraQA"
-            >
-              Sign In
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleEvaluationClick}
+                className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded hover:from-green-700 hover:to-emerald-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-300 flex items-center gap-2"
+                aria-label="Request evaluation of AcceleraQA"
+              >
+                <span>🔬</span>
+                <span>Request Evaluation</span>
+              </button>
+              <button
+                onClick={handleLoginClick}
+                className="px-6 py-2 bg-white text-black font-medium rounded hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+                aria-label="Sign in to AcceleraQA"
+              >
+                Sign In
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -58,14 +77,25 @@ const AuthScreen = memo(() => {
               </div>
             </div>
             
-            <button
-              onClick={handleLoginClick}
-              className="group inline-flex items-center space-x-3 bg-white text-black px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-purple-600"
-            >
-              <User className="h-5 w-5" />
-              <span>Sign In with Auth0</span>
-              <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-            </button>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button
+                onClick={handleLoginClick}
+                className="group inline-flex items-center justify-center space-x-3 bg-white text-black px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-purple-600"
+              >
+                <User className="h-5 w-5" />
+                <span>Sign In with Auth0</span>
+                <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+              
+              <button
+                onClick={handleEvaluationClick}
+                className="group inline-flex items-center justify-center space-x-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-green-300 focus:ring-offset-2 focus:ring-offset-purple-600"
+              >
+                <span>🔬</span>
+                <span>Request Evaluation</span>
+                <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
           </div>
 
           {/* Features Section */}
@@ -112,6 +142,28 @@ const AuthScreen = memo(() => {
                 <div className="text-2xl font-bold text-orange-400 mb-2">24/7</div>
                 <div className="text-sm text-gray-400">Support</div>
               </div>
+            </div>
+          </div>
+
+          {/* Call to Action Section */}
+          <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-8 rounded-lg mt-16 text-center">
+            <h3 className="text-2xl font-bold mb-4">Ready to Transform Your QA Workflow?</h3>
+            <p className="text-lg text-green-100 mb-6">
+              Join pharmaceutical teams already using AcceleraQA to streamline compliance and accelerate quality initiatives.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={handleEvaluationClick}
+                className="px-8 py-3 bg-white text-green-700 font-semibold rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-white"
+              >
+                Get Free Evaluation
+              </button>
+              <button
+                onClick={handleLoginClick}
+                className="px-8 py-3 border-2 border-white text-white font-semibold rounded-lg hover:bg-white hover:text-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-white"
+              >
+                Sign In Now
+              </button>
             </div>
           </div>
         </div>
