@@ -31,10 +31,9 @@ const ChatArea = memo(({
   };
 
   return (
-    <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 flex flex-col shadow-sm h-full">
-      {/* Chat Messages - Fixed height with scroll */}
-      <div className="flex-1 min-h-0">
-        <div className="h-full overflow-y-auto p-8 space-y-6">
+    <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 flex flex-col shadow-sm">
+      {/* Chat Messages - Fixed height scrollable window */}
+      <div className="h-[600px] overflow-y-auto p-8 space-y-6" style={{ scrollBehavior: 'smooth' }}>
           {messages.length === 0 ? (
             <div className="text-center py-16">
               <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg mx-auto mb-6 flex items-center justify-center">
@@ -114,10 +113,9 @@ const ChatArea = memo(({
 
           <div ref={messagesEndRef} aria-hidden="true" />
         </div>
-      </div>
 
-      {/* Input Area - Fixed at bottom */}
-      <div className="flex-shrink-0 p-8 border-t border-gray-200 bg-gray-50">
+      {/* Input Area - Always visible at bottom */}
+      <div className="border-t border-gray-200 bg-gray-50 p-8">
         <form onSubmit={handleSubmit} className="flex space-x-4">
           <div className="flex-1 relative">
             <textarea
