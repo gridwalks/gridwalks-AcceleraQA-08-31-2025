@@ -1,20 +1,17 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useMemo } from 'react';
 import { Search, ChevronRight, ExternalLink, BookOpen } from 'lucide-react';
 
 const ResourcesView = memo(({ currentResources }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filteredResources, setFilteredResources] = useState(currentResources);
 
-  React.useEffect(() => {
+  const filteredResources = useMemo(() => {
     if (!searchTerm.trim()) {
-      setFilteredResources(currentResources);
-    } else {
-      const filtered = currentResources.filter(resource =>
-        resource.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resource.type.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredResources(filtered);
+      return currentResources;
     }
+    return currentResources.filter((resource) =>
+      resource.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      resource.type.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   }, [currentResources, searchTerm]);
 
   const handleSearchChange = (e) => {
