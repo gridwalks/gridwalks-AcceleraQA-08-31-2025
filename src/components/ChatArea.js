@@ -119,7 +119,7 @@ const ChatArea = memo(({
         </div>
 
       {/* Input Area - Always visible at bottom */}
-      <div className="border-t border-gray-200 bg-gray-50 p-8">
+      <div className="border-t border-gray-200 bg-gray-50 p-8 flex-shrink-0">
         <form onSubmit={handleSubmit} className="flex space-x-4">
           <div className="flex-1 relative">
             <textarea
