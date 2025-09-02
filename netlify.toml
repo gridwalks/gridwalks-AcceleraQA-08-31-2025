@@ -3,8 +3,7 @@
   command = "npm run build"
 
 [build.environment]
-  NODE_VERSION = "18"
-  NPM_VERSION = "8"
+  NODE_VERSION = "18.19.0"
   CI = "false"
   GENERATE_SOURCEMAP = "false"
 
