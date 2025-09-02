@@ -334,56 +334,45 @@
     </div>
     
     <script>
-      if ('performance' in window && 'getEntriesByType' in performance) {
-        window.addEventListener('load', function() {
-          setTimeout(function() {
-            const perfData = performance.getEntriesByType('navigation')[0];
-            if (perfData) {
-              console.log('⚡ Page Load Performance:', {
-                'DOM Content Loaded': Math.round(perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart) + 'ms',
-                'Full Page Load': Math.round(perfData.loadEventEnd - perfData.loadEventStart) + 'ms'
-              });
-            }
-          }, 0);
-        });
-      }
-
+      // Make functions available immediately
       window.openEvaluationModal = function() {
+        console.log('Opening evaluation modal...');
         const modal = document.getElementById('evaluationModal');
-        modal.classList.add('show');
-        
-        setTimeout(() => {
-          document.getElementById('firstName').focus();
-        }, 100);
-        
-        document.body.style.overflow = 'hidden';
-      }
+        if (modal) {
+          modal.classList.add('show');
+          
+          setTimeout(() => {
+            const firstInput = document.getElementById('firstName');
+            if (firstInput) firstInput.focus();
+          }, 100);
+          
+          document.body.style.overflow = 'hidden';
+        } else {
+          console.error('Modal element not found');
+        }
+      };
 
       window.closeEvaluationModal = function() {
+        console.log('Closing evaluation modal...');
         const modal = document.getElementById('evaluationModal');
-        modal.classList.remove('show');
-        
-        document.getElementById('evaluationForm').reset();
-        document.getElementById('modalForm').style.display = 'block';
-        document.getElementById('successMessage').style.display = 'none';
-        
-        document.body.style.overflow = '';
-      }
-
-      document.getElementById('evaluationModal').addEventListener('click', function(e) {
-        if (e.target === this) {
-          closeEvaluationModal();
+        if (modal) {
+          modal.classList.remove('show');
+          
+          const form = document.getElementById('evaluationForm');
+          if (form) form.reset();
+          
+          const modalForm = document.getElementById('modalForm');
+          const successMessage = document.getElementById('successMessage');
+          if (modalForm) modalForm.style.display = 'block';
+          if (successMessage) successMessage.style.display = 'none';
+          
+          document.body.style.overflow = '';
         }
-      });
-
-      document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && document.getElementById('evaluationModal').classList.contains('show')) {
-          closeEvaluationModal();
-        }
-      });
+      };
 
       window.submitEvaluationRequest = async function(event) {
         event.preventDefault();
+        console.log('Submitting evaluation request...');
         
         const submitBtn = document.getElementById('submitBtn');
         const originalText = submitBtn.textContent;
@@ -399,6 +388,8 @@
             email: formData.get('email'),
             company: formData.get('company') || 'Not provided'
           };
+
+          console.log('Form data:', data);
 
           const emailSubject = encodeURIComponent('AcceleraQA Evaluation Request - ' + data.firstName + ' ' + data.lastName);
           const emailBody = encodeURIComponent('Hello AcceleraQA Team,\n\nA new evaluation request has been submitted through the landing page:\n\nCONTACT INFORMATION:\nName: ' + data.firstName + ' ' + data.lastName + '\nEmail: ' + data.email + '\nCompany: ' + data.company + '\nRequest Date: ' + new Date().toLocaleString() + '\nSource: AcceleraQA Landing Page\n\nREQUEST DETAILS:\nThe user has expressed interest in evaluating AcceleraQA for their pharmaceutical quality and compliance team.\n\nNEXT STEPS:\n1. Create evaluation account access\n2. Schedule personalized demo\n3. Provide onboarding materials\n4. Follow up within 1-2 business days\n\nPlease process this evaluation request and reach out to the prospect.\n\nBest regards,\nAcceleraQA System');
@@ -419,8 +410,10 @@
             formData: data
           });
           
-          document.getElementById('modalForm').style.display = 'none';
-          document.getElementById('successMessage').style.display = 'block';
+          const modalForm = document.getElementById('modalForm');
+          const successMessage = document.getElementById('successMessage');
+          if (modalForm) modalForm.style.display = 'none';
+          if (successMessage) successMessage.style.display = 'block';
           
           setTimeout(() => {
             closeEvaluationModal();
@@ -433,12 +426,50 @@
           submitBtn.disabled = false;
           submitBtn.textContent = originalText;
         }
+      };
+
+      // Performance monitoring
+      if ('performance' in window && 'getEntriesByType' in performance) {
+        window.addEventListener('load', function() {
+          setTimeout(function() {
+            const perfData = performance.getEntriesByType('navigation')[0];
+            if (perfData) {
+              console.log('⚡ Page Load Performance:', {
+                'DOM Content Loaded': Math.round(perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart) + 'ms',
+                'Full Page Load': Math.round(perfData.loadEventEnd - perfData.loadEventStart) + 'ms'
+              });
+            }
+          }, 0);
+        });
       }
 
+      // Event listeners
+      document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, setting up modal event listeners...');
+        
+        const modal = document.getElementById('evaluationModal');
+        if (modal) {
+          modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+              closeEvaluationModal();
+            }
+          });
+        }
+
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && modal && modal.classList.contains('show')) {
+            closeEvaluationModal();
+          }
+        });
+      });
+
+      // Make sure modal functions are available globally for React components
       window.AcceleraQAModal = {
-        openEvaluation: openEvaluationModal,
-        closeEvaluation: closeEvaluationModal
+        openEvaluation: window.openEvaluationModal,
+        closeEvaluation: window.closeEvaluationModal
       };
+
+      console.log('Evaluation modal functions loaded');
     </script>
   </body>
 </html>
