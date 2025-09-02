@@ -14,7 +14,7 @@
   to = "/index.html"
   status = 200
 
-# Enhanced security headers for Auth0 compatibility
+# Enhanced security headers for Auth0 compatibility with evaluation modal support
 [[headers]]
   for = "/*"
   [headers.values]
@@ -22,7 +22,7 @@
     X-XSS-Protection = "1; mode=block"  
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' https://*.auth0.com https://cdn.auth0.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.openai.com https://*.auth0.com https://*.auth0.io; font-src 'self'; frame-src https://*.auth0.com; worker-src 'self' blob:;"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://*.auth0.com https://cdn.auth0.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.openai.com https://*.auth0.com https://*.auth0.io; font-src 'self'; frame-src https://*.auth0.com; worker-src 'self' blob:;"
 
 # Cache static assets
 [[headers]]
