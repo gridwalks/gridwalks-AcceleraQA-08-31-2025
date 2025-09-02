@@ -1,4 +1,4 @@
-import { OPENAI_CONFIG, ERROR_MESSAGES } from '../config/constants';
+import { OPENAI_CONFIG, ERROR_MESSAGES, OPENAI_TIMEOUT_MS } from '../config/constants';
 import { generateResources } from '../utils/resourceGenerator';
 
 class OpenAIService {
@@ -15,6 +15,8 @@ class OpenAIService {
 
   async makeRequest(endpoint, options = {}) {
     this.validateApiKey();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
     const defaultOptions = {
       method: 'POST',
@@ -22,18 +24,23 @@ class OpenAIService {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`
       },
+      signal: controller.signal,
       ...options
     };
 
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, defaultOptions);
-      
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
         await this.handleApiError(response);
       }
 
       return await response.json();
     } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error(ERROR_MESSAGES.REQUEST_TIMEOUT);
+      }
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         throw new Error(ERROR_MESSAGES.NETWORK_ERROR);
       }

@@ -10,7 +10,7 @@ export const OPENAI_CONFIG = {
   MODEL: 'gpt-4',
   MAX_TOKENS: 1200,
   TEMPERATURE: 0.7,
-  SYSTEM_PROMPT: `You are AcceleraQA, an AI assistant specialized in pharmaceutical quality and compliance. 
+  SYSTEM_PROMPT: `You are AcceleraQA, an AI assistant specialized in pharmaceutical quality and compliance.
 
 Your expertise includes:
 - Good Manufacturing Practice (GMP) and cGMP regulations
@@ -32,6 +32,9 @@ Focus on practical implementation and current best practices.
 When appropriate, mention specific FDA guidance documents, ICH guidelines, or industry standards.
 Prioritize patient safety and product quality in all recommendations.`
 };
+
+// Timeout for OpenAI requests (in milliseconds)
+export const OPENAI_TIMEOUT_MS = 30000;
 
 // Auth0 Configuration
 export const AUTH0_CONFIG = {
@@ -58,6 +61,7 @@ export const ERROR_MESSAGES = {
   RATE_LIMIT_EXCEEDED: '⏱️ API rate limit exceeded. Please wait a moment and try again.',
   QUOTA_EXCEEDED: '💳 API quota exceeded. Please check your OpenAI account billing and usage limits.',
   NETWORK_ERROR: '🌐 Network error. Please check your internet connection and try again.',
+  REQUEST_TIMEOUT: '⏳ Request timed out. Please try again.',
   GENERIC_ERROR: 'Sorry, I encountered an error. Please try again.',
   AUTH_ERROR: 'Authentication error occurred. Please try signing in again.',
   STUDY_NOTES_GENERATION_FAILED: '❌ Failed to generate study notes. Please check your API configuration and try again.'
