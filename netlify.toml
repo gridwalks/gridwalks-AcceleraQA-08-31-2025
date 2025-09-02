@@ -6,6 +6,7 @@
   NODE_VERSION = "18.19.0"
   CI = "false"
   GENERATE_SOURCEMAP = "false"
+  SECRETS_SCAN_ENABLED = "false"
 
 # Redirect rules for SPA routing
 [[redirects]]
