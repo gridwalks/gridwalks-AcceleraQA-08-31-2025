@@ -333,113 +333,178 @@
     </div>
     
     <script>
-      // Make functions available immediately
-      window.openEvaluationModal = function() {
-        console.log('Opening evaluation modal...');
-        const modal = document.getElementById('evaluationModal');
-        if (modal) {
-          modal.classList.add('show');
-          
-          setTimeout(() => {
-            const firstInput = document.getElementById('firstName');
-            if (firstInput) firstInput.focus();
-          }, 100);
-          
-          document.body.style.overflow = 'hidden';
-        } else {
-          console.error('Modal element not found');
-        }
-      };
+    <script>
+      // Define functions immediately - before DOM load
+      (function() {
+        console.log('Initializing evaluation modal functions...');
+        
+        // Make functions available immediately
+        window.openEvaluationModal = function() {
+          console.log('Opening evaluation modal...');
+          const modal = document.getElementById('evaluationModal');
+          if (modal) {
+            modal.classList.add('show');
+            
+            setTimeout(() => {
+              const firstInput = document.getElementById('firstName');
+              if (firstInput) {
+                firstInput.focus();
+                console.log('Focused on first input');
+              }
+            }, 100);
+            
+            document.body.style.overflow = 'hidden';
+            console.log('Modal opened successfully');
+          } else {
+            console.error('Modal element not found');
+          }
+        };
 
-      window.closeEvaluationModal = function() {
-        console.log('Closing evaluation modal...');
-        const modal = document.getElementById('evaluationModal');
-        if (modal) {
-          modal.classList.remove('show');
+        window.closeEvaluationModal = function() {
+          console.log('Closing evaluation modal...');
+          const modal = document.getElementById('evaluationModal');
+          if (modal) {
+            modal.classList.remove('show');
+            
+            const form = document.getElementById('evaluationForm');
+            if (form) form.reset();
+            
+            const modalForm = document.getElementById('modalForm');
+            const successMessage = document.getElementById('successMessage');
+            if (modalForm) modalForm.style.display = 'block';
+            if (successMessage) successMessage.style.display = 'none';
+            
+            document.body.style.overflow = '';
+            console.log('Modal closed successfully');
+          }
+        };
+
+        // Simplified form submission handler
+        window.handleFormSubmit = function(event) {
+          event.preventDefault();
+          console.log('Form submitted - handleFormSubmit called');
           
-          const form = document.getElementById('evaluationForm');
-          if (form) form.reset();
+          try {
+            // Get form data
+            const form = event.target;
+            const formData = new FormData(form);
+            const firstName = formData.get('firstName');
+            const lastName = formData.get('lastName');
+            const email = formData.get('email');
+            const company = formData.get('company') || 'Not provided';
+            
+            console.log('Form data collected:', { firstName, lastName, email, company });
+            
+            // Validate required fields
+            if (!firstName || !lastName || !email) {
+              alert('Please fill in all required fields');
+              return false;
+            }
+            
+            // Show loading state
+            const submitBtn = document.getElementById('submitBtn');
+            if (submitBtn) {
+              submitBtn.disabled = true;
+              submitBtn.innerHTML = '<span class="loading-spinner"></span>Submitting...';
+            }
+            
+            // Create email content for Jira
+            const emailSubject = 'AcceleraQA Evaluation Request - ' + firstName + ' ' + lastName;
+            const emailBody = 'Hello AcceleraQA Team,\n\nA new evaluation request:\n\nName: ' + firstName + ' ' + lastName + '\nEmail: ' + email + '\nCompany: ' + company + '\nDate: ' + new Date().toLocaleString() + '\n\nPlease follow up for evaluation access.\n\nBest regards,\nAcceleraQA System';
+            
+            // Log the request
+            console.log('Evaluation request:', { firstName, lastName, email, company });
+            
+            // Create mailto link
+            const mailtoLink = 'mailto:support@acceleraqa.atlassian.net?subject=' + encodeURIComponent(emailSubject) + '&body=' + encodeURIComponent(emailBody);
+            
+            // Try to open mailto
+            try {
+              window.open(mailtoLink, '_blank');
+              console.log('Mailto link opened');
+            } catch (e) {
+              console.log('Mailto not available');
+            }
+            
+            // Show success after 1 second
+            setTimeout(() => {
+              console.log('Showing success message');
+              showSuccessMessage();
+            }, 1000);
+            
+            return false;
+            
+          } catch (error) {
+            console.error('Error in form submission:', error);
+            alert('There was an error. Please try again.');
+            return false;
+          }
+        };
+        
+        // Function to show success message
+        window.showSuccessMessage = function() {
+          console.log('showSuccessMessage called');
           
           const modalForm = document.getElementById('modalForm');
           const successMessage = document.getElementById('successMessage');
-          if (modalForm) modalForm.style.display = 'block';
-          if (successMessage) successMessage.style.display = 'none';
           
-          document.body.style.overflow = '';
-        }
-      };
-
-      // Simplified form submission handler
-      window.handleFormSubmit = function(event) {
-        event.preventDefault();
-        console.log('Form submitted - handleFormSubmit called');
-        
-        try {
-          // Get form data
-          const form = event.target;
-          const formData = new FormData(form);
-          const firstName = formData.get('firstName');
-          const lastName = formData.get('lastName');
-          const email = formData.get('email');
-          const company = formData.get('company') || 'Not provided';
-          
-          console.log('Form data collected:', { firstName, lastName, email, company });
-          
-          // Validate required fields
-          if (!firstName || !lastName || !email) {
-            alert('Please fill in all required fields');
-            return false;
+          if (modalForm) {
+            modalForm.style.display = 'none';
+            console.log('Form hidden');
+          } else {
+            console.error('modalForm element not found');
           }
           
-          // Show loading state
-          const submitBtn = document.getElementById('submitBtn');
-          if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="loading-spinner"></span>Submitting...';
+          if (successMessage) {
+            successMessage.style.display = 'block';
+            console.log('Success message shown');
+          } else {
+            console.error('successMessage element not found');
           }
           
-          // Simulate processing and show success after 1 second
+          // Auto-close after 3 seconds
           setTimeout(() => {
-            console.log('Showing success message');
-            showSuccessMessage();
-          }, 1000);
-          
-          return false; // Prevent default form submission
-          
-        } catch (error) {
-          console.error('Error in form submission:', error);
-          alert('There was an error. Please try again.');
-          return false;
+            console.log('Auto-closing modal');
+            window.closeEvaluationModal();
+          }, 3000);
+        };
+
+        // Make functions globally available
+        window.AcceleraQAModal = {
+          openEvaluation: window.openEvaluationModal,
+          closeEvaluation: window.closeEvaluationModal
+        };
+
+        console.log('Evaluation modal functions initialized');
+        console.log('Available functions:', {
+          openEvaluationModal: typeof window.openEvaluationModal,
+          closeEvaluationModal: typeof window.closeEvaluationModal,
+          handleFormSubmit: typeof window.handleFormSubmit
+        });
+      })();
+
+      // Set up event listeners when DOM is ready
+      document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, setting up modal event listeners...');
+        
+        const modal = document.getElementById('evaluationModal');
+        if (modal) {
+          modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+              window.closeEvaluationModal();
+            }
+          });
+          console.log('Modal click listener added');
         }
-      };
-      
-      // Function to show success message
-      window.showSuccessMessage = function() {
-        console.log('showSuccessMessage called');
+
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && modal && modal.classList.contains('show')) {
+            window.closeEvaluationModal();
+          }
+        });
         
-        const modalForm = document.getElementById('modalForm');
-        const successMessage = document.getElementById('successMessage');
-        
-        if (modalForm) {
-          modalForm.style.display = 'none';
-          console.log('Form hidden');
-        } else {
-          console.error('modalForm element not found');
-        }
-        
-        if (successMessage) {
-          successMessage.style.display = 'block';
-          console.log('Success message shown');
-        } else {
-          console.error('successMessage element not found');
-        }
-        
-        // Auto-close after 3 seconds
-        setTimeout(() => {
-          console.log('Auto-closing modal');
-          closeEvaluationModal();
-        }, 3000);
-      };
+        console.log('Escape key listener added');
+      });
 
       // Performance monitoring
       if ('performance' in window && 'getEntriesByType' in performance) {
@@ -455,34 +520,7 @@
           }, 0);
         });
       }
-
-      // Event listeners
-      document.addEventListener('DOMContentLoaded', function() {
-        console.log('DOM loaded, setting up modal event listeners...');
-        
-        const modal = document.getElementById('evaluationModal');
-        if (modal) {
-          modal.addEventListener('click', function(e) {
-            if (e.target === this) {
-              closeEvaluationModal();
-            }
-          });
-        }
-
-        document.addEventListener('keydown', function(e) {
-          if (e.key === 'Escape' && modal && modal.classList.contains('show')) {
-            closeEvaluationModal();
-          }
-        });
-      });
-
-      // Make sure modal functions are available globally for React components
-      window.AcceleraQAModal = {
-        openEvaluation: window.openEvaluationModal,
-        closeEvaluation: window.closeEvaluationModal
-      };
-
-      console.log('Evaluation modal functions loaded');
+    </script>
     </script>
   </body>
 </html>
