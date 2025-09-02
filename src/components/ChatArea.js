@@ -70,31 +70,35 @@ const ChatArea = memo(({
                     }}
                   />
                   
-                  <div className={`flex items-center justify-between mt-3 pt-3 border-t ${
-                    message.type === 'user' ? 'border-gray-700 text-gray-300' : 'border-gray-200 text-gray-500'
-                  }`}>
-                    <div className="flex items-center space-x-3">
-                      <time className="text-xs" dateTime={message.timestamp}>
-                        {new Date(message.timestamp).toLocaleString()}
-                      </time>
+                  {message.type === 'ai' && (
+                    <div className={`flex items-center justify-between mt-3 pt-3 border-t ${
+                      message.isStudyNotes
+                        ? 'border-green-200 text-gray-500'
+                        : 'border-gray-200 text-gray-500'
+                    }`}>
+                      <div className="flex items-center space-x-3">
+                        <time className="text-xs" dateTime={message.timestamp}>
+                          {new Date(message.timestamp).toLocaleString()}
+                        </time>
+                        {message.isStudyNotes && (
+                          <span className="text-xs text-green-600 font-medium">
+                            📚 Study Notes
+                          </span>
+                        )}
+                      </div>
+                      
                       {message.isStudyNotes && (
-                        <span className="text-xs text-green-600 font-medium">
-                          📚 Study Notes
-                        </span>
+                        <button
+                          onClick={() => handleExportStudyNotes(message)}
+                          className="ml-3 px-3 py-1 bg-black text-white text-xs rounded hover:bg-gray-800 transition-colors flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-gray-600"
+                          aria-label="Export study notes to Word document"
+                        >
+                          <FileText className="h-3 w-3" />
+                          <span>Export to Word</span>
+                        </button>
                       )}
                     </div>
-                    
-                    {message.isStudyNotes && (
-                      <button
-                        onClick={() => handleExportStudyNotes(message)}
-                        className="ml-3 px-3 py-1 bg-black text-white text-xs rounded hover:bg-gray-800 transition-colors flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-gray-600"
-                        aria-label="Export study notes to Word document"
-                      >
-                        <FileText className="h-3 w-3" />
-                        <span>Export to Word</span>
-                      </button>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
             ))
