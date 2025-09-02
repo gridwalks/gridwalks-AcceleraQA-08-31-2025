@@ -102,7 +102,7 @@ const generateStudyNotes = useCallback(async () => {
 }, [selectedMessages, thirtyDayMessages, isGeneratingNotes, openaiService, setMessages, setCurrentResources, setSelectedMessages, setShowNotebook, setError, createMessage, combineMessagesIntoConversations]);
 
 // Updated OpenAI Service - Fixed generateStudyNotes method
-
+;
 async generateStudyNotes(selectedMessages) {
   if (!selectedMessages || selectedMessages.length === 0) {
     throw new Error('No messages selected for study notes generation');
