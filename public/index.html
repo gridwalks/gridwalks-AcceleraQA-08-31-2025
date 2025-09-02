@@ -268,7 +268,7 @@
             </p>
           </div>
 
-          <form id="evaluationForm" onsubmit="submitEvaluationRequest(event)">
+          <form id="evaluationForm" onsubmit="return handleFormSubmit(event)">
             <div class="form-group">
               <label for="firstName" class="form-label">First Name *</label>
               <input 
@@ -369,86 +369,76 @@
         }
       };
 
-      window.submitEvaluationRequest = async function(event) {
+      // Simplified form submission handler
+      window.handleFormSubmit = function(event) {
         event.preventDefault();
-        console.log('Submitting evaluation request...');
-        
-        const submitBtn = document.getElementById('submitBtn');
-        const originalText = submitBtn ? submitBtn.textContent : 'Request Evaluation Access';
-        
-        if (submitBtn) {
-          submitBtn.disabled = true;
-          submitBtn.innerHTML = '<span class="loading-spinner"></span>Submitting Request...';
-        }
+        console.log('Form submitted - handleFormSubmit called');
         
         try {
-          const formData = new FormData(event.target);
-          const data = {
-            firstName: formData.get('firstName'),
-            lastName: formData.get('lastName'),
-            email: formData.get('email'),
-            company: formData.get('company') || 'Not provided'
-          };
-
-          console.log('Form data:', data);
-
+          // Get form data
+          const form = event.target;
+          const formData = new FormData(form);
+          const firstName = formData.get('firstName');
+          const lastName = formData.get('lastName');
+          const email = formData.get('email');
+          const company = formData.get('company') || 'Not provided';
+          
+          console.log('Form data collected:', { firstName, lastName, email, company });
+          
           // Validate required fields
-          if (!data.firstName || !data.lastName || !data.email) {
-            throw new Error('Please fill in all required fields');
-          }
-
-          const emailSubject = encodeURIComponent('AcceleraQA Evaluation Request - ' + data.firstName + ' ' + data.lastName);
-          const emailBody = encodeURIComponent('Hello AcceleraQA Team,\n\nA new evaluation request has been submitted through the landing page:\n\nCONTACT INFORMATION:\nName: ' + data.firstName + ' ' + data.lastName + '\nEmail: ' + data.email + '\nCompany: ' + data.company + '\nRequest Date: ' + new Date().toLocaleString() + '\nSource: AcceleraQA Landing Page\n\nREQUEST DETAILS:\nThe user has expressed interest in evaluating AcceleraQA for their pharmaceutical quality and compliance team.\n\nNEXT STEPS:\n1. Create evaluation account access\n2. Schedule personalized demo\n3. Provide onboarding materials\n4. Follow up within 1-2 business days\n\nPlease process this evaluation request and reach out to the prospect.\n\nBest regards,\nAcceleraQA System');
-
-          // Simulate processing time
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          
-          const mailtoLink = 'mailto:support@acceleraqa.atlassian.net?subject=' + emailSubject + '&body=' + emailBody;
-          
-          try {
-            window.open(mailtoLink);
-          } catch (e) {
-            console.log('Mailto not available, email content logged for manual processing');
-          }
-
-          console.log('Evaluation Request Data:', {
-            subject: decodeURIComponent(emailSubject),
-            body: decodeURIComponent(emailBody),
-            formData: data
-          });
-          
-          // Show success message
-          const modalForm = document.getElementById('modalForm');
-          const successMessage = document.getElementById('successMessage');
-          
-          if (modalForm) {
-            modalForm.style.display = 'none';
-            console.log('Hiding form');
+          if (!firstName || !lastName || !email) {
+            alert('Please fill in all required fields');
+            return false;
           }
           
-          if (successMessage) {
-            successMessage.style.display = 'block';
-            console.log('Showing success message');
-          } else {
-            console.error('Success message element not found');
-          }
-          
-          // Auto-close modal after 4 seconds
-          setTimeout(() => {
-            console.log('Auto-closing modal');
-            closeEvaluationModal();
-          }, 4000);
-
-        } catch (error) {
-          console.error('Error submitting evaluation request:', error);
-          alert('There was an error submitting your request. Please try again or contact support@acceleraqa.atlassian.net directly.');
-          
-          // Reset button
+          // Show loading state
+          const submitBtn = document.getElementById('submitBtn');
           if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.textContent = originalText;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="loading-spinner"></span>Submitting...';
           }
+          
+          // Simulate processing and show success after 1 second
+          setTimeout(() => {
+            console.log('Showing success message');
+            showSuccessMessage();
+          }, 1000);
+          
+          return false; // Prevent default form submission
+          
+        } catch (error) {
+          console.error('Error in form submission:', error);
+          alert('There was an error. Please try again.');
+          return false;
         }
+      };
+      
+      // Function to show success message
+      window.showSuccessMessage = function() {
+        console.log('showSuccessMessage called');
+        
+        const modalForm = document.getElementById('modalForm');
+        const successMessage = document.getElementById('successMessage');
+        
+        if (modalForm) {
+          modalForm.style.display = 'none';
+          console.log('Form hidden');
+        } else {
+          console.error('modalForm element not found');
+        }
+        
+        if (successMessage) {
+          successMessage.style.display = 'block';
+          console.log('Success message shown');
+        } else {
+          console.error('successMessage element not found');
+        }
+        
+        // Auto-close after 3 seconds
+        setTimeout(() => {
+          console.log('Auto-closing modal');
+          closeEvaluationModal();
+        }, 3000);
       };
 
       // Performance monitoring
