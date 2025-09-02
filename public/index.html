@@ -23,8 +23,12 @@
     
     <title>AcceleraQA - Pharmaceutical Quality & Compliance AI</title>
 
-    <style>
-      .evaluation-modal {
+      <style>
+        .no-scroll {
+          overflow: hidden;
+        }
+
+        .evaluation-modal {
         display: none;
         position: fixed;
         z-index: 10000;
@@ -354,7 +358,7 @@
                 console.log('Focused on first input');
               }
             }, 100);
-            document.body.style.overflow = 'hidden';
+            document.body.classList.add('no-scroll');
             console.log('Modal opened successfully');
           } else {
             console.error('Modal element not found');
@@ -372,7 +376,7 @@
             const successMessage = document.getElementById('successMessage');
             if (modalForm) modalForm.style.display = 'block';
             if (successMessage) successMessage.style.display = 'none';
-            document.body.style.overflow = '';
+            document.body.classList.remove('no-scroll');
             console.log('Modal closed successfully');
           }
         };
@@ -459,6 +463,9 @@
 
         console.log('Evaluation modal setup complete');
         console.log('Functions available:', typeof window.openEvaluationModal);
+
+        // Ensure body scroll is restored on page navigation/unload
+        window.addEventListener('pagehide', window.closeEvaluationModal);
       });
 
       // Performance monitoring
