@@ -2,13 +2,82 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- Data URI favicon to prevent 404 errors during build -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚗️</text></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="AI learning assistant for pharmaceutical quality and compliance professionals" />
+    
+    <!-- Enhanced meta tags for better SEO and social sharing -->
+    <meta property="og:title" content="AcceleraQA - Pharmaceutical Quality & Compliance AI" />
+    <meta property="og:description" content="AI-powered learning assistant for pharmaceutical quality and compliance professionals" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="%PUBLIC_URL%/og-image.png" />
+    
+    <!-- Twitter Card meta tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="AcceleraQA - Pharmaceutical Quality & Compliance AI" />
+    <meta name="twitter:description" content="AI-powered learning assistant for pharmaceutical quality and compliance professionals" />
+    
+    <!-- Apple touch icon using data URI -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚗️</text></svg>" />
+    
+    <!-- Preconnect to external domains for performance -->
+    <link rel="preconnect" href="https://api.openai.com" />
+    <link rel="dns-prefetch" href="https://api.openai.com" />
+    
     <title>AcceleraQA - Pharmaceutical Quality & Compliance AI</title>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>
+      <div style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #1f2937;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        text-align: center;
+        padding: 20px;
+        z-index: 9999;
+      ">
+        <h1 style="font-size: 2.5rem; margin-bottom: 1rem; color: #fff;">AcceleraQA</h1>
+        <p style="font-size: 1.25rem; margin-bottom: 2rem; color: #9ca3af;">
+          JavaScript Required
+        </p>
+        <p style="color: #6b7280; max-width: 500px; line-height: 1.5;">
+          AcceleraQA requires JavaScript to run. This pharmaceutical quality and compliance AI assistant 
+          uses modern web technologies to provide secure authentication and real-time AI responses.
+        </p>
+        <p style="color: #6b7280; margin-top: 1rem;">
+          Please enable JavaScript in your browser settings and reload the page.
+        </p>
+      </div>
+    </noscript>
     <div id="root"></div>
+    
+    <!-- Performance monitoring script (optional) -->
+    <script>
+      // Basic performance monitoring
+      if ('performance' in window && 'getEntriesByType' in performance) {
+        window.addEventListener('load', function() {
+          setTimeout(function() {
+            const perfData = performance.getEntriesByType('navigation')[0];
+            if (perfData) {
+              console.log('⚡ Page Load Performance:', {
+                'DOM Content Loaded': Math.round(perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart) + 'ms',
+                'Full Page Load': Math.round(perfData.loadEventEnd - perfData.loadEventStart) + 'ms'
+              });
+            }
+          }, 0);
+        });
+      }
+    </script>
   </body>
 </html>
