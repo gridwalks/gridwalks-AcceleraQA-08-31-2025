@@ -147,8 +147,8 @@ const Header = memo(({
               <img
                 src="/AceleraQA_logo.png"
                 alt="AcceleraQA logo"
-                width="190"
-                height="30"
+                width="180"
+                height="20"
               />
 
             </div>
