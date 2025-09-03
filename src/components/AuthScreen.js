@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { User, ChevronRight, MessageSquare, BookOpen, FileText, Shield, Rocket } from 'lucide-react';
+import { User, ChevronRight, MessageSquare, BookOpen, FileText, Shield } from 'lucide-react';
 import { handleLogin } from '../services/authService';
 
 const AuthScreen = memo(() => {
@@ -50,10 +50,11 @@ const AuthScreen = memo(() => {
       <header className="border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Rocket className="h-6 w-6 text-primary-light" />
-              <span className="text-2xl font-bold tracking-tight bg-gradient-to-r from-primary-light to-primary bg-clip-text text-transparent">AcceleraQA</span>
-            </div>
+            <img
+              src="/logo.svg"
+              alt="AcceleraQA logo"
+              className="h-8 w-auto"
+            />
             <div className="flex items-center">
               <button
                 onClick={handleLoginClick}
