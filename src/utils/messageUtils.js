@@ -22,6 +22,37 @@ export function getMessagesByDays(messages, days = UI_CONFIG.MESSAGE_HISTORY_DAY
 }
 
 /**
+ * Merges current session messages with stored messages, removing duplicates
+ * @param {Object[]} currentMessages - Messages from current session
+ * @param {Object[]} storedMessages - Messages from storage
+ * @returns {Object[]} - Merged and deduplicated messages
+ */
+export function mergeCurrentAndStoredMessages(currentMessages, storedMessages) {
+  if (!Array.isArray(currentMessages)) currentMessages = [];
+  if (!Array.isArray(storedMessages)) storedMessages = [];
+  
+  const messageMap = new Map();
+  
+  // Add stored messages first
+  storedMessages.forEach(msg => {
+    if (msg && msg.id) {
+      messageMap.set(msg.id, { ...msg, isStored: true });
+    }
+  });
+  
+  // Add current messages (will override any duplicates)
+  currentMessages.forEach(msg => {
+    if (msg && msg.id) {
+      messageMap.set(msg.id, { ...msg, isStored: false, isCurrent: true });
+    }
+  });
+  
+  // Convert back to array and sort by timestamp
+  return Array.from(messageMap.values())
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
+
+/**
  * Combines user and AI message pairs into conversation objects
  * @param {Object[]} messages - Array of message objects
  * @returns {Object[]} - Array of combined conversation objects
@@ -48,7 +79,10 @@ export function combineMessagesIntoConversations(messages) {
         resources: message.resources || [],
         isStudyNotes: message.isStudyNotes || false,
         originalUserMessage: userMessage,
-        originalAiMessage: message
+        originalAiMessage: message,
+        // Preserve current session and stored flags
+        isCurrent: message.isCurrent || userMessage.isCurrent || false,
+        isStored: message.isStored && userMessage.isStored
       };
       acc.push(combinedMessage);
     } 
@@ -61,7 +95,9 @@ export function combineMessagesIntoConversations(messages) {
         timestamp: message.timestamp,
         resources: message.resources || [],
         isStudyNotes: message.isStudyNotes || false,
-        originalAiMessage: message
+        originalAiMessage: message,
+        isCurrent: message.isCurrent || false,
+        isStored: message.isStored || false
       };
       acc.push(combinedMessage);
     } 
@@ -74,7 +110,9 @@ export function combineMessagesIntoConversations(messages) {
         timestamp: message.timestamp,
         resources: [],
         isStudyNotes: false,
-        originalUserMessage: message
+        originalUserMessage: message,
+        isCurrent: message.isCurrent || false,
+        isStored: message.isStored || false
       };
       acc.push(combinedMessage);
     }
@@ -92,6 +130,18 @@ export function getRecentConversations(messages) {
   const recentMessages = getMessagesByDays(messages);
   const conversations = combineMessagesIntoConversations(recentMessages);
   return conversations.slice(-UI_CONFIG.MAX_DISPLAYED_CONVERSATIONS);
+}
+
+/**
+ * Separates conversations into current session and stored
+ * @param {Object[]} conversations - Array of conversation objects
+ * @returns {Object} - Object with current and stored conversation arrays
+ */
+export function separateCurrentAndStoredConversations(conversations) {
+  const current = conversations.filter(conv => conv.isCurrent);
+  const stored = conversations.filter(conv => !conv.isCurrent);
+  
+  return { current, stored };
 }
 
 /**
@@ -173,6 +223,8 @@ export function createMessage(type, content, resources = [], isStudyNotes = fals
     timestamp,
     resources: Array.isArray(resources) ? resources : [],
     isStudyNotes: Boolean(isStudyNotes),
+    isCurrent: true, // Mark as current session message
+    isStored: false, // Not yet stored
     // Add version for future migrations
     version: '1.0.0'
   };
@@ -295,6 +347,14 @@ export function repairMessage(message) {
     // Fix boolean fields
     repaired.isStudyNotes = Boolean(repaired.isStudyNotes);
 
+    // Add session tracking flags if missing
+    if (repaired.isCurrent === undefined) {
+      repaired.isCurrent = false;
+    }
+    if (repaired.isStored === undefined) {
+      repaired.isStored = true; // Assume repaired messages are from storage
+    }
+
     // Add version if missing
     if (!repaired.version) {
       repaired.version = '1.0.0';
@@ -361,7 +421,7 @@ export function sanitizeMessageContent(content) {
 }
 
 /**
- * Gets message statistics
+ * Gets message statistics including current vs stored breakdown
  * @param {Object[]} messages - Array of message objects
  * @returns {Object} - Message statistics
  */
@@ -374,6 +434,8 @@ export function getMessageStats(messages) {
       studyNotes: 0,
       withResources: 0,
       conversations: 0,
+      currentSession: 0,
+      stored: 0,
       oldestMessage: null,
       newestMessage: null,
       averageContentLength: 0,
@@ -387,6 +449,8 @@ export function getMessageStats(messages) {
   const withResources = messages.filter(msg => 
     msg.resources && Array.isArray(msg.resources) && msg.resources.length > 0
   );
+  const currentSession = messages.filter(msg => msg.isCurrent);
+  const stored = messages.filter(msg => msg.isStored);
   const conversations = combineMessagesIntoConversations(messages);
 
   const totalContentLength = messages.reduce((sum, msg) => sum + (msg.content?.length || 0), 0);
@@ -404,6 +468,8 @@ export function getMessageStats(messages) {
     studyNotes: studyNotes.length,
     withResources: withResources.length,
     conversations: conversations.length,
+    currentSession: currentSession.length,
+    stored: stored.length,
     oldestMessage,
     newestMessage,
     averageContentLength,
@@ -497,5 +563,24 @@ export function deduplicateMessages(messages) {
     
     seen.add(message.id);
     return true;
+  });
+}
+
+/**
+ * Gets conversations that match the current session
+ * @param {Object[]} conversations - Array of conversation objects
+ * @param {Set} currentMessageIds - Set of current message IDs
+ * @returns {Object[]} - Current session conversations
+ */
+export function getCurrentSessionConversations(conversations, currentMessageIds) {
+  if (!conversations || !Array.isArray(conversations) || !currentMessageIds) {
+    return [];
+  }
+
+  return conversations.filter(conv => {
+    // Check if any message in this conversation is from current session
+    if (conv.originalUserMessage && currentMessageIds.has(conv.originalUserMessage.id)) return true;
+    if (conv.originalAiMessage && currentMessageIds.has(conv.originalAiMessage.id)) return true;
+    return false;
   });
 }
