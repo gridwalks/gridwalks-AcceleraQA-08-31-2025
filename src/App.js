@@ -475,13 +475,6 @@ const AcceleraQA = () => {
             />
           </div>
         </div>
-
-        {/* Server status indicator */}
-        <div className="fixed bottom-4 left-4 bg-black text-white px-3 py-1 rounded text-xs font-mono">
-          <div>Messages: Current {messages.length} | Stored {storedMessages.length}</div>
-          <div>Server: {isServerAvailable ? '✅ Online' : '❌ Offline'}</div>
-          <div>Mode: {isServerAvailable ? 'Persistent' : 'Session Only'}</div>
-        </div>
       </div>
     </ErrorBoundary>
   );
