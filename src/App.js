@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar';
 import AuthScreen from './components/AuthScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
+import StorageNotification, { useStorageNotifications } from './components/StorageNotification';
 
 // Services
 import openaiService from './services/openaiService';
@@ -41,6 +42,9 @@ const AcceleraQA = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   
   const messagesEndRef = useRef(null);
+
+  // Storage notifications hook
+  const { StorageWelcomeModal } = useStorageNotifications(user, messages.length);
 
   // Memoized values
   const thirtyDayMessages = useMemo(() => 
