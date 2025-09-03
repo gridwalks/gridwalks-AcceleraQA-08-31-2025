@@ -30,6 +30,11 @@ code {
   overflow: hidden;
 }
 
+/* Custom background color for current session conversations */
+.bg-blue-25 {
+  background-color: #f8fafc; /* Very light blue-gray background */
+}
+
 /* Storage notification animations */
 @keyframes slideIn {
   from {
@@ -127,6 +132,82 @@ code {
   animation: bounce 1s;
 }
 
+/* Notebook section separators */
+.notebook-separator {
+  display: flex;
+  align-items: center;
+  margin: 1.5rem 0;
+}
+
+.notebook-separator::before,
+.notebook-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: currentColor;
+}
+
+.notebook-separator.current-session {
+  color: #3b82f6; /* blue-500 */
+}
+
+.notebook-separator.previous-conversations {
+  color: #6b7280; /* gray-500 */
+}
+
+.notebook-separator span {
+  padding: 0 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* Enhanced conversation card styles */
+.conversation-card {
+  transition: all 0.2s ease;
+  border-radius: 0.5rem;
+  position: relative;
+}
+
+.conversation-card.current-session {
+  background-color: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.conversation-card.current-session:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px 0 rgba(59, 130, 246, 0.1);
+}
+
+.conversation-card.current-session.selected {
+  background-color: #eff6ff;
+  border-color: #93c5fd;
+  box-shadow: 0 1px 3px 0 rgba(59, 130, 246, 0.1);
+}
+
+.conversation-card.stored {
+  background-color: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.conversation-card.stored:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.conversation-card.stored.selected {
+  background-color: #eff6ff;
+  border-color: #93c5fd;
+  box-shadow: 0 1px 3px 0 rgba(59, 130, 246, 0.1);
+}
+
+/* Live indicator pulse animation */
+.live-indicator {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 /* Storage status indicator */
 .storage-indicator {
   position: relative;
@@ -214,6 +295,10 @@ code {
   .storage-indicator::after {
     border: 2px solid;
   }
+  
+  .conversation-card.current-session {
+    border-width: 2px;
+  }
 }
 
 /* Reduced motion support */
@@ -225,7 +310,9 @@ code {
   .animate-pulse-slow,
   .animate-bounce-once,
   .progress-bar,
-  .storage-menu-item {
+  .storage-menu-item,
+  .conversation-card,
+  .live-indicator {
     animation: none;
     transition: none;
   }
