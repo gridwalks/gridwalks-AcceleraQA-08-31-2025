@@ -1,5 +1,5 @@
 import React, { memo, useState, useEffect } from 'react';
-import { Download, Clock, MessageSquare, LogOut, User, Database, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Download, Clock, MessageSquare, LogOut, User, Database, AlertTriangle, CheckCircle, Rocket } from 'lucide-react';
 import { handleLogout } from '../services/authService';
 import { getStorageStats, getStorageHealthReport, performStorageMaintenance, clearStorageData } from '../utils/storageUtils';
 
@@ -138,12 +138,15 @@ const Header = memo(({
   };
 
   return (
-    <header className="bg-black text-white border-b border-gray-800">
+    <header className="bg-gradient-to-r from-gray-900 via-gray-800 to-black text-white border-b border-gray-800 shadow">
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-4">
-            <div className="text-2xl font-bold tracking-tight">AcceleraQA</div>
-            <div className="hidden md:block text-sm text-gray-400">
+            <div className="flex items-center space-x-2">
+              <Rocket className="h-6 w-6 text-primary-light" />
+              <span className="text-2xl font-bold tracking-tight bg-gradient-to-r from-primary-light to-primary bg-clip-text text-transparent">AcceleraQA</span>
+            </div>
+            <div className="hidden md:block text-sm text-primary-light/70">
               Pharmaceutical Quality & Compliance AI
             </div>
           </div>

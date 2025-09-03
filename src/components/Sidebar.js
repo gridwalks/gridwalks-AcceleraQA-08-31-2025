@@ -22,15 +22,8 @@ const Sidebar = memo(({
 
   return (
     <div className="lg:col-span-1">
-      {/* Debug indicator */}
-      <div className="bg-yellow-100 border border-yellow-300 p-2 mb-2 text-xs">
-        <strong>Sidebar Debug:</strong><br />
-        Mode: {showNotebook ? 'Notebook' : 'Resources'}<br />
-        Messages: {messages?.length || 0} | ThirtyDay: {thirtyDayMessages?.length || 0}
-      </div>
-      
       {showNotebook ? (
-        <NotebookView 
+        <NotebookView
           messages={messages}
           thirtyDayMessages={thirtyDayMessages}
           selectedMessages={selectedMessages}
@@ -39,8 +32,8 @@ const Sidebar = memo(({
           isGeneratingNotes={isGeneratingNotes}
         />
       ) : (
-        <ResourcesView 
-          currentResources={currentResources} 
+        <ResourcesView
+          currentResources={currentResources}
         />
       )}
     </div>

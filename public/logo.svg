@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" fill="none">
+  <defs>
+    <linearGradient id="aqGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+  <!-- Rocket icon -->
+  <g transform="translate(0,2)" stroke="url(#aqGradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 0c-6 2-12 8-12 14 0 5 4 12 12 24 8-12 12-19 12-24 0-6-6-12-12-14z" fill="none"/>
+    <path d="M20 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" fill="url(#aqGradient)" stroke="none"/>
+    <path d="M20 22c-3 4-4 6-4 8h8c0-2-1-4-4-8z" fill="url(#aqGradient)" stroke="none"/>
+  </g>
+  <!-- Text -->
+  <text x="50" y="28" font-family="Helvetica, Arial, sans-serif" font-size="24" fill="url(#aqGradient)">AcceleraQA</text>
+</svg>
