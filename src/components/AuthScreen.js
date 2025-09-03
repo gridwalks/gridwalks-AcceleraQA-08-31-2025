@@ -83,8 +83,8 @@ const AuthScreen = memo(() => {
           </h1>
           
           <p className="text-xl lg:text-2xl text-gray-300 mb-12 leading-relaxed max-w-3xl">
-            AI-powered learning assistant for pharmaceutical quality and compliance professionals. 
-            Accelerating innovation in regulatory excellence through intelligent automation.
+            AcceleraQA is an interactive AI learning assistant built for pharmaceutical quality professionals.
+            Upskill faster through dynamic conversations and engage directly with industry documents.
           </p>
 
           {/* Main CTA Section */}
@@ -126,22 +126,22 @@ const AuthScreen = memo(() => {
             <FeatureCard
               icon={<MessageSquare className="h-8 w-8" />}
               gradient="from-blue-600 to-purple-600"
-              title="Intelligent Responses"
-              description="Advanced AI understanding of pharmaceutical regulations, GMP standards, and compliance requirements with real-time learning capabilities."
+              title="Interactive Learning"
+              description="Dynamic conversations that adapt to your quality questions in real time."
             />
-            
+
             <FeatureCard
               icon={<BookOpen className="h-8 w-8" />}
               gradient="from-purple-600 to-pink-600"
-              title="Curated Learning"
-              description="Dynamic resource recommendations from FDA, ICH, and industry leaders for continuous professional development and regulatory updates."
+              title="Faster Upskilling"
+              description="Personalized guidance and curated resources to accelerate your expertise."
             />
-            
+
             <FeatureCard
               icon={<FileText className="h-8 w-8" />}
               gradient="from-pink-600 to-red-600"
-              title="Export & Analyze"
-              description="Generate comprehensive study materials and export conversation data for team collaboration and knowledge sharing."
+              title="Industry Document Chat"
+              description="Upload and interact with FDA, ICH, and company documents for instant answers."
             />
           </div>
 
