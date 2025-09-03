@@ -31,25 +31,60 @@ export function mergeCurrentAndStoredMessages(currentMessages, storedMessages) {
   if (!Array.isArray(currentMessages)) currentMessages = [];
   if (!Array.isArray(storedMessages)) storedMessages = [];
   
+  // Debug logging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('=== MERGE FUNCTION DEBUG ===');
+    console.log('Current messages input:', currentMessages.length);
+    console.log('Stored messages input:', storedMessages.length);
+  }
+  
   const messageMap = new Map();
   
-  // Add stored messages first
+  // Add stored messages first (mark them properly)
   storedMessages.forEach(msg => {
     if (msg && msg.id) {
-      messageMap.set(msg.id, { ...msg, isStored: true });
+      messageMap.set(msg.id, { 
+        ...msg, 
+        isStored: true, 
+        isCurrent: false 
+      });
     }
   });
   
-  // Add current messages (will override any duplicates)
+  // Add current messages (will override any duplicates, mark as current)
   currentMessages.forEach(msg => {
     if (msg && msg.id) {
-      messageMap.set(msg.id, { ...msg, isStored: false, isCurrent: true });
+      messageMap.set(msg.id, { 
+        ...msg, 
+        isStored: false, 
+        isCurrent: true 
+      });
     }
   });
   
   // Convert back to array and sort by timestamp
-  return Array.from(messageMap.values())
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const result = Array.from(messageMap.values())
+    .filter(msg => msg && msg.timestamp) // Ensure we have valid messages
+    .sort((a, b) => {
+      const dateA = new Date(a.timestamp);
+      const dateB = new Date(b.timestamp);
+      
+      // Handle invalid dates
+      if (isNaN(dateA.getTime())) return 1;
+      if (isNaN(dateB.getTime())) return -1;
+      
+      return dateA - dateB;
+    });
+  
+  // Debug logging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Merged result count:', result.length);
+    console.log('Result breakdown:');
+    console.log('- Current messages:', result.filter(m => m.isCurrent).length);
+    console.log('- Stored messages:', result.filter(m => m.isStored && !m.isCurrent).length);
+  }
+  
+  return result;
 }
 
 /**
