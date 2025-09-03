@@ -258,7 +258,7 @@ export async function loadMessagesFromStorage(userId) {
 }
 
 /**
- * Validates and filters messages before storage
+ * Validates and filters messages before storage - FIXED VERSION
  * @param {Object[]} messages - Messages to validate
  * @returns {Object[]} - Valid messages
  */
@@ -268,13 +268,37 @@ function validateMessagesForStorage(messages) {
     return [];
   }
   
-  return messages.filter(msg => {
+  console.log('=== VALIDATING MESSAGES FOR STORAGE ===');
+  console.log('Input messages:', messages.length);
+  console.log('Sample input:', messages.slice(0, 2).map(m => ({
+    id: m?.id,
+    type: m?.type,
+    content: m?.content?.substring(0, 50) + '...',
+    hasRequiredFields: !!(m?.id && m?.type && m?.content)
+  })));
+  
+  const validMessages = messages.filter((msg, index) => {
+    // CRITICAL FIX: Check if this is a version-only object
+    if (msg && typeof msg === 'object' && Object.keys(msg).length === 1 && msg.version) {
+      console.log(`Skipping version-only object at index ${index}:`, msg);
+      return false;
+    }
+    
     if (!validateMessage(msg)) {
-      console.warn('Invalid message found, skipping:', msg);
+      console.warn(`Invalid message found at index ${index}, skipping:`, msg);
       return false;
     }
     return true;
   });
+  
+  console.log('Valid messages after filtering:', validMessages.length);
+  console.log('Valid messages sample:', validMessages.slice(0, 2).map(m => ({
+    id: m.id,
+    type: m.type,
+    content: m.content.substring(0, 50) + '...'
+  })));
+  
+  return validMessages;
 }
 
 /**
