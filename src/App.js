@@ -15,7 +15,12 @@ import { initializeAuth } from './services/authService';
 
 // Utils
 import { exportNotebook } from './utils/exportUtils';
-import { getMessagesByDays, createMessage, combineMessagesIntoConversations } from './utils/messageUtils';
+import { 
+  getMessagesByDays, 
+  createMessage, 
+  combineMessagesIntoConversations,
+  mergeCurrentAndStoredMessages 
+} from './utils/messageUtils';
 import { validateEnvironment, DEFAULT_RESOURCES } from './config/constants';
 
 // Storage utilities
@@ -29,7 +34,8 @@ import {
 
 const AcceleraQA = () => {
   // State management
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([]); // Current session messages
+  const [storedMessages, setStoredMessages] = useState([]); // Messages from storage
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentResources, setCurrentResources] = useState([]);
@@ -46,13 +52,18 @@ const AcceleraQA = () => {
   // Storage notifications hook
   const { StorageWelcomeModal } = useStorageNotifications(user, messages.length);
 
-  // Memoized values
-  const thirtyDayMessages = useMemo(() => 
-    getMessagesByDays(messages), 
-    [messages]
+  // Memoized values - combine current and stored messages for notebook display
+  const allMessages = useMemo(() => 
+    mergeCurrentAndStoredMessages(messages, storedMessages), 
+    [messages, storedMessages]
   );
 
-  // Load messages from storage when component mounts and user is authenticated
+  const thirtyDayMessages = useMemo(() => 
+    getMessagesByDays(allMessages), 
+    [allMessages]
+  );
+
+  // Load stored messages when component mounts and user is authenticated
   useEffect(() => {
     const loadStoredMessages = async () => {
       if (!user || isInitialized) return;
@@ -61,14 +72,22 @@ const AcceleraQA = () => {
         console.log('Loading stored messages for user:', user.email || user.sub);
         
         // Load messages from storage
-        const storedMessages = await loadMessagesFromStorage(user.sub || user.email);
+        const loadedMessages = await loadMessagesFromStorage(user.sub || user.email);
         
-        if (storedMessages && storedMessages.length > 0) {
-          console.log(`Loaded ${storedMessages.length} messages from storage`);
-          setMessages(storedMessages);
+        if (loadedMessages && loadedMessages.length > 0) {
+          console.log(`Loaded ${loadedMessages.length} messages from storage`);
+          
+          // Mark loaded messages as stored
+          const markedStoredMessages = loadedMessages.map(msg => ({
+            ...msg,
+            isStored: true,
+            isCurrent: false
+          }));
+          
+          setStoredMessages(markedStoredMessages);
           
           // Set current resources from the last AI message
-          const lastAiMessage = storedMessages
+          const lastAiMessage = markedStoredMessages
             .filter(msg => msg.type === 'ai' && msg.resources && msg.resources.length > 0)
             .pop();
           
@@ -96,14 +115,15 @@ const AcceleraQA = () => {
     }
   }, [user, isInitialized]);
 
-  // Save messages to storage whenever messages change
+  // Save all messages to storage whenever they change
   useEffect(() => {
     const saveMessages = async () => {
-      if (!user || !isInitialized || messages.length === 0) return;
+      if (!user || !isInitialized || allMessages.length === 0) return;
 
       try {
-        await saveMessagesToStorage(user.sub || user.email, messages);
-        console.log(`Saved ${messages.length} messages to storage`);
+        // Save the merged messages (current + stored) to storage
+        await saveMessagesToStorage(user.sub || user.email, allMessages);
+        console.log(`Saved ${allMessages.length} messages to storage`);
       } catch (error) {
         console.error('Error saving messages to storage:', error);
         // Don't show error to user for storage failures, just log it
@@ -113,7 +133,7 @@ const AcceleraQA = () => {
     // Debounce saves to avoid excessive writes
     const timeoutId = setTimeout(saveMessages, 500);
     return () => clearTimeout(timeoutId);
-  }, [messages, user, isInitialized]);
+  }, [allMessages, user, isInitialized]);
 
   // Initialize environment and authentication
   useEffect(() => {
@@ -221,6 +241,7 @@ const AcceleraQA = () => {
       
       // Clear local state
       setMessages([]);
+      setStoredMessages([]);
       setCurrentResources([]);
       setSelectedMessages(new Set());
       setError(null);
@@ -233,6 +254,7 @@ const AcceleraQA = () => {
       console.error('Error clearing chat history:', error);
       // Still clear local state even if storage clear fails
       setMessages([]);
+      setStoredMessages([]);
       setCurrentResources([]);
       setSelectedMessages(new Set());
       setError(null);
@@ -240,7 +262,7 @@ const AcceleraQA = () => {
     }
   }, [user, initializeWelcomeMessage]);
 
-  // Generate study notes from selected messages - FIXED VERSION
+  // Generate study notes from selected messages - IMPROVED VERSION
   const generateStudyNotes = useCallback(async () => {
     if (selectedMessages.size === 0 || isGeneratingNotes) return;
 
@@ -248,8 +270,8 @@ const AcceleraQA = () => {
     setError(null);
 
     try {
-      // Get selected conversation data from thirtyDayMessages based on selected IDs
-      const selectedConversationData = thirtyDayMessages.filter(msg => {
+      // Get selected conversation data from allMessages (current + stored) based on selected IDs
+      const selectedConversationData = allMessages.filter(msg => {
         // Check if this message's ID is in selectedMessages
         if (selectedMessages.has(msg.id)) {
           return true;
@@ -265,8 +287,8 @@ const AcceleraQA = () => {
       });
 
       // Also check for combined conversations from the notebook view
-      const thirtyDayConversations = combineMessagesIntoConversations(thirtyDayMessages);
-      const selectedCombinedConversations = thirtyDayConversations.filter(conv => 
+      const allConversations = combineMessagesIntoConversations(allMessages);
+      const selectedCombinedConversations = allConversations.filter(conv => 
         selectedMessages.has(conv.id)
       );
 
@@ -339,17 +361,17 @@ const AcceleraQA = () => {
     } finally {
       setIsGeneratingNotes(false);
     }
-  }, [selectedMessages, thirtyDayMessages, isGeneratingNotes]);
+  }, [selectedMessages, allMessages, isGeneratingNotes]);
 
   // Handle export
   const handleExport = useCallback(() => {
     try {
-      exportNotebook(messages);
+      exportNotebook(allMessages);
     } catch (error) {
       console.error('Export failed:', error);
       setError('Failed to export notebook. Please try again.');
     }
-  }, [messages]);
+  }, [allMessages]);
 
   // Loading screen
   if (isLoadingAuth) {
@@ -399,7 +421,7 @@ const AcceleraQA = () => {
         <div className="max-w-7xl mx-auto px-6 py-8 h-[calc(100vh-64px)]">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full min-h-0">
             <ChatArea
-              messages={messages}
+              messages={messages} // Only show current session in chat
               inputMessage={inputMessage}
               setInputMessage={setInputMessage}
               isLoading={isLoading}
@@ -410,8 +432,8 @@ const AcceleraQA = () => {
             
             <Sidebar 
               showNotebook={showNotebook}
-              messages={messages}
-              thirtyDayMessages={thirtyDayMessages}
+              messages={messages} // Current session messages
+              thirtyDayMessages={thirtyDayMessages} // All messages (current + stored)
               selectedMessages={selectedMessages}
               setSelectedMessages={setSelectedMessages}
               generateStudyNotes={generateStudyNotes}
@@ -424,12 +446,12 @@ const AcceleraQA = () => {
         {/* Storage status indicator for development */}
         {process.env.NODE_ENV === 'development' && user && (
           <div className="fixed bottom-4 left-4 bg-black text-white px-3 py-1 rounded text-xs">
-            Storage: {messages.length} messages saved
+            Storage: {allMessages.length} messages total ({messages.length} current, {storedMessages.length} stored)
           </div>
         )}
 
         {/* Storage Notifications */}
-        <StorageNotification user={user} messagesCount={messages.length} />
+        <StorageNotification user={user} messagesCount={allMessages.length} />
         <StorageWelcomeModal />
       </div>
     </ErrorBoundary>
