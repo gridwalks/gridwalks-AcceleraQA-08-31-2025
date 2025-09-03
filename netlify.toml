@@ -9,163 +9,48 @@
   GENERATE_SOURCEMAP = "false"
   SECRETS_SCAN_ENABLED = "false"
 
-# Environment variables for different contexts
 [context.production.environment]
   NODE_ENV = "production"
   GENERATE_SOURCEMAP = "false"
 
 [context.deploy-preview.environment]
   NODE_ENV = "development"
-  GENERATE_SOURCEMAP = "false"
   
 [context.branch-deploy.environment]
   NODE_ENV = "development"
-  GENERATE_SOURCEMAP = "false"
 
-# SPA routing - redirect all routes to index.html
+# Redirect rules for SPA routing
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  conditions = {file_exists = false}
 
-# API routes - redirect to Netlify Functions
+# API routes
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
 
-# Enhanced security headers with Auth0 and FaunaDB compatibility
+# Enhanced security headers for Auth0 compatibility
 [[headers]]
   for = "/*"
   [headers.values]
-    # Security headers
     X-Frame-Options = "DENY"
     X-XSS-Protection = "1; mode=block"  
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
-    
-    # Content Security Policy - Updated for server-side functionality
-    Content-Security-Policy = """
-      default-src 'self';
-      script-src 'self' https://*.auth0.com https://cdn.auth0.com 'unsafe-eval' 'unsafe-inline';
-      style-src 'self' 'unsafe-inline';
-      img-src 'self' data: https: blob:;
-      connect-src 'self' 
-        https://api.openai.com 
-        https://*.auth0.com 
-        https://*.auth0.io 
-        https://*.netlify.app 
-        https://db.fauna.com
-        wss://*.netlify.app;
-      font-src 'self' data:;
-      frame-src https://*.auth0.com;
-      worker-src 'self' blob:;
-      object-src 'none';
-      base-uri 'self';
-      form-action 'self';
-    """
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://*.auth0.com https://cdn.auth0.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.openai.com https://*.auth0.com https://*.auth0.io https://*.netlify.app https://db.fauna.com; font-src 'self'; frame-src https://*.auth0.com; worker-src 'self' blob:;"
 
-# Cache static assets for performance
+# Cache static assets
 [[headers]]
   for = "/static/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# Cache build assets
-[[headers]]
-  for = "/build/static/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-# API function headers
-[[headers]]
-  for = "/.netlify/functions/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Headers = "Content-Type, Authorization, X-User-ID"
-    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
-    Cache-Control = "no-cache, no-store, must-revalidate"
-
-# Don't cache HTML files
-[[headers]]
-  for = "/*.html"
-  [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-
-# Plugin for sitemap generation
-[[plugins]]
-  package = "@netlify/plugin-sitemap"
-
-# Plugin for lighthouse checks (optional)
-[[plugins]]
-  package = "netlify-plugin-lighthouse"
-  [plugins.inputs]
-    audits = ["accessibility", "best-practices", "performance", "seo"]
-
-# Form handling (if needed for contact forms)
-[forms]
-  [forms.contact]
-    name = "contact"
-
 # Function settings
 [functions]
-  # Global function settings
   external_node_modules = ["faunadb"]
-  node_bundler = "esbuild"
-  
-  # Individual function configurations
-  [functions.conversations]
-    timeout = 30
-    memory = 1024
 
-# Build processing
-[build.processing]
-  skip_processing = false
-
-[build.processing.css]
-  bundle = true
-  minify = true
-
-[build.processing.js]
-  bundle = true
-  minify = true
-
-[build.processing.html]
-  pretty_urls = true
-
-[build.processing.images]
-  compress = true
-
-# Edge functions (if you want to add any)
-[edge_functions]
-  # Example edge function
-  # [edge_functions.auth-check]
-  #   function = "auth-check"
-  #   path = "/protected/*"
-
-# Split testing (A/B testing) configuration
-# [split_testing]
-#   [split_testing.test_example]
-#     path = "/"
-#     branches = ["main", "feature-branch"]
-#     weights = [90, 10]
-
-# Analytics (if using Netlify Analytics)
-[analytics]
-  provider = "netlify"
-
-# Large media (if you have large assets)
-# [large_media]
-#   repository = "git-lfs"
-
-# Build command variants for different contexts
-[context.production]
-  command = "npm run build"
-
-[context.deploy-preview]
-  command = "npm run build"
-
-[context.branch-deploy]
-  command = "npm run build"
+# Build plugin for enhanced error reporting (optional)
+[[plugins]]
+  package = "@netlify/plugin-sitemap"
