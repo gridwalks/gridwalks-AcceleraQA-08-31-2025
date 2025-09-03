@@ -52,20 +52,47 @@ const AcceleraQA = () => {
   // Storage notifications hook
   const { StorageWelcomeModal } = useStorageNotifications(user, messages.length);
 
-  // Memoized values - combine current and stored messages for notebook display
-  const allMessages = useMemo(() => 
-    mergeCurrentAndStoredMessages(messages, storedMessages), 
-    [messages, storedMessages]
-  );
+  // Debug logging for stored messages
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('=== DEBUG INFO ===');
+      console.log('Current messages:', messages.length);
+      console.log('Stored messages:', storedMessages.length);
+      console.log('User:', user?.email || 'No user');
+      console.log('Is initialized:', isInitialized);
+    }
+  }, [messages, storedMessages, user, isInitialized]);
 
-  const thirtyDayMessages = useMemo(() => 
-    getMessagesByDays(allMessages), 
-    [allMessages]
-  );
+  // Memoized values - combine current and stored messages for notebook display
+  const allMessages = useMemo(() => {
+    const merged = mergeCurrentAndStoredMessages(messages, storedMessages);
+    
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('=== MERGED MESSAGES DEBUG ===');
+      console.log('Current messages:', messages.map(m => ({ id: m.id, type: m.type, content: m.content.substring(0, 50) + '...', isCurrent: m.isCurrent })));
+      console.log('Stored messages:', storedMessages.map(m => ({ id: m.id, type: m.type, content: m.content.substring(0, 50) + '...', isStored: m.isStored })));
+      console.log('Merged result:', merged.map(m => ({ id: m.id, type: m.type, content: m.content.substring(0, 50) + '...', isCurrent: m.isCurrent, isStored: m.isStored })));
+    }
+    
+    return merged;
+  }, [messages, storedMessages]);
+
+  const thirtyDayMessages = useMemo(() => {
+    const result = getMessagesByDays(allMessages);
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('=== THIRTY DAY MESSAGES DEBUG ===');
+      console.log('All messages count:', allMessages.length);
+      console.log('Thirty day messages count:', result.length);
+    }
+    
+    return result;
+  }, [allMessages]);
 
   // Load stored messages when component mounts and user is authenticated
   useEffect(() => {
-    const loadStoredMessages = async () => {
+    const loadStoredMessagesEffect = async () => {
       if (!user || isInitialized) return;
 
       try {
@@ -74,16 +101,19 @@ const AcceleraQA = () => {
         // Load messages from storage
         const loadedMessages = await loadMessagesFromStorage(user.sub || user.email);
         
+        console.log('Raw loaded messages:', loadedMessages?.length || 0);
+        
         if (loadedMessages && loadedMessages.length > 0) {
-          console.log(`Loaded ${loadedMessages.length} messages from storage`);
+          console.log(`Successfully loaded ${loadedMessages.length} messages from storage`);
           
-          // Mark loaded messages as stored
+          // Mark loaded messages as stored and not current
           const markedStoredMessages = loadedMessages.map(msg => ({
             ...msg,
             isStored: true,
             isCurrent: false
           }));
           
+          console.log('Marked stored messages:', markedStoredMessages.length);
           setStoredMessages(markedStoredMessages);
           
           // Set current resources from the last AI message
@@ -96,12 +126,16 @@ const AcceleraQA = () => {
           } else {
             setCurrentResources(DEFAULT_RESOURCES);
           }
+          
+          console.log('Set resources from last AI message');
         } else {
+          console.log('No stored messages found, initializing welcome message');
           // No stored messages, initialize with welcome message
           initializeWelcomeMessage();
         }
         
         setIsInitialized(true);
+        console.log('Storage loading completed');
       } catch (error) {
         console.error('Error loading stored messages:', error);
         // If loading fails, initialize with welcome message
@@ -111,29 +145,38 @@ const AcceleraQA = () => {
     };
 
     if (user && !isInitialized) {
-      loadStoredMessages();
+      console.log('Starting to load stored messages...');
+      loadStoredMessagesEffect();
     }
   }, [user, isInitialized]);
 
-  // Save all messages to storage whenever they change
+  // Save all messages to storage whenever they change (but only if we have messages to save)
   useEffect(() => {
     const saveMessages = async () => {
-      if (!user || !isInitialized || allMessages.length === 0) return;
+      if (!user || !isInitialized) return;
+      
+      // Only save if we have current session messages (don't save empty state)
+      if (messages.length === 0) return;
+      
+      console.log('Preparing to save messages to storage...');
+      console.log('Current messages to save:', messages.length);
+      console.log('Stored messages:', storedMessages.length);
+      console.log('All messages (merged):', allMessages.length);
 
       try {
-        // Save the merged messages (current + stored) to storage
-        await saveMessagesToStorage(user.sub || user.email, allMessages);
-        console.log(`Saved ${allMessages.length} messages to storage`);
+        // Save only the current session messages, not the merged ones
+        // The storage system will handle merging with existing data
+        await saveMessagesToStorage(user.sub || user.email, messages);
+        console.log(`Successfully saved ${messages.length} current messages to storage`);
       } catch (error) {
         console.error('Error saving messages to storage:', error);
-        // Don't show error to user for storage failures, just log it
       }
     };
 
     // Debounce saves to avoid excessive writes
-    const timeoutId = setTimeout(saveMessages, 500);
+    const timeoutId = setTimeout(saveMessages, 1000);
     return () => clearTimeout(timeoutId);
-  }, [allMessages, user, isInitialized]);
+  }, [messages, user, isInitialized]); // Remove allMessages and storedMessages from dependencies
 
   // Initialize environment and authentication
   useEffect(() => {
@@ -168,6 +211,8 @@ const AcceleraQA = () => {
 
   // Initialize welcome message for authenticated users
   const initializeWelcomeMessage = useCallback(() => {
+    console.log('Initializing welcome message...');
+    
     const welcomeMessage = createMessage(
       'ai',
       'Welcome to AcceleraQA! I\'m your pharmaceutical quality and compliance AI assistant. I specialize in GMP, validation, CAPA, regulatory requirements, and quality risk management. How can I help you today?',
@@ -176,6 +221,7 @@ const AcceleraQA = () => {
     
     setMessages([welcomeMessage]);
     setCurrentResources(DEFAULT_RESOURCES);
+    console.log('Welcome message initialized');
   }, []);
 
   // Handle sending messages
@@ -185,6 +231,7 @@ const AcceleraQA = () => {
     const userMessage = createMessage('user', inputMessage);
     const currentInput = inputMessage.trim();
 
+    console.log('Sending message:', { userMessage: userMessage.content });
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
@@ -199,6 +246,7 @@ const AcceleraQA = () => {
         response.resources
       );
 
+      console.log('Received AI response:', { aiMessage: aiMessage.content.substring(0, 100) + '...' });
       setMessages(prev => [...prev, aiMessage]);
       setCurrentResources(response.resources);
 
@@ -233,6 +281,8 @@ const AcceleraQA = () => {
   // Clear chat history with storage cleanup
   const clearChat = useCallback(async () => {
     try {
+      console.log('Clearing chat history...');
+      
       // Clear from storage if user is authenticated
       if (user) {
         await clearStorageData(user.sub || user.email);
@@ -245,6 +295,8 @@ const AcceleraQA = () => {
       setCurrentResources([]);
       setSelectedMessages(new Set());
       setError(null);
+      
+      console.log('Cleared all local state');
       
       // Initialize with welcome message
       setTimeout(() => {
@@ -266,6 +318,7 @@ const AcceleraQA = () => {
   const generateStudyNotes = useCallback(async () => {
     if (selectedMessages.size === 0 || isGeneratingNotes) return;
 
+    console.log('Generating study notes from selected messages:', selectedMessages.size);
     setIsGeneratingNotes(true);
     setError(null);
 
@@ -291,6 +344,8 @@ const AcceleraQA = () => {
       const selectedCombinedConversations = allConversations.filter(conv => 
         selectedMessages.has(conv.id)
       );
+
+      console.log('Selected combined conversations:', selectedCombinedConversations.length);
 
       // Flatten combined conversations back to individual messages
       const messagesFromCombined = selectedCombinedConversations.flatMap(conv => {
@@ -318,7 +373,7 @@ const AcceleraQA = () => {
         return acc;
       }, []);
 
-      console.log('Selected messages for study notes:', uniqueSelectedMessages);
+      console.log('Unique selected messages for study notes:', uniqueSelectedMessages.length);
       
       if (uniqueSelectedMessages.length === 0) {
         throw new Error('No valid messages found in selection. Please ensure you have selected conversations from the notebook.');
@@ -344,6 +399,7 @@ const AcceleraQA = () => {
         generatedDate: new Date().toLocaleDateString()
       };
 
+      console.log('Study notes generated successfully');
       setMessages(prev => [...prev, studyNotesMessage]);
       setCurrentResources(response.resources);
       setSelectedMessages(new Set());
@@ -366,6 +422,7 @@ const AcceleraQA = () => {
   // Handle export
   const handleExport = useCallback(() => {
     try {
+      console.log('Exporting notebook with', allMessages.length, 'messages');
       exportNotebook(allMessages);
     } catch (error) {
       console.error('Export failed:', error);
@@ -443,10 +500,12 @@ const AcceleraQA = () => {
           </div>
         </div>
 
-        {/* Storage status indicator for development */}
+        {/* Enhanced storage status indicator for development */}
         {process.env.NODE_ENV === 'development' && user && (
-          <div className="fixed bottom-4 left-4 bg-black text-white px-3 py-1 rounded text-xs">
-            Storage: {allMessages.length} messages total ({messages.length} current, {storedMessages.length} stored)
+          <div className="fixed bottom-4 left-4 bg-black text-white px-3 py-1 rounded text-xs font-mono">
+            <div>All: {allMessages.length} | Current: {messages.length} | Stored: {storedMessages.length}</div>
+            <div>30-day: {thirtyDayMessages.length} | Conversations: {combineMessagesIntoConversations(allMessages).length}</div>
+            <div>User: {user?.email?.substring(0, 10) || 'Unknown'} | Init: {isInitialized ? 'Yes' : 'No'}</div>
           </div>
         )}
 
