@@ -185,3 +185,178 @@ const Header = memo(({
                           <div className="grid grid-cols-2 gap-2 text-sm">
                             <div>
                               <span className="text-gray-600">Messages:</span>
+                              <span className="ml-2 font-medium">{storageInfo.stats.totalMessages}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Storage Used:</span>
+                              <span className="ml-2 font-medium">{Math.round(storageInfo.stats.usage.percentage)}%</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Users:</span>
+                              <span className="ml-2 font-medium">{storageInfo.stats.totalUsers}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Health:</span>
+                              <span className={`ml-2 font-medium ${
+                                storageInfo.health.isHealthy ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {storageInfo.health.isHealthy ? 'Good' : 'Issues'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Storage Usage Bar */}
+                          <div className="mt-3">
+                            <div className="flex justify-between text-xs text-gray-600 mb-1">
+                              <span>Storage Usage</span>
+                              <span>{Math.round(storageInfo.stats.usage.percentage)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full ${
+                                  storageInfo.stats.usage.percentage > 90 
+                                    ? 'bg-red-500' 
+                                    : storageInfo.stats.usage.percentage > 70 
+                                    ? 'bg-yellow-500' 
+                                    : 'bg-green-500'
+                                }`}
+                                style={{ width: `${Math.min(storageInfo.stats.usage.percentage, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Health Issues */}
+                        {storageInfo.health.issues.length > 0 && (
+                          <div className="bg-yellow-50 border border-yellow-200 p-3 rounded">
+                            <h4 className="font-medium text-yellow-800 text-sm mb-2 flex items-center">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              Storage Issues
+                            </h4>
+                            <ul className="text-xs text-yellow-700 space-y-1">
+                              {storageInfo.health.issues.map((issue, index) => (
+                                <li key={index}>• {issue}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Recommendations */}
+                        {storageInfo.health.recommendations.length > 0 && (
+                          <div className="bg-blue-50 border border-blue-200 p-3 rounded">
+                            <h4 className="font-medium text-blue-800 text-sm mb-2">Recommendations</h4>
+                            <ul className="text-xs text-blue-700 space-y-1">
+                              {storageInfo.health.recommendations.slice(0, 2).map((rec, index) => (
+                                <li key={index}>• {rec}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-col space-y-2 pt-2 border-t border-gray-200">
+                          <button
+                            onClick={handleStorageMaintenance}
+                            disabled={isPerformingMaintenance}
+                            className="flex items-center justify-center space-x-2 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {isPerformingMaintenance ? (
+                              <>
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
+                                <span>Optimizing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="h-3 w-3" />
+                                <span>Optimize Storage</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={handleClearStorage}
+                            className="flex items-center justify-center space-x-2 px-3 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            <span>Clear All Data</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {!storageInfo && (
+                      <div className="text-center py-4">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-600 mx-auto mb-2" />
+                        <span className="text-sm text-gray-600">Loading storage info...</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Clear Chat */}
+            <button
+              onClick={clearChat}
+              className="px-4 py-2 text-gray-300 hover:text-white transition-colors text-sm font-medium"
+              aria-label="Clear chat history"
+            >
+              Clear
+            </button>
+            
+            {/* Toggle Notebook/Chat View */}
+            <button
+              onClick={handleToggleView}
+              className="flex items-center space-x-2 px-4 py-2 bg-gray-800 rounded hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-600"
+              aria-label={showNotebook ? 'Switch to chat view' : 'Switch to notebook view'}
+            >
+              {showNotebook ? (
+                <>
+                  <MessageSquare className="h-4 w-4" />
+                  <span>Chat</span>
+                </>
+              ) : (
+                <>
+                  <Clock className="h-4 w-4" />
+                  <span>Notebook</span>
+                </>
+              )}
+            </button>
+            
+            {/* Export */}
+            <button
+              onClick={handleExportClick}
+              className="flex items-center space-x-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+              aria-label="Export conversation history"
+            >
+              <Download className="h-4 w-4" />
+              <span>Export</span>
+            </button>
+            
+            {/* Logout */}
+            <button
+              onClick={handleLogoutClick}
+              className="flex items-center space-x-2 px-4 py-2 text-gray-300 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-gray-600 rounded"
+              aria-label="Sign out of AcceleraQA"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Click outside to close storage menu */}
+      {showStorageMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setShowStorageMenu(false)}
+        />
+      )}
+    </header>
+  );
+});
+
+Header.displayName = 'Header';
+
+export default Header;
