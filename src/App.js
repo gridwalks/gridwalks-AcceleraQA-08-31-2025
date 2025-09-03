@@ -443,4 +443,48 @@ const AcceleraQA = () => {
       <div className="min-h-screen bg-gray-50">
         <Header 
           user={user}
-          show
+          showNotebook={showNotebook}
+          setShowNotebook={setShowNotebook}
+          clearChat={clearChat}
+          exportNotebook={handleExport}
+          clearAllConversations={clearAllConversations}
+          isServerAvailable={isServerAvailable}
+        />
+
+        <div className="max-w-7xl mx-auto px-6 py-8 h-[calc(100vh-64px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full min-h-0">
+            <ChatArea
+              messages={messages}
+              inputMessage={inputMessage}
+              setInputMessage={setInputMessage}
+              isLoading={isLoading}
+              handleSendMessage={handleSendMessage}
+              handleKeyPress={handleKeyPress}
+              messagesEndRef={messagesEndRef}
+            />
+            
+            <Sidebar 
+              showNotebook={showNotebook}
+              messages={messages}
+              thirtyDayMessages={thirtyDayMessages}
+              selectedMessages={selectedMessages}
+              setSelectedMessages={setSelectedMessages}
+              generateStudyNotes={generateStudyNotes}
+              isGeneratingNotes={isGeneratingNotes}
+              currentResources={currentResources}
+            />
+          </div>
+        </div>
+
+        {/* Server status indicator */}
+        <div className="fixed bottom-4 left-4 bg-black text-white px-3 py-1 rounded text-xs font-mono">
+          <div>Messages: Current {messages.length} | Stored {storedMessages.length}</div>
+          <div>Server: {isServerAvailable ? '✅ Online' : '❌ Offline'}</div>
+          <div>Mode: {isServerAvailable ? 'Persistent' : 'Session Only'}</div>
+        </div>
+      </div>
+    </ErrorBoundary>
+  );
+};
+
+export default AcceleraQA;
