@@ -17,6 +17,15 @@ import { exportNotebook } from './utils/exportUtils';
 import { getMessagesByDays, createMessage, combineMessagesIntoConversations } from './utils/messageUtils';
 import { validateEnvironment, DEFAULT_RESOURCES } from './config/constants';
 
+// Storage utilities
+import { 
+  saveMessagesToStorage, 
+  loadMessagesFromStorage, 
+  clearStorageData,
+  validateStorageData,
+  migrateOldStorageFormat
+} from './utils/storageUtils';
+
 const AcceleraQA = () => {
   // State management
   const [messages, setMessages] = useState([]);
@@ -29,6 +38,7 @@ const AcceleraQA = () => {
   const [user, setUser] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [error, setError] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   const messagesEndRef = useRef(null);
 
@@ -37,6 +47,69 @@ const AcceleraQA = () => {
     getMessagesByDays(messages), 
     [messages]
   );
+
+  // Load messages from storage when component mounts and user is authenticated
+  useEffect(() => {
+    const loadStoredMessages = async () => {
+      if (!user || isInitialized) return;
+
+      try {
+        console.log('Loading stored messages for user:', user.email || user.sub);
+        
+        // Load messages from storage
+        const storedMessages = await loadMessagesFromStorage(user.sub || user.email);
+        
+        if (storedMessages && storedMessages.length > 0) {
+          console.log(`Loaded ${storedMessages.length} messages from storage`);
+          setMessages(storedMessages);
+          
+          // Set current resources from the last AI message
+          const lastAiMessage = storedMessages
+            .filter(msg => msg.type === 'ai' && msg.resources && msg.resources.length > 0)
+            .pop();
+          
+          if (lastAiMessage) {
+            setCurrentResources(lastAiMessage.resources);
+          } else {
+            setCurrentResources(DEFAULT_RESOURCES);
+          }
+        } else {
+          // No stored messages, initialize with welcome message
+          initializeWelcomeMessage();
+        }
+        
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Error loading stored messages:', error);
+        // If loading fails, initialize with welcome message
+        initializeWelcomeMessage();
+        setIsInitialized(true);
+      }
+    };
+
+    if (user && !isInitialized) {
+      loadStoredMessages();
+    }
+  }, [user, isInitialized]);
+
+  // Save messages to storage whenever messages change
+  useEffect(() => {
+    const saveMessages = async () => {
+      if (!user || !isInitialized || messages.length === 0) return;
+
+      try {
+        await saveMessagesToStorage(user.sub || user.email, messages);
+        console.log(`Saved ${messages.length} messages to storage`);
+      } catch (error) {
+        console.error('Error saving messages to storage:', error);
+        // Don't show error to user for storage failures, just log it
+      }
+    };
+
+    // Debounce saves to avoid excessive writes
+    const timeoutId = setTimeout(saveMessages, 500);
+    return () => clearTimeout(timeoutId);
+  }, [messages, user, isInitialized]);
 
   // Initialize environment and authentication
   useEffect(() => {
@@ -50,7 +123,10 @@ const AcceleraQA = () => {
         }
 
         // Initialize authentication
-        await initializeAuth(setUser, setIsLoadingAuth, initializeWelcomeMessage);
+        await initializeAuth(setUser, setIsLoadingAuth, () => {
+          // Don't auto-initialize welcome message here anymore
+          // Let the storage loading effect handle it
+        });
       } catch (error) {
         console.error('Initialization failed:', error);
         setError('Failed to initialize application. Please refresh the page.');
@@ -130,13 +206,35 @@ const AcceleraQA = () => {
     }
   }, [handleSendMessage]);
 
-  // Clear chat history
-  const clearChat = useCallback(() => {
-    setMessages([]);
-    setCurrentResources([]);
-    setSelectedMessages(new Set());
-    setError(null);
-  }, []);
+  // Clear chat history with storage cleanup
+  const clearChat = useCallback(async () => {
+    try {
+      // Clear from storage if user is authenticated
+      if (user) {
+        await clearStorageData(user.sub || user.email);
+        console.log('Cleared storage data for user');
+      }
+      
+      // Clear local state
+      setMessages([]);
+      setCurrentResources([]);
+      setSelectedMessages(new Set());
+      setError(null);
+      
+      // Initialize with welcome message
+      setTimeout(() => {
+        initializeWelcomeMessage();
+      }, 100);
+    } catch (error) {
+      console.error('Error clearing chat history:', error);
+      // Still clear local state even if storage clear fails
+      setMessages([]);
+      setCurrentResources([]);
+      setSelectedMessages(new Set());
+      setError(null);
+      initializeWelcomeMessage();
+    }
+  }, [user, initializeWelcomeMessage]);
 
   // Generate study notes from selected messages - FIXED VERSION
   const generateStudyNotes = useCallback(async () => {
@@ -318,6 +416,13 @@ const AcceleraQA = () => {
             />
           </div>
         </div>
+
+        {/* Storage status indicator for development */}
+        {process.env.NODE_ENV === 'development' && user && (
+          <div className="fixed bottom-4 left-4 bg-black text-white px-3 py-1 rounded text-xs">
+            Storage: {messages.length} messages saved
+          </div>
+        )}
       </div>
     </ErrorBoundary>
   );
