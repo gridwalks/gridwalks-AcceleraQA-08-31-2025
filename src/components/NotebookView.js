@@ -2,17 +2,36 @@ import React, { memo, useMemo } from 'react';
 import { combineMessagesIntoConversations } from '../utils/messageUtils';
 
 const NotebookView = memo(({ 
-  messages,
-  thirtyDayMessages, 
+  messages, // All messages including current session
+  thirtyDayMessages, // Messages from last 30 days (from storage)
   selectedMessages, 
   setSelectedMessages, 
   generateStudyNotes, 
   isGeneratingNotes 
 }) => {
   // Memoize conversations to prevent unnecessary recalculation
+  // Combine current session messages with stored messages, removing duplicates
+  const allMessages = useMemo(() => {
+    const messageMap = new Map();
+    
+    // Add thirty day messages first (from storage)
+    thirtyDayMessages.forEach(msg => {
+      messageMap.set(msg.id, msg);
+    });
+    
+    // Add current session messages (will override any duplicates)
+    messages.forEach(msg => {
+      messageMap.set(msg.id, msg);
+    });
+    
+    // Convert back to array and sort by timestamp
+    return Array.from(messageMap.values())
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  }, [messages, thirtyDayMessages]);
+
   const conversations = useMemo(() => 
-    combineMessagesIntoConversations(thirtyDayMessages).slice(-10),
-    [thirtyDayMessages]
+    combineMessagesIntoConversations(allMessages).slice(-20), // Show last 20 conversations
+    [allMessages]
   );
 
   const selectAllConversations = () => {
@@ -39,6 +58,22 @@ const NotebookView = memo(({
     generateStudyNotes();
   };
 
+  // Separate current session conversations from stored ones
+  const currentSessionIds = useMemo(() => new Set(messages.map(msg => msg.id)), [messages]);
+  const currentConversations = conversations.filter(conv => {
+    // Check if any message in this conversation is from current session
+    if (conv.originalUserMessage && currentSessionIds.has(conv.originalUserMessage.id)) return true;
+    if (conv.originalAiMessage && currentSessionIds.has(conv.originalAiMessage.id)) return true;
+    return false;
+  });
+  
+  const storedConversations = conversations.filter(conv => {
+    // Check if this conversation is NOT from current session
+    if (conv.originalUserMessage && currentSessionIds.has(conv.originalUserMessage.id)) return false;
+    if (conv.originalAiMessage && currentSessionIds.has(conv.originalAiMessage.id)) return false;
+    return true;
+  });
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 h-full shadow-sm">
       {/* Header */}
@@ -46,7 +81,12 @@ const NotebookView = memo(({
         <div>
           <h3 className="text-lg font-bold text-gray-900">Notebook</h3>
           <p className="text-sm text-gray-500">
-            {thirtyDayMessages.length} messages • {conversations.length} conversations
+            {allMessages.length} messages • {conversations.length} conversations
+            {currentConversations.length > 0 && (
+              <span className="ml-2 text-blue-600">
+                ({currentConversations.length} current)
+              </span>
+            )}
           </p>
         </div>
         
@@ -104,14 +144,55 @@ const NotebookView = memo(({
             </p>
           </div>
         ) : (
-          conversations.map((conversation) => (
-            <ConversationCard
-              key={conversation.id}
-              conversation={conversation}
-              isSelected={selectedMessages.has(conversation.id)}
-              onToggleSelection={toggleMessageSelection}
-            />
-          ))
+          <>
+            {/* Current Session Conversations */}
+            {currentConversations.length > 0 && (
+              <>
+                <div className="flex items-center space-x-2 mb-3">
+                  <div className="h-px bg-blue-200 flex-1"></div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                    Current Session
+                  </span>
+                  <div className="h-px bg-blue-200 flex-1"></div>
+                </div>
+                
+                {currentConversations.map((conversation) => (
+                  <ConversationCard
+                    key={conversation.id}
+                    conversation={conversation}
+                    isSelected={selectedMessages.has(conversation.id)}
+                    onToggleSelection={toggleMessageSelection}
+                    isCurrentSession={true}
+                  />
+                ))}
+              </>
+            )}
+            
+            {/* Stored Conversations */}
+            {storedConversations.length > 0 && (
+              <>
+                {currentConversations.length > 0 && (
+                  <div className="flex items-center space-x-2 mb-3 mt-6">
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 bg-gray-50 px-3 py-1 rounded-full">
+                      Previous Conversations
+                    </span>
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                  </div>
+                )}
+                
+                {storedConversations.map((conversation) => (
+                  <ConversationCard
+                    key={conversation.id}
+                    conversation={conversation}
+                    isSelected={selectedMessages.has(conversation.id)}
+                    onToggleSelection={toggleMessageSelection}
+                    isCurrentSession={false}
+                  />
+                ))}
+              </>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -119,7 +200,7 @@ const NotebookView = memo(({
 });
 
 // Individual conversation card component
-const ConversationCard = memo(({ conversation, isSelected, onToggleSelection }) => {
+const ConversationCard = memo(({ conversation, isSelected, onToggleSelection, isCurrentSession }) => {
   const handleToggle = () => {
     onToggleSelection(conversation.id);
   };
@@ -128,6 +209,8 @@ const ConversationCard = memo(({ conversation, isSelected, onToggleSelection }) 
     <div className={`p-4 rounded-lg border transition-all cursor-pointer ${
       isSelected 
         ? 'bg-blue-50 border-blue-300 shadow-sm' 
+        : isCurrentSession
+        ? 'bg-blue-25 border-blue-100 hover:border-blue-200 hover:shadow-sm'
         : 'bg-gray-50 border-gray-200 hover:border-gray-300 hover:shadow-sm'
     }`}>
       <div className="flex items-start space-x-3">
@@ -141,9 +224,18 @@ const ConversationCard = memo(({ conversation, isSelected, onToggleSelection }) 
         
         <div className="flex-1 min-w-0" onClick={handleToggle}>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wide text-purple-600">
-              Conversation
-            </span>
+            <div className="flex items-center space-x-2">
+              <span className={`text-xs font-semibold uppercase tracking-wide ${
+                isCurrentSession ? 'text-blue-600' : 'text-purple-600'
+              }`}>
+                Conversation
+              </span>
+              {isCurrentSession && (
+                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                  Live
+                </span>
+              )}
+            </div>
             <time 
               className="text-xs text-gray-500"
               dateTime={conversation.timestamp}
