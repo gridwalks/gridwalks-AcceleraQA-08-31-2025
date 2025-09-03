@@ -51,9 +51,10 @@ const AuthScreen = memo(() => {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <img
-              src="/logo.svg"
+              src="/AceleraQA_logo.png"
               alt="AcceleraQA logo"
-              className="h-8 w-auto"
+              width="200"
+              height="40"
             />
             <div className="flex items-center">
               <button

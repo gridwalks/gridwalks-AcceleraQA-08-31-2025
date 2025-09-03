@@ -144,7 +144,12 @@ const Header = memo(({
           <div className="flex items-center space-x-4">
             <div className="flex items-center">
 
-              <img src="/logo.svg" alt="AcceleraQA logo" className="h-8 w-auto" />
+              <img
+                src="/AceleraQA_logo.png"
+                alt="AcceleraQA logo"
+                width="200"
+                height="40"
+              />
 
             </div>
             <div className="hidden md:block text-sm text-primary-light/70">
