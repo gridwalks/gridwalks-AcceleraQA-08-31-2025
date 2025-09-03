@@ -423,6 +423,10 @@ const AcceleraQA = () => {
             Storage: {messages.length} messages saved
           </div>
         )}
+
+        {/* Storage Notifications */}
+        <StorageNotification user={user} messagesCount={messages.length} />
+        <StorageWelcomeModal />
       </div>
     </ErrorBoundary>
   );
