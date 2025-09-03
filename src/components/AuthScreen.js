@@ -51,23 +51,15 @@ const AuthScreen = memo(() => {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="text-2xl font-bold tracking-tight">AcceleraQA</div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleEvaluationClick}
-                className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded hover:from-green-700 hover:to-emerald-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-300 flex items-center gap-2"
-                aria-label="Request evaluation of AcceleraQA"
-              >
-                <span>🔬</span>
-                <span>Request Evaluation</span>
-              </button>
-              <button
-                onClick={handleLoginClick}
-                className="px-6 py-2 bg-white text-black font-medium rounded hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
-                aria-label="Sign in to AcceleraQA"
-              >
-                Sign In
-              </button>
-            </div>
+          <div className="flex items-center">
+            <button
+              onClick={handleLoginClick}
+              className="px-6 py-2 bg-white text-black font-medium rounded hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+              aria-label="Sign in to AcceleraQA"
+            >
+              Sign In
+            </button>
+          </div>
           </div>
         </div>
       </header>
@@ -83,8 +75,8 @@ const AuthScreen = memo(() => {
           </h1>
           
           <p className="text-xl lg:text-2xl text-gray-300 mb-12 leading-relaxed max-w-3xl">
-            AI-powered learning assistant for pharmaceutical quality and compliance professionals. 
-            Accelerating innovation in regulatory excellence through intelligent automation.
+            AcceleraQA is an interactive AI learning assistant built for pharmaceutical quality professionals.
+            Upskill faster through dynamic conversations and engage directly with industry documents.
           </p>
 
           {/* Main CTA Section */}
@@ -126,22 +118,22 @@ const AuthScreen = memo(() => {
             <FeatureCard
               icon={<MessageSquare className="h-8 w-8" />}
               gradient="from-blue-600 to-purple-600"
-              title="Intelligent Responses"
-              description="Advanced AI understanding of pharmaceutical regulations, GMP standards, and compliance requirements with real-time learning capabilities."
+              title="Interactive Learning"
+              description="Dynamic conversations that adapt to your quality questions in real time."
             />
-            
+
             <FeatureCard
               icon={<BookOpen className="h-8 w-8" />}
               gradient="from-purple-600 to-pink-600"
-              title="Curated Learning"
-              description="Dynamic resource recommendations from FDA, ICH, and industry leaders for continuous professional development and regulatory updates."
+              title="Faster Upskilling"
+              description="Personalized guidance and curated resources to accelerate your expertise."
             />
-            
+
             <FeatureCard
               icon={<FileText className="h-8 w-8" />}
               gradient="from-pink-600 to-red-600"
-              title="Export & Analyze"
-              description="Generate comprehensive study materials and export conversation data for team collaboration and knowledge sharing."
+              title="Industry Document Chat"
+              description="Upload and interact with FDA, ICH, and company documents for instant answers."
             />
           </div>
 
