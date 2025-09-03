@@ -27,8 +27,8 @@ export function isStorageAvailable() {
     localStorage.removeItem(test);
     return true;
   } catch (error) {
-    console.error('Error getting storage stats:', error);
-    return { totalUsers: 0, totalMessages: 0, usage: { used: 0, available: 0, percentage: 0 } };
+    console.warn('localStorage not available:', error);
+    return false;
   }
 }
 
@@ -220,10 +220,6 @@ export function getStorageHealthReport() {
     report.isHealthy = false;
     report.issues.push('Failed to generate health report');
     return report;
-  }
-}
-    console.warn('localStorage not available:', error);
-    return false;
   }
 }
 
@@ -644,3 +640,7 @@ export function getStorageStats() {
       lastUpdated: new Date().toISOString()
     };
   } catch (error) {
+    console.error('Error getting storage stats:', error);
+    return { totalUsers: 0, totalMessages: 0, usage: { used: 0, available: 0, percentage: 0 } };
+  }
+}
