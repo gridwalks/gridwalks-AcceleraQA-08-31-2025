@@ -153,7 +153,7 @@ const Header = memo(({
 
             </div>
             <div className="hidden md:block text-sm text-primary-light/70">
-              Pharmaceutical Quality & Compliance AI
+             
             </div>
           </div>
           
