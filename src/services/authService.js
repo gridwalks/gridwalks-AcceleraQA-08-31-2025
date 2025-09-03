@@ -206,3 +206,8 @@ export const handleLogout = async () => {
     // Could show a toast notification here
   }
 };
+
+// Export getToken function for use with server-side API calls
+export const getToken = async () => {
+  return await authService.getToken();
+};
