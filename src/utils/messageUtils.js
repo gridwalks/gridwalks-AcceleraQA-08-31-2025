@@ -161,18 +161,25 @@ export function createMessage(type, content, resources = [], isStudyNotes = fals
     throw new Error('Message content must be a non-empty string');
   }
 
+  // Generate a more unique ID that includes timestamp and random component
+  const timestamp = new Date().toISOString();
+  const randomComponent = Math.random().toString(36).substring(2, 15);
+  const id = `msg_${Date.now()}_${randomComponent}`;
+
   return {
-    id: Date.now() + Math.random(), // More unique ID generation
+    id,
     type,
     content: content.trim(),
-    timestamp: new Date().toISOString(),
+    timestamp,
     resources: Array.isArray(resources) ? resources : [],
-    isStudyNotes: Boolean(isStudyNotes)
+    isStudyNotes: Boolean(isStudyNotes),
+    // Add version for future migrations
+    version: '1.0.0'
   };
 }
 
 /**
- * Validates message object structure
+ * Enhanced message validation for storage compatibility
  * @param {Object} message - Message object to validate
  * @returns {boolean} - Whether the message is valid
  */
@@ -181,6 +188,7 @@ export function validateMessage(message) {
     return false;
   }
 
+  // Required fields for all messages
   const requiredFields = ['id', 'type', 'content', 'timestamp'];
   const hasRequiredFields = requiredFields.every(field => 
     message.hasOwnProperty(field) && message[field] != null
@@ -190,10 +198,12 @@ export function validateMessage(message) {
     return false;
   }
 
+  // Validate message type
   if (message.type !== 'user' && message.type !== 'ai') {
     return false;
   }
 
+  // Validate content
   if (typeof message.content !== 'string' || message.content.trim() === '') {
     return false;
   }
@@ -204,7 +214,134 @@ export function validateMessage(message) {
     return false;
   }
 
+  // Validate resources array if present
+  if (message.resources && !Array.isArray(message.resources)) {
+    return false;
+  }
+
+  // Validate resources structure if present
+  if (message.resources && Array.isArray(message.resources)) {
+    const invalidResource = message.resources.find(resource => {
+      if (!resource || typeof resource !== 'object') return true;
+      if (!resource.title || !resource.url || !resource.type) return true;
+      if (typeof resource.title !== 'string' || typeof resource.url !== 'string' || typeof resource.type !== 'string') return true;
+      return false;
+    });
+    
+    if (invalidResource) {
+      return false;
+    }
+  }
+
+  // Validate study notes data if present
+  if (message.studyNotesData && typeof message.studyNotesData !== 'object') {
+    return false;
+  }
+
+  // Check for reasonable content length (prevent storage abuse)
+  if (message.content.length > 50000) {
+    console.warn('Message content exceeds reasonable length limit');
+    return false;
+  }
+
   return true;
+}
+
+/**
+ * Repairs a message object by fixing common issues
+ * @param {Object} message - Message object to repair
+ * @returns {Object|null} - Repaired message or null if unrepairable
+ */
+export function repairMessage(message) {
+  if (!message || typeof message !== 'object') {
+    return null;
+  }
+
+  try {
+    const repaired = { ...message };
+
+    // Fix missing ID
+    if (!repaired.id) {
+      const timestamp = repaired.timestamp || new Date().toISOString();
+      const randomComponent = Math.random().toString(36).substring(2, 8);
+      repaired.id = `repaired_${Date.now()}_${randomComponent}`;
+    }
+
+    // Fix invalid type
+    if (repaired.type !== 'user' && repaired.type !== 'ai') {
+      // Try to guess type based on content or other indicators
+      if (repaired.content && repaired.content.includes('Welcome to AcceleraQA')) {
+        repaired.type = 'ai';
+      } else {
+        repaired.type = 'user'; // Default to user
+      }
+    }
+
+    // Fix missing or empty content
+    if (!repaired.content || typeof repaired.content !== 'string') {
+      repaired.content = '[Content unavailable]';
+    }
+
+    // Fix missing timestamp
+    if (!repaired.timestamp || isNaN(new Date(repaired.timestamp).getTime())) {
+      repaired.timestamp = new Date().toISOString();
+    }
+
+    // Fix resources array
+    if (!Array.isArray(repaired.resources)) {
+      repaired.resources = [];
+    }
+
+    // Fix boolean fields
+    repaired.isStudyNotes = Boolean(repaired.isStudyNotes);
+
+    // Add version if missing
+    if (!repaired.version) {
+      repaired.version = '1.0.0';
+    }
+
+    // Validate the repaired message
+    if (validateMessage(repaired)) {
+      return repaired;
+    } else {
+      console.warn('Could not repair message:', message);
+      return null;
+    }
+
+  } catch (error) {
+    console.error('Error repairing message:', error);
+    return null;
+  }
+}
+
+/**
+ * Batch validates and repairs an array of messages
+ * @param {Object[]} messages - Array of messages to process
+ * @returns {Object[]} - Array of valid messages
+ */
+export function validateAndRepairMessages(messages) {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+
+  const validMessages = [];
+
+  messages.forEach((message, index) => {
+    if (validateMessage(message)) {
+      validMessages.push(message);
+    } else {
+      console.warn(`Invalid message at index ${index}, attempting repair...`);
+      const repairedMessage = repairMessage(message);
+      if (repairedMessage) {
+        console.log(`Successfully repaired message at index ${index}`);
+        validMessages.push(repairedMessage);
+      } else {
+        console.error(`Could not repair message at index ${index}, skipping`);
+      }
+    }
+  });
+
+  return validMessages;
 }
 
 /**
@@ -236,7 +373,11 @@ export function getMessageStats(messages) {
       aiMessages: 0,
       studyNotes: 0,
       withResources: 0,
-      conversations: 0
+      conversations: 0,
+      oldestMessage: null,
+      newestMessage: null,
+      averageContentLength: 0,
+      totalContentLength: 0
     };
   }
 
@@ -248,13 +389,25 @@ export function getMessageStats(messages) {
   );
   const conversations = combineMessagesIntoConversations(messages);
 
+  const totalContentLength = messages.reduce((sum, msg) => sum + (msg.content?.length || 0), 0);
+  const averageContentLength = messages.length > 0 ? Math.round(totalContentLength / messages.length) : 0;
+
+  // Find oldest and newest messages
+  const timestamps = messages.map(msg => new Date(msg.timestamp)).filter(date => !isNaN(date.getTime()));
+  const oldestMessage = timestamps.length > 0 ? new Date(Math.min(...timestamps)) : null;
+  const newestMessage = timestamps.length > 0 ? new Date(Math.max(...timestamps)) : null;
+
   return {
     total: messages.length,
     userMessages: userMessages.length,
     aiMessages: aiMessages.length,
     studyNotes: studyNotes.length,
     withResources: withResources.length,
-    conversations: conversations.length
+    conversations: conversations.length,
+    oldestMessage,
+    newestMessage,
+    averageContentLength,
+    totalContentLength
   };
 }
 
@@ -274,4 +427,75 @@ export function truncateContent(content, maxLength = 100) {
   }
 
   return content.substring(0, maxLength - 3) + '...';
+}
+
+/**
+ * Groups messages by date for display purposes
+ * @param {Object[]} messages - Array of message objects
+ * @returns {Object} - Messages grouped by date
+ */
+export function groupMessagesByDate(messages) {
+  if (!messages || !Array.isArray(messages)) {
+    return {};
+  }
+
+  return messages.reduce((groups, message) => {
+    if (!message.timestamp) return groups;
+    
+    const date = new Date(message.timestamp);
+    if (isNaN(date.getTime())) return groups;
+    
+    const dateKey = date.toDateString();
+    
+    if (!groups[dateKey]) {
+      groups[dateKey] = [];
+    }
+    
+    groups[dateKey].push(message);
+    return groups;
+  }, {});
+}
+
+/**
+ * Finds messages containing specific keywords
+ * @param {Object[]} messages - Array of message objects
+ * @param {string[]} keywords - Keywords to search for
+ * @returns {Object[]} - Messages containing keywords
+ */
+export function findMessagesByKeywords(messages, keywords) {
+  if (!messages || !Array.isArray(messages) || !keywords || !Array.isArray(keywords)) {
+    return [];
+  }
+
+  const lowerKeywords = keywords.map(keyword => keyword.toLowerCase());
+
+  return messages.filter(message => {
+    if (!message.content) return false;
+    
+    const lowerContent = message.content.toLowerCase();
+    return lowerKeywords.some(keyword => lowerContent.includes(keyword));
+  });
+}
+
+/**
+ * Deduplicates messages based on ID
+ * @param {Object[]} messages - Array of message objects
+ * @returns {Object[]} - Deduplicated messages
+ */
+export function deduplicateMessages(messages) {
+  if (!messages || !Array.isArray(messages)) {
+    return [];
+  }
+
+  const seen = new Set();
+  return messages.filter(message => {
+    if (!message.id) return false;
+    
+    if (seen.has(message.id)) {
+      return false;
+    }
+    
+    seen.add(message.id);
+    return true;
+  });
 }
