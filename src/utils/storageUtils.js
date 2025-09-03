@@ -1,5 +1,5 @@
 import { UI_CONFIG, APP_CONFIG } from '../config/constants';
-import { validateMessage } from './messageUtils';
+import { validateMessage, repairMessage } from './messageUtils';
 
 // Storage keys and configuration
 const STORAGE_KEYS = {
@@ -33,76 +33,483 @@ export function isStorageAvailable() {
 }
 
 /**
- * Exports all stored data for a user (for backup purposes)
+ * Gets the storage key for a specific user
  * @param {string} userId - User identifier
- * @returns {Promise<Object|null>} - Exported data or null if failed
+ * @returns {string} - Storage key
  */
-export async function exportStorageData(userId) {
+function getUserStorageKey(userId) {
+  if (!userId) {
+    throw new Error('User ID is required for storage operations');
+  }
+  
+  // Sanitize user ID for use as storage key
+  const sanitizedUserId = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `${STORAGE_KEYS.USER_PREFIX}${sanitizedUserId}`;
+}
+
+/**
+ * Compresses data for storage (simple JSON stringification with size tracking)
+ * @param {any} data - Data to compress
+ * @returns {string} - Compressed data string
+ */
+function compressData(data) {
+  if (!STORAGE_CONFIG.COMPRESSION_ENABLED) {
+    return JSON.stringify(data);
+  }
+
+  try {
+    // Simple compression: remove unnecessary whitespace and sort keys
+    const compressed = JSON.stringify(data, Object.keys(data).sort());
+    return compressed;
+  } catch (error) {
+    console.error('Error compressing data:', error);
+    return JSON.stringify(data);
+  }
+}
+
+/**
+ * Decompresses data from storage
+ * @param {string} compressedData - Compressed data string
+ * @returns {any} - Decompressed data
+ */
+function decompressData(compressedData) {
+  try {
+    return JSON.parse(compressedData);
+  } catch (error) {
+    console.error('Error decompressing data:', error);
+    throw new Error('Failed to parse stored data');
+  }
+}
+
+/**
+ * Gets storage usage information
+ * @returns {Object} - Storage usage stats
+ */
+export function getStorageUsage() {
+  if (!isStorageAvailable()) {
+    return { used: 0, available: 0, percentage: 0 };
+  }
+
+  try {
+    let used = 0;
+    for (let key in localStorage) {
+      if (localStorage.hasOwnProperty(key)) {
+        used += localStorage[key].length + key.length;
+      }
+    }
+
+    // Approximate localStorage limit (varies by browser, typically 5-10MB)
+    const approximateLimit = 5 * 1024 * 1024; // 5MB
+    const percentage = (used / approximateLimit) * 100;
+
+    return {
+      used,
+      available: approximateLimit - used,
+      percentage: Math.min(percentage, 100)
+    };
+  } catch (error) {
+    console.error('Error calculating storage usage:', error);
+    return { used: 0, available: 0, percentage: 0 };
+  }
+}
+
+/**
+ * Validates the structure of stored data
+ * @param {Object} data - Data to validate
+ * @returns {boolean} - Whether data is valid
+ */
+export function validateStorageData(data) {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+  
+  const requiredFields = ['version', 'userId', 'messages', 'lastSaved'];
+  const hasRequiredFields = requiredFields.every(field => 
+    data.hasOwnProperty(field)
+  );
+  
+  if (!hasRequiredFields) {
+    return false;
+  }
+  
+  if (!Array.isArray(data.messages)) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * FIXED: Enhanced message loading with better error handling
+ * @param {string} userId - User identifier
+ * @returns {Promise<Object[]>} - Loaded messages or empty array
+ */
+export async function loadMessagesFromStorage(userId) {
+  console.log('=== LOADING MESSAGES FROM STORAGE ===');
+  console.log('User ID:', userId);
+  
+  if (!isStorageAvailable()) {
+    console.warn('Storage not available, returning empty messages');
+    return [];
+  }
+
   try {
     if (!userId) {
       throw new Error('User ID is required');
     }
     
     const storageKey = getUserStorageKey(userId);
+    console.log('Storage key:', storageKey);
+    
     const storedData = localStorage.getItem(storageKey);
+    console.log('Raw stored data exists:', !!storedData);
+    console.log('Raw stored data length:', storedData?.length || 0);
     
     if (!storedData) {
-      return null;
+      console.log(`No stored data found for user ${userId}`);
+      return [];
     }
     
     const data = decompressData(storedData);
+    console.log('Decompressed data:', data);
     
-    return {
-      ...data,
-      exportedAt: new Date().toISOString(),
-      exportVersion: STORAGE_CONFIG.VERSION
-    };
+    // ENHANCED: Handle different data formats that might be stored
+    let messages = [];
+    
+    if (Array.isArray(data)) {
+      // Old format: data is directly an array of messages
+      console.log('Found old format - array of messages');
+      messages = data;
+    } else if (data.messages && Array.isArray(data.messages)) {
+      // New format: data is an object with messages array
+      console.log('Found new format - object with messages array');
+      messages = data.messages;
+    } else {
+      console.warn('Unknown data format:', data);
+      return [];
+    }
+    
+    console.log('Raw messages found:', messages.length);
+    console.log('Sample messages:', messages.slice(0, 2).map(m => ({
+      id: m?.id,
+      type: m?.type,
+      content: m?.content?.substring(0, 50) + '...',
+      timestamp: m?.timestamp
+    })));
+    
+    // FIXED: Better message validation and repair
+    const validMessages = [];
+    
+    messages.forEach((msg, index) => {
+      // Skip invalid entries (like standalone version objects)
+      if (!msg || typeof msg !== 'object' || !msg.id || !msg.type || !msg.content) {
+        console.log(`Skipping invalid message at index ${index}:`, msg);
+        return;
+      }
+      
+      if (validateMessage(msg)) {
+        validMessages.push({
+          ...msg,
+          isStored: true,
+          isCurrent: false
+        });
+      } else {
+        console.warn(`Invalid message at index ${index}, attempting repair:`, msg);
+        const repairedMessage = repairMessage(msg);
+        if (repairedMessage) {
+          console.log(`Successfully repaired message at index ${index}`);
+          validMessages.push({
+            ...repairedMessage,
+            isStored: true,
+            isCurrent: false
+          });
+        } else {
+          console.error(`Could not repair message at index ${index}, skipping`);
+        }
+      }
+    });
+    
+    console.log(`Successfully loaded ${validMessages.length} valid messages out of ${messages.length} total`);
+    console.log('Valid messages sample:', validMessages.slice(0, 2).map(m => ({
+      id: m.id,
+      type: m.type,
+      content: m.content.substring(0, 50) + '...',
+      timestamp: m.timestamp
+    })));
+    
+    return validMessages;
     
   } catch (error) {
-    console.error('Error exporting storage data:', error);
-    return null;
+    console.error('Error loading messages from storage:', error);
+    console.error('Error stack:', error.stack);
+    
+    // If there's corrupted data, try to clear it and return empty array
+    try {
+      const storageKey = getUserStorageKey(userId);
+      console.log('Attempting to clear corrupted data...');
+      localStorage.removeItem(storageKey);
+      console.log('Corrupted data cleared');
+    } catch (clearError) {
+      console.error('Error clearing corrupted data:', clearError);
+    }
+    
+    return [];
   }
 }
 
 /**
- * Imports data into storage (for restore purposes)
- * @param {string} userId - User identifier
- * @param {Object} importData - Data to import
+ * Validates and filters messages before storage
+ * @param {Object[]} messages - Messages to validate
+ * @returns {Object[]} - Valid messages
+ */
+function validateMessagesForStorage(messages) {
+  if (!Array.isArray(messages)) {
+    console.warn('Messages is not an array, converting to empty array');
+    return [];
+  }
+  
+  return messages.filter(msg => {
+    if (!validateMessage(msg)) {
+      console.warn('Invalid message found, skipping:', msg);
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Saves messages to localStorage for a specific user
+ * @param {string} userId - User identifier  
+ * @param {Object[]} messages - Messages to save
  * @returns {Promise<boolean>} - Success status
  */
-export async function importStorageData(userId, importData) {
+export async function saveMessagesToStorage(userId, messages) {
+  if (!isStorageAvailable()) {
+    console.warn('Storage not available, messages not saved');
+    return false;
+  }
+
   try {
-    if (!userId || !importData) {
-      throw new Error('User ID and import data are required');
+    // Validate input
+    if (!userId) {
+      throw new Error('User ID is required');
     }
     
-    // Validate import data
-    if (!validateStorageData(importData)) {
-      throw new Error('Invalid import data format');
+    const validMessages = validateMessagesForStorage(messages);
+    const storageKey = getUserStorageKey(userId);
+    
+    console.log(`Saving ${validMessages.length} messages to storage for user ${userId}`);
+    
+    // Check storage usage and cleanup if needed
+    const usage = getStorageUsage();
+    if (usage.percentage > STORAGE_CONFIG.CLEANUP_THRESHOLD * 100) {
+      console.log('Storage usage high, performing cleanup...');
+      cleanupOldMessages(userId);
     }
     
-    // Merge with existing data if any
-    const existingMessages = await loadMessagesFromStorage(userId);
-    const importedMessages = importData.messages || [];
+    // Prepare data for storage
+    const storageData = {
+      version: STORAGE_CONFIG.VERSION,
+      userId,
+      messages: validMessages,
+      lastSaved: new Date().toISOString(),
+      messageCount: validMessages.length,
+      appVersion: APP_CONFIG.VERSION
+    };
     
-    // Combine messages and remove duplicates by ID
-    const combinedMessages = [...existingMessages];
+    // Save to localStorage
+    const compressedData = compressData(storageData);
+    localStorage.setItem(storageKey, compressedData);
     
-    importedMessages.forEach(importedMsg => {
-      if (!combinedMessages.find(existing => existing.id === importedMsg.id)) {
-        combinedMessages.push(importedMsg);
-      }
-    });
+    // Update metadata
+    updateStorageMetadata(userId, validMessages.length);
     
-    // Sort by timestamp
-    combinedMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    
-    // Save combined data
-    return await saveMessagesToStorage(userId, combinedMessages);
+    console.log(`Successfully saved ${validMessages.length} messages for user ${userId}`);
+    return true;
     
   } catch (error) {
-    console.error('Error importing storage data:', error);
+    console.error('Error saving messages to storage:', error);
+    
+    // If quota exceeded, try cleanup and retry once
+    if (error.name === 'QuotaExceededError') {
+      try {
+        console.log('Quota exceeded, attempting cleanup and retry...');
+        cleanupOldMessages(userId, Math.floor(STORAGE_CONFIG.MAX_MESSAGES_PER_USER * 0.5));
+        
+        // Retry with fewer messages
+        const reducedMessages = messages.slice(-Math.floor(STORAGE_CONFIG.MAX_MESSAGES_PER_USER * 0.5));
+        return await saveMessagesToStorage(userId, reducedMessages);
+      } catch (retryError) {
+        console.error('Retry failed:', retryError);
+      }
+    }
+    
     return false;
+  }
+}
+
+/**
+ * Cleans up old messages to free storage space
+ * @param {string} userId - User identifier
+ * @param {number} maxMessages - Maximum messages to keep
+ */
+function cleanupOldMessages(userId, maxMessages = STORAGE_CONFIG.MAX_MESSAGES_PER_USER) {
+  try {
+    const storageKey = getUserStorageKey(userId);
+    const storedData = localStorage.getItem(storageKey);
+    
+    if (!storedData) return;
+    
+    const data = decompressData(storedData);
+    const messages = data.messages || [];
+    
+    if (messages.length <= maxMessages) return;
+    
+    console.log(`Cleaning up old messages: ${messages.length} -> ${maxMessages}`);
+    
+    // Keep the most recent messages
+    const recentMessages = messages
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, maxMessages);
+    
+    // Save cleaned data
+    const cleanedData = {
+      ...data,
+      messages: recentMessages,
+      lastCleanup: new Date().toISOString(),
+      cleanupCount: (data.cleanupCount || 0) + 1
+    };
+    
+    localStorage.setItem(storageKey, compressData(cleanedData));
+    console.log(`Cleanup completed: removed ${messages.length - maxMessages} old messages`);
+    
+  } catch (error) {
+    console.error('Error during cleanup:', error);
+  }
+}
+
+/**
+ * Updates storage metadata for tracking
+ * @param {string} userId - User identifier
+ * @param {number} messageCount - Number of messages
+ */
+function updateStorageMetadata(userId, messageCount) {
+  try {
+    const metadata = JSON.parse(localStorage.getItem(STORAGE_KEYS.METADATA) || '{}');
+    
+    metadata[userId] = {
+      messageCount,
+      lastUpdated: new Date().toISOString(),
+      version: STORAGE_CONFIG.VERSION
+    };
+    
+    localStorage.setItem(STORAGE_KEYS.METADATA, JSON.stringify(metadata));
+  } catch (error) {
+    console.error('Error updating storage metadata:', error);
+  }
+}
+
+/**
+ * Clears all storage data for a specific user
+ * @param {string} userId - User identifier
+ * @returns {Promise<boolean>} - Success status
+ */
+export async function clearStorageData(userId) {
+  if (!isStorageAvailable()) {
+    return true; // Consider it successful if storage isn't available
+  }
+
+  try {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+    
+    const storageKey = getUserStorageKey(userId);
+    localStorage.removeItem(storageKey);
+    
+    // Update metadata
+    try {
+      const metadata = JSON.parse(localStorage.getItem(STORAGE_KEYS.METADATA) || '{}');
+      delete metadata[userId];
+      localStorage.setItem(STORAGE_KEYS.METADATA, JSON.stringify(metadata));
+    } catch (metaError) {
+      console.warn('Error updating metadata during clear:', metaError);
+    }
+    
+    console.log(`Successfully cleared storage data for user ${userId}`);
+    return true;
+    
+  } catch (error) {
+    console.error('Error clearing storage data:', error);
+    return false;
+  }
+}
+
+/**
+ * Gets storage statistics for all users
+ * @returns {Object} - Storage statistics
+ */
+export function getStorageStats() {
+  if (!isStorageAvailable()) {
+    return { totalUsers: 0, totalMessages: 0, usage: { used: 0, available: 0, percentage: 0 } };
+  }
+
+  try {
+    const metadata = JSON.parse(localStorage.getItem(STORAGE_KEYS.METADATA) || '{}');
+    const users = Object.keys(metadata);
+    const totalMessages = users.reduce((total, userId) => {
+      return total + (metadata[userId].messageCount || 0);
+    }, 0);
+    
+    return {
+      totalUsers: users.length,
+      totalMessages,
+      usage: getStorageUsage(),
+      lastUpdated: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Error getting storage stats:', error);
+    return { totalUsers: 0, totalMessages: 0, usage: { used: 0, available: 0, percentage: 0 } };
+  }
+}
+
+/**
+ * Migrates old storage format to new format
+ * @param {Object} oldData - Old format data
+ * @returns {Promise<Object|null>} - Migrated data or null if migration failed
+ */
+export async function migrateOldStorageFormat(oldData) {
+  try {
+    console.log('Attempting to migrate old storage format...');
+    
+    // Handle different old formats
+    let messages = [];
+    
+    if (oldData.messages && Array.isArray(oldData.messages)) {
+      messages = oldData.messages;
+    } else if (Array.isArray(oldData)) {
+      // Very old format where data was just an array of messages
+      messages = oldData;
+    } else {
+      console.warn('Unable to migrate old storage format');
+      return null;
+    }
+    
+    // Validate migrated messages
+    const validMessages = validateMessagesForStorage(messages);
+    
+    console.log(`Migration successful: ${validMessages.length} messages migrated`);
+    
+    return {
+      version: STORAGE_CONFIG.VERSION,
+      messages: validMessages,
+      migrated: true,
+      migratedAt: new Date().toISOString()
+    };
+    
+  } catch (error) {
+    console.error('Error during migration:', error);
+    return null;
   }
 }
 
@@ -220,427 +627,5 @@ export function getStorageHealthReport() {
     report.isHealthy = false;
     report.issues.push('Failed to generate health report');
     return report;
-  }
-}
-
-/**
- * Gets the storage key for a specific user
- * @param {string} userId - User identifier
- * @returns {string} - Storage key
- */
-function getUserStorageKey(userId) {
-  if (!userId) {
-    throw new Error('User ID is required for storage operations');
-  }
-  
-  // Sanitize user ID for use as storage key
-  const sanitizedUserId = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
-  return `${STORAGE_KEYS.USER_PREFIX}${sanitizedUserId}`;
-}
-
-/**
- * Compresses data for storage (simple JSON stringification with size tracking)
- * @param {any} data - Data to compress
- * @returns {string} - Compressed data string
- */
-function compressData(data) {
-  if (!STORAGE_CONFIG.COMPRESSION_ENABLED) {
-    return JSON.stringify(data);
-  }
-
-  try {
-    // Simple compression: remove unnecessary whitespace and sort keys
-    const compressed = JSON.stringify(data, Object.keys(data).sort());
-    return compressed;
-  } catch (error) {
-    console.error('Error compressing data:', error);
-    return JSON.stringify(data);
-  }
-}
-
-/**
- * Decompresses data from storage
- * @param {string} compressedData - Compressed data string
- * @returns {any} - Decompressed data
- */
-function decompressData(compressedData) {
-  try {
-    return JSON.parse(compressedData);
-  } catch (error) {
-    console.error('Error decompressing data:', error);
-    throw new Error('Failed to parse stored data');
-  }
-}
-
-/**
- * Gets storage usage information
- * @returns {Object} - Storage usage stats
- */
-export function getStorageUsage() {
-  if (!isStorageAvailable()) {
-    return { used: 0, available: 0, percentage: 0 };
-  }
-
-  try {
-    let used = 0;
-    for (let key in localStorage) {
-      if (localStorage.hasOwnProperty(key)) {
-        used += localStorage[key].length + key.length;
-      }
-    }
-
-    // Approximate localStorage limit (varies by browser, typically 5-10MB)
-    const approximateLimit = 5 * 1024 * 1024; // 5MB
-    const percentage = (used / approximateLimit) * 100;
-
-    return {
-      used,
-      available: approximateLimit - used,
-      percentage: Math.min(percentage, 100)
-    };
-  } catch (error) {
-    console.error('Error calculating storage usage:', error);
-    return { used: 0, available: 0, percentage: 0 };
-  }
-}
-
-/**
- * Cleans up old messages to free storage space
- * @param {string} userId - User identifier
- * @param {number} maxMessages - Maximum messages to keep
- */
-function cleanupOldMessages(userId, maxMessages = STORAGE_CONFIG.MAX_MESSAGES_PER_USER) {
-  try {
-    const storageKey = getUserStorageKey(userId);
-    const storedData = localStorage.getItem(storageKey);
-    
-    if (!storedData) return;
-    
-    const data = decompressData(storedData);
-    const messages = data.messages || [];
-    
-    if (messages.length <= maxMessages) return;
-    
-    console.log(`Cleaning up old messages: ${messages.length} -> ${maxMessages}`);
-    
-    // Keep the most recent messages
-    const recentMessages = messages
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-      .slice(0, maxMessages);
-    
-    // Save cleaned data
-    const cleanedData = {
-      ...data,
-      messages: recentMessages,
-      lastCleanup: new Date().toISOString(),
-      cleanupCount: (data.cleanupCount || 0) + 1
-    };
-    
-    localStorage.setItem(storageKey, compressData(cleanedData));
-    console.log(`Cleanup completed: removed ${messages.length - maxMessages} old messages`);
-    
-  } catch (error) {
-    console.error('Error during cleanup:', error);
-  }
-}
-
-/**
- * Validates and filters messages before storage
- * @param {Object[]} messages - Messages to validate
- * @returns {Object[]} - Valid messages
- */
-function validateMessagesForStorage(messages) {
-  if (!Array.isArray(messages)) {
-    console.warn('Messages is not an array, converting to empty array');
-    return [];
-  }
-  
-  return messages.filter(msg => {
-    if (!validateMessage(msg)) {
-      console.warn('Invalid message found, skipping:', msg);
-      return false;
-    }
-    return true;
-  });
-}
-
-/**
- * Saves messages to localStorage for a specific user
- * @param {string} userId - User identifier  
- * @param {Object[]} messages - Messages to save
- * @returns {Promise<boolean>} - Success status
- */
-export async function saveMessagesToStorage(userId, messages) {
-  if (!isStorageAvailable()) {
-    console.warn('Storage not available, messages not saved');
-    return false;
-  }
-
-  try {
-    // Validate input
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
-    
-    const validMessages = validateMessagesForStorage(messages);
-    const storageKey = getUserStorageKey(userId);
-    
-    // Check storage usage and cleanup if needed
-    const usage = getStorageUsage();
-    if (usage.percentage > STORAGE_CONFIG.CLEANUP_THRESHOLD * 100) {
-      console.log('Storage usage high, performing cleanup...');
-      cleanupOldMessages(userId);
-    }
-    
-    // Prepare data for storage
-    const storageData = {
-      version: STORAGE_CONFIG.VERSION,
-      userId,
-      messages: validMessages,
-      lastSaved: new Date().toISOString(),
-      messageCount: validMessages.length,
-      appVersion: APP_CONFIG.VERSION
-    };
-    
-    // Save to localStorage
-    const compressedData = compressData(storageData);
-    localStorage.setItem(storageKey, compressedData);
-    
-    // Update metadata
-    updateStorageMetadata(userId, validMessages.length);
-    
-    console.log(`Successfully saved ${validMessages.length} messages for user ${userId}`);
-    return true;
-    
-  } catch (error) {
-    console.error('Error saving messages to storage:', error);
-    
-    // If quota exceeded, try cleanup and retry once
-    if (error.name === 'QuotaExceededError') {
-      try {
-        console.log('Quota exceeded, attempting cleanup and retry...');
-        cleanupOldMessages(userId, Math.floor(STORAGE_CONFIG.MAX_MESSAGES_PER_USER * 0.5));
-        
-        // Retry with fewer messages
-        const reducedMessages = messages.slice(-Math.floor(STORAGE_CONFIG.MAX_MESSAGES_PER_USER * 0.5));
-        return await saveMessagesToStorage(userId, reducedMessages);
-      } catch (retryError) {
-        console.error('Retry failed:', retryError);
-      }
-    }
-    
-    return false;
-  }
-}
-
-/**
- * Loads messages from localStorage for a specific user
- * @param {string} userId - User identifier
- * @returns {Promise<Object[]>} - Loaded messages or empty array
- */
-export async function loadMessagesFromStorage(userId) {
-  if (!isStorageAvailable()) {
-    console.warn('Storage not available, returning empty messages');
-    return [];
-  }
-
-  try {
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
-    
-    const storageKey = getUserStorageKey(userId);
-    const storedData = localStorage.getItem(storageKey);
-    
-    if (!storedData) {
-      console.log(`No stored data found for user ${userId}`);
-      return [];
-    }
-    
-    const data = decompressData(storedData);
-    
-    // Validate stored data structure
-    if (!validateStorageData(data)) {
-      console.warn('Invalid storage data structure, returning empty messages');
-      return [];
-    }
-    
-    // Check for version compatibility
-    if (data.version !== STORAGE_CONFIG.VERSION) {
-      console.log(`Storage version mismatch: ${data.version} vs ${STORAGE_CONFIG.VERSION}, attempting migration...`);
-      const migratedData = await migrateOldStorageFormat(data);
-      if (migratedData) {
-        // Save migrated data
-        await saveMessagesToStorage(userId, migratedData.messages);
-        return migratedData.messages;
-      }
-    }
-    
-    const messages = data.messages || [];
-    const validMessages = validateMessagesForStorage(messages);
-    
-    // If we filtered out invalid messages, save the cleaned data
-    if (validMessages.length !== messages.length) {
-      console.log(`Filtered ${messages.length - validMessages.length} invalid messages`);
-      await saveMessagesToStorage(userId, validMessages);
-    }
-    
-    console.log(`Successfully loaded ${validMessages.length} messages for user ${userId}`);
-    return validMessages;
-    
-  } catch (error) {
-    console.error('Error loading messages from storage:', error);
-    return [];
-  }
-}
-
-/**
- * Updates storage metadata for tracking
- * @param {string} userId - User identifier
- * @param {number} messageCount - Number of messages
- */
-function updateStorageMetadata(userId, messageCount) {
-  try {
-    const metadata = JSON.parse(localStorage.getItem(STORAGE_KEYS.METADATA) || '{}');
-    
-    metadata[userId] = {
-      messageCount,
-      lastUpdated: new Date().toISOString(),
-      version: STORAGE_CONFIG.VERSION
-    };
-    
-    localStorage.setItem(STORAGE_KEYS.METADATA, JSON.stringify(metadata));
-  } catch (error) {
-    console.error('Error updating storage metadata:', error);
-  }
-}
-
-/**
- * Validates the structure of stored data
- * @param {Object} data - Data to validate
- * @returns {boolean} - Whether data is valid
- */
-export function validateStorageData(data) {
-  if (!data || typeof data !== 'object') {
-    return false;
-  }
-  
-  const requiredFields = ['version', 'userId', 'messages', 'lastSaved'];
-  const hasRequiredFields = requiredFields.every(field => 
-    data.hasOwnProperty(field)
-  );
-  
-  if (!hasRequiredFields) {
-    return false;
-  }
-  
-  if (!Array.isArray(data.messages)) {
-    return false;
-  }
-  
-  return true;
-}
-
-/**
- * Migrates old storage format to new format
- * @param {Object} oldData - Old format data
- * @returns {Promise<Object|null>} - Migrated data or null if migration failed
- */
-export async function migrateOldStorageFormat(oldData) {
-  try {
-    console.log('Attempting to migrate old storage format...');
-    
-    // Handle different old formats
-    let messages = [];
-    
-    if (oldData.messages && Array.isArray(oldData.messages)) {
-      messages = oldData.messages;
-    } else if (Array.isArray(oldData)) {
-      // Very old format where data was just an array of messages
-      messages = oldData;
-    } else {
-      console.warn('Unable to migrate old storage format');
-      return null;
-    }
-    
-    // Validate migrated messages
-    const validMessages = validateMessagesForStorage(messages);
-    
-    console.log(`Migration successful: ${validMessages.length} messages migrated`);
-    
-    return {
-      version: STORAGE_CONFIG.VERSION,
-      messages: validMessages,
-      migrated: true,
-      migratedAt: new Date().toISOString()
-    };
-    
-  } catch (error) {
-    console.error('Error during migration:', error);
-    return null;
-  }
-}
-
-/**
- * Clears all storage data for a specific user
- * @param {string} userId - User identifier
- * @returns {Promise<boolean>} - Success status
- */
-export async function clearStorageData(userId) {
-  if (!isStorageAvailable()) {
-    return true; // Consider it successful if storage isn't available
-  }
-
-  try {
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
-    
-    const storageKey = getUserStorageKey(userId);
-    localStorage.removeItem(storageKey);
-    
-    // Update metadata
-    try {
-      const metadata = JSON.parse(localStorage.getItem(STORAGE_KEYS.METADATA) || '{}');
-      delete metadata[userId];
-      localStorage.setItem(STORAGE_KEYS.METADATA, JSON.stringify(metadata));
-    } catch (metaError) {
-      console.warn('Error updating metadata during clear:', metaError);
-    }
-    
-    console.log(`Successfully cleared storage data for user ${userId}`);
-    return true;
-    
-  } catch (error) {
-    console.error('Error clearing storage data:', error);
-    return false;
-  }
-}
-
-/**
- * Gets storage statistics for all users
- * @returns {Object} - Storage statistics
- */
-export function getStorageStats() {
-  if (!isStorageAvailable()) {
-    return { totalUsers: 0, totalMessages: 0, usage: { used: 0, available: 0, percentage: 0 } };
-  }
-
-  try {
-    const metadata = JSON.parse(localStorage.getItem(STORAGE_KEYS.METADATA) || '{}');
-    const users = Object.keys(metadata);
-    const totalMessages = users.reduce((total, userId) => {
-      return total + (metadata[userId].messageCount || 0);
-    }, 0);
-    
-    return {
-      totalUsers: users.length,
-      totalMessages,
-      usage: getStorageUsage(),
-      lastUpdated: new Date().toISOString()
-    };
-  } catch (error) {
-    console.error('Error getting storage stats:', error);
-    return { totalUsers: 0, totalMessages: 0, usage: { used: 0, available: 0, percentage: 0 } };
   }
 }
