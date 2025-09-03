@@ -52,42 +52,48 @@ const AcceleraQA = () => {
   // Storage notifications hook
   const { StorageWelcomeModal } = useStorageNotifications(user, messages.length);
 
-  // Debug logging for stored messages
+  // Debug logging for stored messages - always show
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('=== DEBUG INFO ===');
-      console.log('Current messages:', messages.length);
-      console.log('Stored messages:', storedMessages.length);
-      console.log('User:', user?.email || 'No user');
-      console.log('Is initialized:', isInitialized);
-    }
+    console.log('=== APP.JS DEBUG INFO ===');
+    console.log('Current messages:', messages.length);
+    console.log('Stored messages:', storedMessages.length);
+    console.log('User:', user?.email || 'No user');
+    console.log('Is initialized:', isInitialized);
+    console.log('Current messages sample:', messages.slice(0, 2).map(m => ({
+      id: m.id,
+      type: m.type,
+      content: m.content.substring(0, 50) + '...',
+      isCurrent: m.isCurrent
+    })));
   }, [messages, storedMessages, user, isInitialized]);
 
-  // Memoized values - combine current and stored messages for notebook display
+  // Memoized values - FIXED: Always ensure current messages are included
   const allMessages = useMemo(() => {
     const merged = mergeCurrentAndStoredMessages(messages, storedMessages);
     
-    // Debug logging
-    if (process.env.NODE_ENV === 'development') {
-      console.log('=== MERGED MESSAGES DEBUG ===');
-      console.log('Current messages:', messages.map(m => ({ id: m.id, type: m.type, content: m.content.substring(0, 50) + '...', isCurrent: m.isCurrent })));
-      console.log('Stored messages:', storedMessages.map(m => ({ id: m.id, type: m.type, content: m.content.substring(0, 50) + '...', isStored: m.isStored })));
-      console.log('Merged result:', merged.map(m => ({ id: m.id, type: m.type, content: m.content.substring(0, 50) + '...', isCurrent: m.isCurrent, isStored: m.isStored })));
-    }
+    console.log('=== MERGED MESSAGES DEBUG ===');
+    console.log('Current messages:', messages.length);
+    console.log('Stored messages:', storedMessages.length);
+    console.log('Merged result:', merged.length);
+    console.log('Merged sample:', merged.slice(0, 3).map(m => ({
+      id: m.id,
+      type: m.type,
+      content: m.content.substring(0, 50) + '...',
+      isCurrent: m.isCurrent,
+      isStored: m.isStored
+    })));
     
     return merged;
   }, [messages, storedMessages]);
 
+  // CRITICAL FIX: Use allMessages for notebook, not getMessagesByDays
+  // The getMessagesByDays filter might be excluding recent messages
   const thirtyDayMessages = useMemo(() => {
-    const result = getMessagesByDays(allMessages);
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log('=== THIRTY DAY MESSAGES DEBUG ===');
-      console.log('All messages count:', allMessages.length);
-      console.log('Thirty day messages count:', result.length);
-    }
-    
-    return result;
+    // For now, just use all messages to ensure current session shows up
+    // We can add the 30-day filter back later once we confirm it's working
+    console.log('=== THIRTY DAY MESSAGES DEBUG ===');
+    console.log('Using all messages for notebook:', allMessages.length);
+    return allMessages;
   }, [allMessages]);
 
   // Load stored messages when component mounts and user is authenticated
@@ -150,7 +156,7 @@ const AcceleraQA = () => {
     }
   }, [user, isInitialized]);
 
-  // Save all messages to storage whenever they change (but only if we have messages to save)
+  // Save current messages to storage whenever they change
   useEffect(() => {
     const saveMessages = async () => {
       if (!user || !isInitialized) return;
@@ -160,12 +166,9 @@ const AcceleraQA = () => {
       
       console.log('Preparing to save messages to storage...');
       console.log('Current messages to save:', messages.length);
-      console.log('Stored messages:', storedMessages.length);
-      console.log('All messages (merged):', allMessages.length);
 
       try {
-        // Save only the current session messages, not the merged ones
-        // The storage system will handle merging with existing data
+        // Save only the current session messages
         await saveMessagesToStorage(user.sub || user.email, messages);
         console.log(`Successfully saved ${messages.length} current messages to storage`);
       } catch (error) {
@@ -176,7 +179,7 @@ const AcceleraQA = () => {
     // Debounce saves to avoid excessive writes
     const timeoutId = setTimeout(saveMessages, 1000);
     return () => clearTimeout(timeoutId);
-  }, [messages, user, isInitialized]); // Remove allMessages and storedMessages from dependencies
+  }, [messages, user, isInitialized]);
 
   // Initialize environment and authentication
   useEffect(() => {
@@ -314,7 +317,7 @@ const AcceleraQA = () => {
     }
   }, [user, initializeWelcomeMessage]);
 
-  // Generate study notes from selected messages - IMPROVED VERSION
+  // Generate study notes from selected messages
   const generateStudyNotes = useCallback(async () => {
     if (selectedMessages.size === 0 || isGeneratingNotes) return;
 
@@ -463,6 +466,11 @@ const AcceleraQA = () => {
     return <AuthScreen />;
   }
 
+  // CRITICAL DEBUG: Log what we're passing to Sidebar
+  console.log('=== PASSING TO SIDEBAR ===');
+  console.log('messages (current):', messages.length);
+  console.log('thirtyDayMessages (for notebook):', thirtyDayMessages.length);
+
   // Main authenticated interface
   return (
     <ErrorBoundary>
@@ -490,7 +498,7 @@ const AcceleraQA = () => {
             <Sidebar 
               showNotebook={showNotebook}
               messages={messages} // Current session messages
-              thirtyDayMessages={thirtyDayMessages} // All messages (current + stored)
+              thirtyDayMessages={thirtyDayMessages} // All messages for notebook
               selectedMessages={selectedMessages}
               setSelectedMessages={setSelectedMessages}
               generateStudyNotes={generateStudyNotes}
@@ -500,14 +508,12 @@ const AcceleraQA = () => {
           </div>
         </div>
 
-        {/* Enhanced storage status indicator for development */}
-        {process.env.NODE_ENV === 'development' && user && (
-          <div className="fixed bottom-4 left-4 bg-black text-white px-3 py-1 rounded text-xs font-mono">
-            <div>All: {allMessages.length} | Current: {messages.length} | Stored: {storedMessages.length}</div>
-            <div>30-day: {thirtyDayMessages.length} | Conversations: {combineMessagesIntoConversations(allMessages).length}</div>
-            <div>User: {user?.email?.substring(0, 10) || 'Unknown'} | Init: {isInitialized ? 'Yes' : 'No'}</div>
-          </div>
-        )}
+        {/* Enhanced storage status indicator */}
+        <div className="fixed bottom-4 left-4 bg-black text-white px-3 py-1 rounded text-xs font-mono">
+          <div>All: {allMessages.length} | Current: {messages.length} | Stored: {storedMessages.length}</div>
+          <div>Notebook gets: {thirtyDayMessages.length} messages</div>
+          <div>User: {user?.email?.substring(0, 15) || 'Unknown'} | Init: {isInitialized ? 'Yes' : 'No'}</div>
+        </div>
 
         {/* Storage Notifications */}
         <StorageNotification user={user} messagesCount={allMessages.length} />
