@@ -8,17 +8,42 @@ import { UI_CONFIG } from '../config/constants';
  */
 export function getMessagesByDays(messages, days = UI_CONFIG.MESSAGE_HISTORY_DAYS) {
   if (!messages || !Array.isArray(messages)) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('getMessagesByDays: Invalid input - not an array:', messages);
+    }
     return [];
   }
 
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
   
-  return messages.filter(msg => {
-    if (!msg.timestamp) return false;
+  const result = messages.filter(msg => {
+    if (!msg.timestamp) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('getMessagesByDays: Message missing timestamp:', msg);
+      }
+      return false;
+    }
     const messageDate = new Date(msg.timestamp);
-    return messageDate >= cutoffDate && !isNaN(messageDate.getTime());
+    const isValid = messageDate >= cutoffDate && !isNaN(messageDate.getTime());
+    
+    if (!isValid && process.env.NODE_ENV === 'development') {
+      console.log('getMessagesByDays: Message filtered out:', {
+        id: msg.id,
+        timestamp: msg.timestamp,
+        messageDate: messageDate.toString(),
+        cutoffDate: cutoffDate.toString()
+      });
+    }
+    
+    return isValid;
   });
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`getMessagesByDays: Filtered ${messages.length} to ${result.length} messages within ${days} days`);
+  }
+  
+  return result;
 }
 
 /**
