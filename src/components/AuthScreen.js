@@ -51,23 +51,15 @@ const AuthScreen = memo(() => {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="text-2xl font-bold tracking-tight">AcceleraQA</div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleEvaluationClick}
-                className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded hover:from-green-700 hover:to-emerald-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-green-300 flex items-center gap-2"
-                aria-label="Request evaluation of AcceleraQA"
-              >
-                <span>🔬</span>
-                <span>Request Evaluation</span>
-              </button>
-              <button
-                onClick={handleLoginClick}
-                className="px-6 py-2 bg-white text-black font-medium rounded hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
-                aria-label="Sign in to AcceleraQA"
-              >
-                Sign In
-              </button>
-            </div>
+          <div className="flex items-center">
+            <button
+              onClick={handleLoginClick}
+              className="px-6 py-2 bg-white text-black font-medium rounded hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
+              aria-label="Sign in to AcceleraQA"
+            >
+              Sign In
+            </button>
+          </div>
           </div>
         </div>
       </header>
