@@ -31,35 +31,35 @@ const ChatArea = memo(({
   };
 
   return (
-    <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 flex flex-col shadow-sm h-full">
+    <div className="lg:col-span-2 bg-gray-900/60 backdrop-blur-sm rounded-lg border border-gray-700 flex flex-col shadow-lg h-full text-gray-100">
       {/* Chat Messages - Scrollable window that grows with available space */}
       <div className="flex-1 h-full overflow-y-auto p-8 space-y-6 min-h-0" style={{ scrollBehavior: 'smooth' }}>
           {messages.length === 0 ? (
             <div className="text-center py-16">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg mx-auto mb-6 flex items-center justify-center">
+              <div className="w-16 h-16 bg-gradient-to-r from-primary to-primary-light rounded-lg mx-auto mb-6 flex items-center justify-center">
                 <MessageSquare className="h-8 w-8 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">Welcome to AcceleraQA</h3>
-              <p className="text-gray-600 mb-8 text-lg">
+              <h3 className="text-2xl font-bold text-gray-100 mb-4">Welcome to AcceleraQA</h3>
+              <p className="text-gray-400 mb-8 text-lg">
                 Ask questions about pharmaceutical quality and compliance topics
               </p>
               <div className="flex flex-wrap justify-center gap-3">
-                <span className="px-4 py-2 bg-blue-50 text-blue-700 rounded-full font-medium">GMP</span>
-                <span className="px-4 py-2 bg-purple-50 text-purple-700 rounded-full font-medium">Validation</span>
-                <span className="px-4 py-2 bg-green-50 text-green-700 rounded-full font-medium">CAPA</span>
-                <span className="px-4 py-2 bg-orange-50 text-orange-700 rounded-full font-medium">Regulatory</span>
-                <span className="px-4 py-2 bg-pink-50 text-pink-700 rounded-full font-medium">Risk Management</span>
+                <span className="px-4 py-2 bg-primary/20 text-primary-light rounded-full font-medium">GMP</span>
+                <span className="px-4 py-2 bg-primary/20 text-primary-light rounded-full font-medium">Validation</span>
+                <span className="px-4 py-2 bg-primary/20 text-primary-light rounded-full font-medium">CAPA</span>
+                <span className="px-4 py-2 bg-primary/20 text-primary-light rounded-full font-medium">Regulatory</span>
+                <span className="px-4 py-2 bg-primary/20 text-primary-light rounded-full font-medium">Risk Management</span>
               </div>
             </div>
           ) : (
             messages.map((message) => (
               <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-3xl px-6 py-4 rounded-lg ${
-                  message.type === 'user' 
-                    ? 'bg-black text-white' 
+                  message.type === 'user'
+                    ? 'bg-primary text-white'
                     : message.isStudyNotes
-                      ? 'bg-gradient-to-r from-green-50 to-blue-50 border border-green-200'
-                      : 'bg-gray-50 border border-gray-200'
+                      ? 'bg-gradient-to-r from-primary-dark to-primary border border-primary text-white'
+                      : 'bg-gray-800 border border-gray-700 text-gray-100'
                 }`}>
                   <div 
                     className="whitespace-pre-wrap text-base leading-relaxed"
@@ -73,24 +73,24 @@ const ChatArea = memo(({
                   {message.type === 'ai' && (
                     <div className={`flex items-center justify-between mt-3 pt-3 border-t ${
                       message.isStudyNotes
-                        ? 'border-green-200 text-gray-500'
-                        : 'border-gray-200 text-gray-500'
+                        ? 'border-primary text-gray-300'
+                        : 'border-gray-700 text-gray-400'
                     }`}>
                       <div className="flex items-center space-x-3">
                         <time className="text-xs" dateTime={message.timestamp}>
                           {new Date(message.timestamp).toLocaleString()}
                         </time>
                         {message.isStudyNotes && (
-                          <span className="text-xs text-green-600 font-medium">
+                          <span className="text-xs text-primary-light font-medium">
                             📚 Study Notes
                           </span>
                         )}
                       </div>
-                      
+
                       {message.isStudyNotes && (
                         <button
                           onClick={() => handleExportStudyNotes(message)}
-                          className="ml-3 px-3 py-1 bg-black text-white text-xs rounded hover:bg-gray-800 transition-colors flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-gray-600"
+                          className="ml-3 px-3 py-1 bg-primary text-white text-xs rounded hover:bg-primary-dark transition-colors flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-primary-light"
                           aria-label="Export study notes to Word document"
                         >
                           <FileText className="h-3 w-3" />
@@ -106,10 +106,10 @@ const ChatArea = memo(({
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-gray-50 border border-gray-200 px-6 py-4 rounded-lg">
+              <div className="bg-gray-800 border border-gray-700 px-6 py-4 rounded-lg">
                 <div className="flex items-center space-x-3">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black" />
-                  <span className="text-gray-700">Analyzing your question...</span>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-light" />
+                  <span className="text-gray-300">Analyzing your question...</span>
                 </div>
               </div>
             </div>
@@ -119,7 +119,7 @@ const ChatArea = memo(({
         </div>
 
       {/* Input Area - Always visible at bottom */}
-      <div className="border-t border-gray-200 bg-gray-50 p-8 flex-shrink-0">
+      <div className="border-t border-gray-700 bg-gray-900 p-8 flex-shrink-0">
         <form onSubmit={handleSubmit} className="flex space-x-4">
           <div className="flex-1 relative">
             <textarea
@@ -127,7 +127,7 @@ const ChatArea = memo(({
               onChange={handleInputChange}
               onKeyDown={handleKeyPress}
               placeholder="Ask about GMP, validation, CAPA, regulations..."
-              className="w-full px-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent text-base resize-none min-h-[60px] max-h-32"
+              className="w-full px-4 py-4 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-base text-gray-100 placeholder-gray-500 resize-none min-h-[60px] max-h-32"
               disabled={isLoading}
               rows={1}
               aria-label="Enter your pharmaceutical quality question"
@@ -144,33 +144,33 @@ const ChatArea = memo(({
           <button
             type="submit"
             disabled={isLoading || !inputMessage.trim()}
-            className="px-8 py-4 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-gray-600 flex-shrink-0"
+            className="px-8 py-4 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-primary-light flex-shrink-0"
             aria-label="Send message"
           >
             <Send className="h-5 w-5" />
           </button>
         </form>
-        
+
         {/* Quick action suggestions when no messages */}
         {messages.length === 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               onClick={() => setInputMessage("What are the key requirements for GMP compliance?")}
-              className="text-sm px-3 py-1 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-colors"
+              className="text-sm px-3 py-1 bg-gray-800 border border-gray-700 text-gray-200 rounded-full hover:bg-gray-700 transition-colors"
               disabled={isLoading}
             >
               GMP compliance requirements
             </button>
             <button
               onClick={() => setInputMessage("How do I develop a validation master plan?")}
-              className="text-sm px-3 py-1 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-colors"
+              className="text-sm px-3 py-1 bg-gray-800 border border-gray-700 text-gray-200 rounded-full hover:bg-gray-700 transition-colors"
               disabled={isLoading}
             >
               Validation master plan
             </button>
             <button
               onClick={() => setInputMessage("What is the CAPA process?")}
-              className="text-sm px-3 py-1 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-colors"
+              className="text-sm px-3 py-1 bg-gray-800 border border-gray-700 text-gray-200 rounded-full hover:bg-gray-700 transition-colors"
               disabled={isLoading}
             >
               CAPA process

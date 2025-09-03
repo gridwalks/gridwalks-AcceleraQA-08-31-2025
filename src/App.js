@@ -474,8 +474,8 @@ const AcceleraQA = () => {
   // Main authenticated interface
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gray-50">
-        <Header 
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-gray-100">
+        <Header
           user={user}
           showNotebook={showNotebook}
           setShowNotebook={setShowNotebook}
