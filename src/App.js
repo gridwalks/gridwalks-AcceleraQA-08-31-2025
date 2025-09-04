@@ -253,160 +253,7 @@ const AcceleraQA = () => {
         aiMessage.sources = response.sources;
       }
 
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsGeneratingNotes(false);
-    }
-  }, [selectedMessages, allMessages, isGeneratingNotes]);
-
-  // Handle export
-  const handleExport = useCallback(() => {
-    try {
-      exportNotebook(allMessages);
-    } catch (error) {
-      console.error('Export failed:', error);
-      setError('Failed to export notebook. Please try again.');
-    }
-  }, [allMessages]);
-
-  // RAG config handlers
-  const handleShowRAGConfig = useCallback(() => {
-    setShowRAGConfig(true);
-  }, []);
-
-  const handleCloseRAGConfig = useCallback(() => {
-    setShowRAGConfig(false);
-  }, []);
-
-  // Force refresh conversations from server
-  const handleRefreshConversations = useCallback(async () => {
-    if (!isServerAvailable || !user) return;
-    
-    try {
-      setIsLoading(true);
-      console.log('Refreshing conversations from Netlify Blob storage...');
-      
-      const freshMessages = await conversationService.refreshConversations();
-      setStoredMessages(freshMessages);
-      
-      console.log(`Refreshed ${freshMessages.length} messages from server`);
-    } catch (error) {
-      console.error('Failed to refresh conversations:', error);
-      setError('Failed to refresh conversations. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isServerAvailable, user]);
-
-  // Loading screen
-  if (isLoadingAuth) {
-    return <LoadingScreen />;
-  }
-
-  // Error screen
-  if (error) {
-    return (
-      <div className="min-h-screen bg-red-50 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <div className="text-red-600 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Application Error</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-          >
-            Reload Application
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Authentication required screen
-  if (!user) {
-    return <AuthScreen />;
-  }
-
-  // Main authenticated interface
-  return (
-    <ErrorBoundary>
-      <div className="min-h-screen bg-gray-50">
-        <Header 
-          user={user}
-          showNotebook={showNotebook}
-          setShowNotebook={setShowNotebook}
-          clearChat={clearChat}
-          exportNotebook={handleExport}
-          clearAllConversations={clearAllConversations}
-          isServerAvailable={isServerAvailable}
-          onShowRAGConfig={handleShowRAGConfig}
-          isSaving={isSaving}
-          lastSaveTime={lastSaveTime}
-          onRefresh={handleRefreshConversations}
-        />
-
-        <div className="max-w-7xl mx-auto px-6 py-8 h-[calc(100vh-64px)]">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full min-h-0">
-            <ChatArea
-              messages={messages}
-              inputMessage={inputMessage}
-              setInputMessage={setInputMessage}
-              isLoading={isLoading}
-              handleSendMessage={handleSendMessage}
-              handleKeyPress={handleKeyPress}
-              messagesEndRef={messagesEndRef}
-              ragEnabled={ragEnabled}
-              setRAGEnabled={setRAGEnabled}
-              isSaving={isSaving}
-            />
-            
-            <Sidebar 
-              showNotebook={showNotebook}
-              messages={messages}
-              thirtyDayMessages={thirtyDayMessages}
-              selectedMessages={selectedMessages}
-              setSelectedMessages={setSelectedMessages}
-              generateStudyNotes={generateStudyNotes}
-              isGeneratingNotes={isGeneratingNotes}
-              currentResources={currentResources}
-              storedMessageCount={storedMessages.length}
-              isServerAvailable={isServerAvailable}
-            />
-          </div>
-        </div>
-
-        {/* RAG Configuration Modal */}
-        {showRAGConfig && (
-          <RAGConfigurationPage
-            user={user}
-            onClose={handleCloseRAGConfig}
-          />
-        )}
-
-        {/* Save Status Indicator */}
-        {isSaving && (
-          <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 z-50">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            <span className="text-sm">Saving to cloud...</span>
-          </div>
-        )}
-
-        {/* Last Save Indicator */}
-        {lastSaveTime && !isSaving && (
-          <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-50 animate-fadeIn">
-            Saved {lastSaveTime.toLocaleTimeString()}
-          </div>
-        )}
-      </div>
-    </ErrorBoundary>
-  );
-};
-
-export default AcceleraQA;(prev => [...prev, aiMessage]);
+      setMessages(prev => [...prev, aiMessage]);
       setCurrentResources(response.resources);
 
     } catch (error) {
@@ -586,4 +433,157 @@ export default AcceleraQA;(prev => [...prev, aiMessage]);
         error.message || 'Failed to generate study notes. Please try again.'
       );
       
-      setMessages
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsGeneratingNotes(false);
+    }
+  }, [selectedMessages, allMessages, isGeneratingNotes]);
+
+  // Handle export
+  const handleExport = useCallback(() => {
+    try {
+      exportNotebook(allMessages);
+    } catch (error) {
+      console.error('Export failed:', error);
+      setError('Failed to export notebook. Please try again.');
+    }
+  }, [allMessages]);
+
+  // RAG config handlers
+  const handleShowRAGConfig = useCallback(() => {
+    setShowRAGConfig(true);
+  }, []);
+
+  const handleCloseRAGConfig = useCallback(() => {
+    setShowRAGConfig(false);
+  }, []);
+
+  // Force refresh conversations from server
+  const handleRefreshConversations = useCallback(async () => {
+    if (!isServerAvailable || !user) return;
+    
+    try {
+      setIsLoading(true);
+      console.log('Refreshing conversations from Netlify Blob storage...');
+      
+      const freshMessages = await conversationService.refreshConversations();
+      setStoredMessages(freshMessages);
+      
+      console.log(`Refreshed ${freshMessages.length} messages from server`);
+    } catch (error) {
+      console.error('Failed to refresh conversations:', error);
+      setError('Failed to refresh conversations. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isServerAvailable, user]);
+
+  // Loading screen
+  if (isLoadingAuth) {
+    return <LoadingScreen />;
+  }
+
+  // Error screen
+  if (error) {
+    return (
+      <div className="min-h-screen bg-red-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="text-red-600 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Application Error</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Reload Application
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Authentication required screen
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  // Main authenticated interface
+  return (
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50">
+        <Header 
+          user={user}
+          showNotebook={showNotebook}
+          setShowNotebook={setShowNotebook}
+          clearChat={clearChat}
+          exportNotebook={handleExport}
+          clearAllConversations={clearAllConversations}
+          isServerAvailable={isServerAvailable}
+          onShowRAGConfig={handleShowRAGConfig}
+          isSaving={isSaving}
+          lastSaveTime={lastSaveTime}
+          onRefresh={handleRefreshConversations}
+        />
+
+        <div className="max-w-7xl mx-auto px-6 py-8 h-[calc(100vh-64px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full min-h-0">
+            <ChatArea
+              messages={messages}
+              inputMessage={inputMessage}
+              setInputMessage={setInputMessage}
+              isLoading={isLoading}
+              handleSendMessage={handleSendMessage}
+              handleKeyPress={handleKeyPress}
+              messagesEndRef={messagesEndRef}
+              ragEnabled={ragEnabled}
+              setRAGEnabled={setRAGEnabled}
+              isSaving={isSaving}
+            />
+            
+            <Sidebar 
+              showNotebook={showNotebook}
+              messages={messages}
+              thirtyDayMessages={thirtyDayMessages}
+              selectedMessages={selectedMessages}
+              setSelectedMessages={setSelectedMessages}
+              generateStudyNotes={generateStudyNotes}
+              isGeneratingNotes={isGeneratingNotes}
+              currentResources={currentResources}
+              storedMessageCount={storedMessages.length}
+              isServerAvailable={isServerAvailable}
+            />
+          </div>
+        </div>
+
+        {/* RAG Configuration Modal */}
+        {showRAGConfig && (
+          <RAGConfigurationPage
+            user={user}
+            onClose={handleCloseRAGConfig}
+          />
+        )}
+
+        {/* Save Status Indicator */}
+        {isSaving && (
+          <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 z-50">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            <span className="text-sm">Saving to cloud...</span>
+          </div>
+        )}
+
+        {/* Last Save Indicator */}
+        {lastSaveTime && !isSaving && (
+          <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-50 animate-fadeIn">
+            Saved {lastSaveTime.toLocaleTimeString()}
+          </div>
+        )}
+      </div>
+    </ErrorBoundary>
+  );
+};
+
+export default AcceleraQA;
