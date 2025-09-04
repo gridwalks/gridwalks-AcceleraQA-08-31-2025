@@ -1,5 +1,5 @@
 // netlify/functions/rag-blob.js - RAG system using Netlify Blob
-const { getStore } = require('@netlify/blob');
+const { getStore } = require('@netlify/blobs');
 
 // Get blob stores for different data types
 const getDocumentStore = () => getStore('rag-documents');
