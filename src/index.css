@@ -32,34 +32,7 @@ code {
   overflow: hidden;
 }
 
-/* Custom background color for current session conversations */
-.bg-blue-25 {
-  background-color: #f8fafc; /* Very light blue-gray background */
-}
-
-/* Storage notification animations */
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes slideOut {
-  from {
-    transform: translateX(0);
-    opacity: 1;
-  }
-  to {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-}
-
+/* Save status animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -79,6 +52,28 @@ code {
   to {
     opacity: 0;
     transform: scale(0.95);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
   }
 }
 
@@ -109,21 +104,33 @@ code {
   }
 }
 
+@keyframes cloudSync {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
 /* Utility classes */
-.animate-slideIn {
-  animation: slideIn 0.3s ease-out;
-}
-
-.animate-slideOut {
-  animation: slideOut 0.3s ease-in;
-}
-
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-out;
 }
 
 .animate-fadeOut {
   animation: fadeOut 0.3s ease-in;
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.animate-slideOutRight {
+  animation: slideOutRight 0.3s ease-in;
 }
 
 .animate-pulse-slow {
@@ -134,39 +141,84 @@ code {
   animation: bounce 1s;
 }
 
-/* Notebook section separators */
-.notebook-separator {
+.animate-cloudSync {
+  animation: cloudSync 2s ease-in-out infinite;
+}
+
+/* Storage status indicators */
+.storage-status {
+  position: relative;
+  overflow: hidden;
+}
+
+.storage-status::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.storage-status:hover::before {
+  left: 100%;
+}
+
+/* Save indicator */
+.save-indicator {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
+
+.save-indicator.saving {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.save-indicator.saved {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Cloud storage status */
+.cloud-status {
   display: flex;
   align-items: center;
-  margin: 1.5rem 0;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
-.notebook-separator::before,
-.notebook-separator::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background-color: currentColor;
+.cloud-status.connected {
+  background-color: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.2);
 }
 
-.notebook-separator.current-session {
-  color: #3b82f6; /* blue-500 */
+.cloud-status.disconnected {
+  background-color: rgba(249, 115, 22, 0.1);
+  color: #ea580c;
+  border: 1px solid rgba(249, 115, 22, 0.2);
 }
 
-.notebook-separator.previous-conversations {
-  color: #6b7280; /* gray-500 */
+.cloud-status.saving {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+  border: 1px solid rgba(59, 130, 246, 0.2);
 }
 
-.notebook-separator span {
-  padding: 0 1rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-
-/* Enhanced conversation card styles */
+/* Conversation cards with storage status */
 .conversation-card {
   transition: all 0.2s ease;
   border-radius: 0.5rem;
@@ -174,90 +226,85 @@ code {
 }
 
 .conversation-card.current-session {
-  background-color: #f8fafc;
-  border-color: #e2e8f0;
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
 }
 
 .conversation-card.current-session:hover {
-  border-color: #cbd5e1;
+  border-color: #93c5fd;
   box-shadow: 0 1px 3px 0 rgba(59, 130, 246, 0.1);
 }
 
 .conversation-card.current-session.selected {
-  background-color: #eff6ff;
-  border-color: #93c5fd;
-  box-shadow: 0 1px 3px 0 rgba(59, 130, 246, 0.1);
+  background-color: #dbeafe;
+  border-color: #60a5fa;
+  box-shadow: 0 1px 3px 0 rgba(59, 130, 246, 0.2);
 }
 
 .conversation-card.stored {
-  background-color: #f9fafb;
-  border-color: #e5e7eb;
+  background-color: #f0fdf4;
+  border-color: #bbf7d0;
 }
 
 .conversation-card.stored:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  border-color: #86efac;
+  box-shadow: 0 1px 3px 0 rgba(34, 197, 94, 0.1);
 }
 
 .conversation-card.stored.selected {
-  background-color: #eff6ff;
-  border-color: #93c5fd;
-  box-shadow: 0 1px 3px 0 rgba(59, 130, 246, 0.1);
+  background-color: #dcfce7;
+  border-color: #4ade80;
+  box-shadow: 0 1px 3px 0 rgba(34, 197, 94, 0.2);
 }
 
-/* Live indicator pulse animation */
-.live-indicator {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Storage status indicator */
-.storage-indicator {
-  position: relative;
-}
-
-.storage-indicator::after {
-  content: '';
+/* Storage badge */
+.storage-badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 8px;
-  height: 8px;
+  top: -6px;
+  right: -6px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: currentColor;
+  border: 2px solid white;
 }
 
-.storage-indicator.storage-healthy::after {
-  background: #10b981; /* green-500 */
+.storage-badge.current {
+  background-color: #3b82f6;
 }
 
-.storage-indicator.storage-warning::after {
-  background: #f59e0b; /* yellow-500 */
+.storage-badge.stored {
+  background-color: #10b981;
 }
 
-.storage-indicator.storage-error::after {
-  background: #ef4444; /* red-500 */
-  animation: pulse 2s infinite;
+.storage-badge.saving {
+  background-color: #f59e0b;
+  animation: pulse 1.5s infinite;
 }
 
-/* Progress bar animations */
-@keyframes progressFill {
-  from {
-    width: 0%;
-  }
+/* Message status indicators */
+.message-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
 }
 
-.progress-bar {
-  animation: progressFill 1s ease-out;
+.message-status.saved {
+  background-color: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
 }
 
-/* Hover effects for storage menu */
-.storage-menu-item {
-  transition: all 0.2s ease;
+.message-status.saving {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
 }
 
-.storage-menu-item:hover {
-  background-color: #f9fafb;
-  transform: translateX(2px);
+.message-status.session {
+  background-color: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
 }
 
 /* Loading states */
@@ -274,53 +321,46 @@ code {
   100% { content: ''; }
 }
 
-/* Responsive notifications */
+/* Responsive behavior */
 @media (max-width: 640px) {
-  .animate-slideIn {
-    animation: slideInMobile 0.3s ease-out;
+  .save-indicator {
+    bottom: 5rem;
+    right: 1rem;
   }
   
-  @keyframes slideInMobile {
-    from {
-      transform: translateY(-100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
+  .cloud-status {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.75rem;
   }
 }
 
 /* High contrast mode support */
 @media (prefers-contrast: high) {
-  .storage-indicator::after {
-    border: 2px solid;
+  .storage-badge {
+    border-width: 3px;
   }
   
-  .conversation-card.current-session {
+  .conversation-card.current-session,
+  .conversation-card.stored {
     border-width: 2px;
   }
 }
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
-  .animate-slideIn,
-  .animate-slideOut,
   .animate-fadeIn,
   .animate-fadeOut,
+  .animate-slideInRight,
+  .animate-slideOutRight,
   .animate-pulse-slow,
   .animate-bounce-once,
-  .progress-bar,
-  .storage-menu-item,
-  .conversation-card,
-  .live-indicator {
+  .animate-cloudSync,
+  .storage-status::before,
+  .save-indicator.saving,
+  .storage-badge.saving,
+  .conversation-card {
     animation: none;
     transition: none;
-  }
-  
-  .storage-indicator.storage-error::after {
-    animation: none;
   }
 }
 
@@ -331,18 +371,70 @@ code {
   ring-offset-width: 2px;
 }
 
-/* Dark mode support for storage components */
+/* Dark mode support */
 @media (prefers-color-scheme: dark) {
-  .storage-menu-item:hover {
-    background-color: #1f2937;
+  .cloud-status.connected {
+    background-color: rgba(34, 197, 94, 0.2);
+  }
+  
+  .cloud-status.disconnected {
+    background-color: rgba(249, 115, 22, 0.2);
+  }
+  
+  .cloud-status.saving {
+    background-color: rgba(59, 130, 246, 0.2);
   }
 }
 
-/* Print styles - hide notifications when printing */
+/* Print styles */
 @media print {
-  .animate-slideIn,
-  .storage-indicator,
+  .save-indicator,
+  .storage-badge,
+  .cloud-status,
   [role="alert"] {
     display: none !important;
   }
 }
+
+/* Auto-save progress indicator */
+.autosave-progress {
+  position: relative;
+  overflow: hidden;
+}
+
+.autosave-progress::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  animation: progressBar 3s ease-in-out;
+}
+
+@keyframes progressBar {
+  0% {
+    width: 0%;
+  }
+  50% {
+    width: 70%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+/* Storage health indicator */
+.storage-health {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.storage-health.healthy {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7
