@@ -1,4 +1,4 @@
-// src/services/ragService.js - Updated to use enhanced function
+// src/services/ragService.js - Fast version to avoid timeouts
 import openaiService from './openaiService';
 import { getToken } from './authService';
 
@@ -6,9 +6,9 @@ const API_BASE_URL = '/.netlify/functions';
 
 class RAGService {
   constructor() {
-    this.apiUrl = `${API_BASE_URL}/rag-enhanced`; // Use the working enhanced function
-    this.maxChunkSize = 1000;
-    this.chunkOverlap = 200;
+    this.apiUrl = `${API_BASE_URL}/rag-fast`; // Use the fast function
+    this.maxChunkSize = 500; // Smaller chunks for speed
+    this.chunkOverlap = 100;
   }
 
   async makeAuthenticatedRequest(endpoint, data = {}) {
@@ -35,7 +35,6 @@ class RAGService {
       }
 
       console.log('Making request to:', endpoint);
-      console.log('Request data:', data);
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -56,7 +55,7 @@ class RAGService {
       }
 
       const result = await response.json();
-      console.log('Response received:', result);
+      console.log('Response received successfully');
       return result;
 
     } catch (error) {
@@ -66,11 +65,11 @@ class RAGService {
   }
 
   /**
-   * Test the enhanced RAG function connectivity
+   * Test the fast RAG function connectivity
    */
   async testConnection() {
     try {
-      console.log('Testing enhanced RAG function connectivity...');
+      console.log('Testing fast RAG function connectivity...');
       
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         action: 'test'
@@ -79,21 +78,21 @@ class RAGService {
       return {
         success: true,
         data: result,
-        recommendation: 'Enhanced RAG function working with real embeddings!'
+        recommendation: 'Fast RAG function working! Instant uploads, text-based search.'
       };
       
     } catch (error) {
-      console.error('Enhanced RAG connection test failed:', error);
+      console.error('Fast RAG connection test failed:', error);
       return {
         success: false,
         error: error.message,
-        recommendation: 'Check function deployment and environment variables'
+        recommendation: 'Check function deployment and try again'
       };
     }
   }
 
   /**
-   * Upload document with real embedding generation
+   * Upload document with instant processing (no embeddings)
    */
   async uploadDocument(file, metadata = {}) {
     try {
@@ -101,13 +100,13 @@ class RAGService {
         throw new Error('File is required');
       }
 
-      console.log('Starting enhanced document upload process...');
+      console.log('Starting fast document upload process...');
       
-      // Extract text from file
+      // Extract text from file quickly
       const text = await this.extractTextFromFile(file);
       console.log('Text extracted, length:', text.length);
       
-      console.log('Sending to enhanced function for processing...');
+      console.log('Sending to fast function for instant processing...');
       
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         action: 'upload',
@@ -120,12 +119,13 @@ class RAGService {
             uploadedAt: new Date().toISOString(),
             originalSize: file.size,
             textLength: text.length,
+            processingMode: 'fast',
             ...metadata
           }
         }
       });
 
-      console.log('Enhanced upload successful:', result);
+      console.log('Fast upload successful:', result);
       return result;
 
     } catch (error) {
@@ -135,7 +135,7 @@ class RAGService {
   }
 
   /**
-   * Extract text from file - now handles multiple formats
+   * Extract text from file quickly
    */
   async extractTextFromFile(file) {
     return new Promise((resolve, reject) => {
@@ -145,9 +145,8 @@ class RAGService {
         reader.onerror = () => reject(new Error('Failed to read text file'));
         reader.readAsText(file);
       } else {
-        // For other file types, the enhanced function will handle them
-        // We just pass the filename and basic info
-        resolve(''); // Let the function generate appropriate placeholder content
+        // For other file types, let the function generate content
+        resolve(''); // Function will generate pharmaceutical content
       }
     });
   }
@@ -157,7 +156,7 @@ class RAGService {
    */
   async getDocuments() {
     try {
-      console.log('Getting document list from enhanced function...');
+      console.log('Getting document list...');
       
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         action: 'list'
@@ -192,7 +191,7 @@ class RAGService {
   }
 
   /**
-   * Search documents using real semantic similarity
+   * Search documents using fast text-based search
    */
   async searchDocuments(query, options = {}) {
     try {
@@ -200,18 +199,18 @@ class RAGService {
         throw new Error('Search query is required');
       }
 
-      console.log('Searching documents with enhanced function:', query);
+      console.log('Searching documents with fast text search:', query);
       
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         action: 'search',
-        query: query.trim(), // Send the actual query text, not embedding
+        query: query.trim(),
         options: {
           limit: options.limit || 10,
-          threshold: options.threshold || 0.7
+          threshold: options.threshold || 0.3 // Lower threshold for text search
         }
       });
       
-      console.log('Enhanced search results:', result);
+      console.log('Fast search results:', result);
       return result;
 
     } catch (error) {
@@ -221,7 +220,7 @@ class RAGService {
   }
 
   /**
-   * Generate AI response using enhanced RAG context
+   * Generate AI response using fast RAG context
    */
   async generateRAGResponse(query, searchResults) {
     try {
@@ -240,10 +239,10 @@ class RAGService {
 
       const ragPrompt = `You are AcceleraQA, an AI assistant specialized in pharmaceutical quality and compliance. 
 
-Use the following document context to answer the user's question. The documents have been retrieved using semantic search and are relevant to the user's query.
+Use the following document context to answer the user's question. The documents have been retrieved using text-based search and contain relevant information.
 
 DOCUMENT CONTEXT:
-${context.substring(0, 12000)} ${context.length > 12000 ? '...[truncated]' : ''}
+${context.substring(0, 10000)} ${context.length > 10000 ? '...[truncated]' : ''}
 
 USER QUESTION: ${query}
 
@@ -259,19 +258,19 @@ Answer:`;
       
       // Enhanced source attribution
       const sourceDocs = [...new Set(searchResults.map(r => r.filename))];
-      const highConfidenceSources = searchResults.filter(r => r.similarity > 0.8);
+      const highScoreResults = searchResults.filter(r => r.similarity > 0.6);
       
       let sourceAttribution = '';
       if (sourceDocs.length > 0) {
         sourceAttribution = `\n\n📄 **Sources Referenced:**\n`;
         sourceDocs.forEach(doc => {
           const docResults = searchResults.filter(r => r.filename === doc);
-          const avgSimilarity = docResults.reduce((sum, r) => sum + r.similarity, 0) / docResults.length;
-          sourceAttribution += `• ${doc} (${(avgSimilarity * 100).toFixed(1)}% relevant)\n`;
+          const avgScore = docResults.reduce((sum, r) => sum + r.similarity, 0) / docResults.length;
+          sourceAttribution += `• ${doc} (${(avgScore * 100).toFixed(1)}% match)\n`;
         });
         
-        if (highConfidenceSources.length > 0) {
-          sourceAttribution += `\n🎯 **High-confidence matches:** ${highConfidenceSources.length} chunks with >80% relevance`;
+        if (highScoreResults.length > 0) {
+          sourceAttribution += `\n🎯 **Strong matches:** ${highScoreResults.length} chunks with >60% relevance`;
         }
       }
 
@@ -281,25 +280,25 @@ Answer:`;
         sources: searchResults,
         ragMetadata: {
           totalSources: searchResults.length,
-          highConfidenceSources: highConfidenceSources.length,
-          avgSimilarity: searchResults.reduce((sum, r) => sum + r.similarity, 0) / searchResults.length,
-          searchType: 'semantic',
-          embeddingsUsed: true
+          highScoreSources: highScoreResults.length,
+          avgScore: searchResults.reduce((sum, r) => sum + r.similarity, 0) / searchResults.length,
+          searchType: 'text-based',
+          processingMode: 'fast'
         }
       };
 
     } catch (error) {
-      console.error('Error generating enhanced RAG response:', error);
+      console.error('Error generating fast RAG response:', error);
       throw error;
     }
   }
 
   /**
-   * Get enhanced statistics
+   * Get fast statistics
    */
   async getStats() {
     try {
-      console.log('Getting enhanced stats...');
+      console.log('Getting fast stats...');
       
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         action: 'stats'
@@ -308,20 +307,21 @@ Answer:`;
       return result;
 
     } catch (error) {
-      console.error('Error getting enhanced stats:', error);
+      console.error('Error getting fast stats:', error);
       throw error;
     }
   }
 
   /**
-   * Test all enhanced functionality
+   * Run quick diagnostics
    */
   async runDiagnostics() {
     try {
-      console.log('Running enhanced RAG diagnostics...');
+      console.log('Running fast RAG diagnostics...');
       
       const diagnostics = {
         timestamp: new Date().toISOString(),
+        mode: 'fast-processing',
         tests: {}
       };
       
@@ -354,77 +354,4 @@ Answer:`;
       try {
         const searchResult = await this.searchDocuments('pharmaceutical quality', { limit: 3 });
         diagnostics.tests.search = {
-          success: true,
-          resultsFound: searchResult.results?.length || 0,
-          searchType: searchResult.searchType
-        };
-      } catch (error) {
-        diagnostics.tests.search = {
-          success: false,
-          error: error.message
-        };
-      }
-      
-      // Test stats
-      try {
-        const stats = await this.getStats();
-        diagnostics.tests.stats = {
-          success: true,
-          ...stats
-        };
-      } catch (error) {
-        diagnostics.tests.stats = {
-          success: false,
-          error: error.message
-        };
-      }
-      
-      // Overall health assessment
-      const successfulTests = Object.values(diagnostics.tests).filter(test => test.success).length;
-      const totalTests = Object.keys(diagnostics.tests).length;
-      
-      diagnostics.health = {
-        score: (successfulTests / totalTests) * 100,
-        status: successfulTests === totalTests ? 'healthy' : 
-                successfulTests > totalTests / 2 ? 'partial' : 'unhealthy',
-        recommendations: []
-      };
-      
-      if (!diagnostics.tests.connectivity?.success) {
-        diagnostics.health.recommendations.push('Check Netlify function deployment');
-      }
-      
-      if (!diagnostics.tests.search?.success) {
-        diagnostics.health.recommendations.push('Upload test documents to enable search testing');
-      }
-      
-      return diagnostics;
-      
-    } catch (error) {
-      console.error('Error running diagnostics:', error);
-      return {
-        timestamp: new Date().toISOString(),
-        health: {
-          score: 0,
-          status: 'error',
-          error: error.message
-        }
-      };
-    }
-  }
-}
-
-// Create singleton instance
-const ragService = new RAGService();
-
-export default ragService;
-
-// Export convenience functions
-export const uploadDocument = (file, metadata) => ragService.uploadDocument(file, metadata);
-export const searchDocuments = (query, options) => ragService.searchDocuments(query, options);
-export const getDocuments = () => ragService.getDocuments();
-export const deleteDocument = (documentId) => ragService.deleteDocument(documentId);
-export const generateRAGResponse = (query, searchResults) => ragService.generateRAGResponse(query, searchResults);
-export const testConnection = () => ragService.testConnection();
-export const getStats = () => ragService.getStats();
-export const runDiagnostics = () => ragService.runDiagnostics();
+          success:
