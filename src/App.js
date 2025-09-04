@@ -8,12 +8,12 @@ import Sidebar from './components/Sidebar';
 import AuthScreen from './components/AuthScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
-import RAGConfigurationPage from './components/RAGConfigurationPage';
+//import RAGConfigurationPage from './components/RAGConfigurationPage';
 
 // Services
 import openaiService from './services/openaiService';
 import conversationService from './services/conversationService';
-import ragService from './services/ragService';
+//import ragService from './services/ragService';
 import { initializeAuth } from './services/authService';
 
 // Utils
@@ -41,8 +41,8 @@ const AcceleraQA = () => {
   const [error, setError] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isServerAvailable, setIsServerAvailable] = useState(true);
-  const [showRAGConfig, setShowRAGConfig] = useState(false);
-  const [ragEnabled, setRAGEnabled] = useState(false);
+  //const [showRAGConfig, setShowRAGConfig] = useState(false);
+  //const [ragEnabled, setRAGEnabled] = useState(false);
   
   const messagesEndRef = useRef(null);
 
@@ -491,13 +491,13 @@ const AcceleraQA = () => {
           </div>
         </div>
 
-        {/* RAG Configuration Modal */}
-        {showRAGConfig && (
-          <RAGConfigurationPage
-            user={user}
-            onClose={handleCloseRAGConfig}
-          />
-        )}
+//        {/* RAG Configuration Modal */}
+ //       {showRAGConfig && (
+   //       <RAGConfigurationPage
+     //       user={user}
+       //     onClose={handleCloseRAGConfig}
+         // />
+       // )}
       </div>
     </ErrorBoundary>
   );
