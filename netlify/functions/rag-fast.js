@@ -1,4 +1,4 @@
-// netlify/functions/rag-fast.js - Complete fast RAG function
+// netlify/functions/rag-fast.js - Fixed with CommonJS syntax
 const headers = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-user-id',
@@ -35,7 +35,8 @@ const storage = {
 exports.handler = async (event, context) => {
   console.log('Fast RAG Function called:', {
     method: event.httpMethod,
-    hasBody: !!event.body
+    hasBody: !!event.body,
+    headers: Object.keys(event.headers)
   });
 
   // Handle CORS preflight
