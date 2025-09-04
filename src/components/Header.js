@@ -790,4 +790,395 @@ const AcceleraQA = () => {
       studyNotesMessage.studyNotesData = {
         content: response.answer,
         selectedTopics: uniqueSelectedMessages
-          .filter(msg => msg.content && msg.type ===
+          .filter(msg => msg.content && msg.type === 'user')
+          .map(msg => msg.content.substring(0, 50) + '...')
+          .join(', '),
+        resourceCount: response.resources.length,
+        generatedDate: new Date().toLocaleDateString()
+      };
+
+      setMessages(prev => [...prev, studyNotesMessage]);
+      setCurrentResources(response.resources);
+      setSelectedMessages(new Set());
+      setShowNotebook(false);
+
+    } catch (error) {
+      console.error('Error generating study notes:', error);
+      
+      const errorMessage = createMessage(
+        'ai',
+        error.message || 'Failed to generate study notes. Please try again.'
+      );
+      
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsGeneratingNotes(false);
+    }
+  }, [selectedMessages, allMessages, isGeneratingNotes]);
+
+  // Handle export
+  const handleExport = useCallback(() => {
+    try {
+      exportNotebook(allMessages);
+    } catch (error) {
+      console.error('Export failed:', error);
+      setError('Failed to export notebook. Please try again.');
+    }
+  }, [allMessages]);
+
+  // Handle showing RAG configuration
+  const handleShowRAGConfig = useCallback(() => {
+    setShowRAGConfig(true);
+  }, []);
+
+  // Handle closing RAG configuration
+  const handleCloseRAGConfig = useCallback(() => {
+    setShowRAGConfig(false);
+  }, []);
+
+  // Loading screen
+  if (isLoadingAuth) {
+    return <LoadingScreen />;
+  }
+
+  // Error screen
+  if (error) {
+    return (
+      <div className="min-h-screen bg-red-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="text-red-600 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Application Error</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Reload Application
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Authentication required screen
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  // Main authenticated interface
+  return (
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50">
+        <Header 
+          user={user}
+          showNotebook={showNotebook}
+          setShowNotebook={setShowNotebook}
+          clearChat={clearChat}
+          exportNotebook={handleExport}
+          clearAllConversations={clearAllConversations}
+          isServerAvailable={isServerAvailable}
+          onShowRAGConfig={handleShowRAGConfig} // Pass the handler
+        />
+
+        <div className="max-w-7xl mx-auto px-6 py-8 h-[calc(100vh-64px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full min-h-0">
+            <ChatArea
+              messages={messages}
+              inputMessage={inputMessage}
+              setInputMessage={setInputMessage}
+              isLoading={isLoading}
+              handleSendMessage={handleSendMessage}
+              handleKeyPress={handleKeyPress}
+              messagesEndRef={messagesEndRef}
+              ragEnabled={ragEnabled} // Pass RAG state
+              setRAGEnabled={setRAGEnabled} // Pass RAG setter
+            />
+            
+            <Sidebar 
+              showNotebook={showNotebook}
+              messages={messages}
+              thirtyDayMessages={thirtyDayMessages}
+              selectedMessages={selectedMessages}
+              setSelectedMessages={setSelectedMessages}
+              generateStudyNotes={generateStudyNotes}
+              isGeneratingNotes={isGeneratingNotes}
+              currentResources={currentResources}
+            />
+          </div>
+        </div>
+
+        {/* RAG Configuration Modal */}
+        {showRAGConfig && (
+          <RAGConfigurationPage
+            user={user}
+            onClose={handleCloseRAGConfig}
+          />
+        )}
+      </div>
+    </ErrorBoundary>
+  );
+};
+
+export default AcceleraQA;
+
+// ===========================================
+// src/components/ChatArea.js - Updated to show RAG status
+// ===========================================
+
+import React, { memo } from 'react';
+import { Send, MessageSquare, FileText, Database, Search } from 'lucide-react';
+import { exportToWord } from '../utils/exportUtils';
+import { sanitizeMessageContent } from '../utils/messageUtils';
+
+const ChatArea = memo(({ 
+  messages, 
+  inputMessage, 
+  setInputMessage, 
+  isLoading, 
+  handleSendMessage, 
+  handleKeyPress, 
+  messagesEndRef,
+  ragEnabled,
+  setRAGEnabled
+}) => {
+  const handleInputChange = (e) => {
+    setInputMessage(e.target.value);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    handleSendMessage();
+  };
+
+  const handleExportStudyNotes = (message) => {
+    try {
+      exportToWord(message);
+    } catch (error) {
+      console.error('Failed to export study notes:', error);
+      // Could show toast notification here
+    }
+  };
+
+  const toggleRAG = () => {
+    setRAGEnabled(!ragEnabled);
+  };
+
+  return (
+    <div className="lg:col-span-2 rounded-lg border border-gray-200 p-6 h-full shadow-sm bg-gray-900/60 backdrop-blur-sm flex flex-col text-gray-100">
+      {/* RAG Status Indicator */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={toggleRAG}
+            className={`flex items-center space-x-2 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
+              ragEnabled 
+                ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title={ragEnabled ? 'RAG search enabled - responses will include your uploaded documents' : 'RAG search disabled - using general knowledge only'}
+          >
+            {ragEnabled ? <Database className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+            <span>{ragEnabled ? 'RAG Enabled' : 'RAG Disabled'}</span>
+          </button>
+          
+          {ragEnabled && (
+            <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+              📄 Searching your documents
+            </div>
+          )}
+        </div>
+        
+        <div className="text-xs text-gray-400">
+          {messages.length} messages
+        </div>
+      </div>
+
+      {/* Chat Messages - Scrollable window that grows with available space */}
+      <div className="flex-1 h-full overflow-y-auto p-8 space-y-6 min-h-0 bg-white text-gray-900" style={{ scrollBehavior: 'smooth' }}>
+        {messages.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="w-16 h-16 bg-gradient-to-r from-primary to-primary-light rounded-lg mx-auto mb-6 flex items-center justify-center">
+              <MessageSquare className="h-8 w-8 text-white" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">Welcome to AcceleraQA</h3>
+            <p className="text-gray-400 mb-8 text-lg">
+              Ask questions about pharmaceutical quality and compliance topics
+            </p>
+            <div className="flex flex-wrap justify-center gap-3 mb-6">
+              <span className="px-4 py-2 bg-primary/20 text-primary-light rounded-full font-medium">GMP</span>
+              <span className="px-4 py-2 bg-primary/20 text-primary-light rounded-full font-medium">Validation</span>
+              <span className="px-4 py-2 bg-primary/20 text-primary-light rounded-full font-medium">CAPA</span>
+              <span className="px-4 py-2 bg-primary/20 text-primary-light rounded-full font-medium">Regulatory</span>
+              <span className="px-4 py-2 bg-primary/20 text-primary-light rounded-full font-medium">Risk Management</span>
+            </div>
+            
+            {/* RAG Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <Database className="h-5 w-5 text-blue-600" />
+                <span className="font-medium text-blue-900">New: Document Search (RAG)</span>
+              </div>
+              <p className="text-sm text-blue-700">
+                Upload your pharmaceutical documents and get answers directly from your own content. 
+                Click "RAG Config" to get started!
+              </p>
+            </div>
+          </div>
+        ) : (
+          messages.map((message) => (
+            <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-3xl px-6 py-4 rounded-lg ${
+                message.type === 'user'
+                  ? 'bg-primary text-white'
+                  : message.isStudyNotes
+                    ? 'bg-gradient-to-r from-primary-dark to-primary border border-primary text-white'
+                    : message.sources && message.sources.length > 0
+                      ? 'bg-green-50 border border-green-200 text-gray-900'
+                      : 'bg-gray-800 border border-gray-700 text-gray-100'
+              }`}>
+                <div 
+                  className="whitespace-pre-wrap text-base leading-relaxed"
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeMessageContent(message.content)
+                      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                  }}
+                />
+                
+                {message.type === 'ai' && (
+                  <div className={`flex items-center justify-between mt-3 pt-3 border-t ${
+                    message.isStudyNotes
+                      ? 'border-primary text-gray-300'
+                      : message.sources && message.sources.length > 0
+                        ? 'border-green-300 text-green-700'
+                        : 'border-gray-700 text-gray-400'
+                  }`}>
+                    <div className="flex items-center space-x-3">
+                      <time className="text-xs" dateTime={message.timestamp}>
+                        {new Date(message.timestamp).toLocaleString()}
+                      </time>
+                      {message.isStudyNotes && (
+                        <span className="text-xs text-primary-light font-medium">
+                          📚 Study Notes
+                        </span>
+                      )}
+                      {message.sources && message.sources.length > 0 && (
+                        <span className="text-xs text-green-600 font-medium bg-green-100 px-2 py-1 rounded-full">
+                          📄 RAG Response ({message.sources.length} sources)
+                        </span>
+                      )}
+                    </div>
+
+                    {message.isStudyNotes && (
+                      <button
+                        onClick={() => handleExportStudyNotes(message)}
+                        className="ml-3 px-3 py-1 bg-primary text-white text-xs rounded hover:bg-primary-dark transition-colors flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-primary-light"
+                        aria-label="Export study notes to Word document"
+                      >
+                        <FileText className="h-3 w-3" />
+                        <span>Export to Word</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-gray-800 border border-gray-700 px-6 py-4 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-light" />
+                <span className="text-gray-300">
+                  {ragEnabled ? 'Searching documents and analyzing...' : 'Analyzing your question...'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} aria-hidden="true" />
+      </div>
+
+      {/* Input Area - Always visible at bottom */}
+      <div className="border-t border-gray-700 bg-gray-900 p-8 flex-shrink-0">
+        <form onSubmit={handleSubmit} className="flex space-x-4">
+          <div className="flex-1 relative">
+            <textarea
+              value={inputMessage}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyPress}
+              placeholder={ragEnabled ? "Ask about your documents or general pharma topics..." : "Ask about GMP, validation, CAPA, regulations..."}
+              className="w-full px-4 py-4 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-base text-gray-100 placeholder-gray-500 resize-none min-h-[60px] max-h-32"
+              disabled={isLoading}
+              rows={1}
+              aria-label="Enter your pharmaceutical quality question"
+            />
+            
+            {/* Character count for very long messages */}
+            {inputMessage.length > 500 && (
+              <div className="absolute bottom-2 right-2 text-xs text-gray-400">
+                {inputMessage.length}/2000
+              </div>
+            )}
+          </div>
+          
+          <button
+            type="submit"
+            disabled={isLoading || !inputMessage.trim()}
+            className="px-8 py-4 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-primary-light flex-shrink-0"
+            aria-label="Send message"
+          >
+            <Send className="h-5 w-5" />
+          </button>
+        </form>
+
+        {/* Quick action suggestions when no messages */}
+        {messages.length === 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={() => setInputMessage("What are the key requirements for GMP compliance?")}
+              className="text-sm px-3 py-1 bg-gray-800 border border-gray-700 text-gray-200 rounded-full hover:bg-gray-700 transition-colors"
+              disabled={isLoading}
+            >
+              GMP compliance requirements
+            </button>
+            <button
+              onClick={() => setInputMessage("How do I develop a validation master plan?")}
+              className="text-sm px-3 py-1 bg-gray-800 border border-gray-700 text-gray-200 rounded-full hover:bg-gray-700 transition-colors"
+              disabled={isLoading}
+            >
+              Validation master plan
+            </button>
+            <button
+              onClick={() => setInputMessage("What is the CAPA process?")}
+              className="text-sm px-3 py-1 bg-gray-800 border border-gray-700 text-gray-200 rounded-full hover:bg-gray-700 transition-colors"
+              disabled={isLoading}
+            >
+              CAPA process
+            </button>
+            {ragEnabled && (
+              <button
+                onClick={() => setInputMessage("Search my uploaded documents for validation procedures")}
+                className="text-sm px-3 py-1 bg-green-700 border border-green-600 text-green-100 rounded-full hover:bg-green-600 transition-colors"
+                disabled={isLoading}
+              >
+                📄 Search my documents
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+ChatArea.displayName = 'ChatArea';
+
+export default ChatArea;
