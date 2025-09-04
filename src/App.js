@@ -1,3 +1,4 @@
+// src/App.js - Fixed version with clean imports
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
 // Components
@@ -7,10 +8,12 @@ import Sidebar from './components/Sidebar';
 import AuthScreen from './components/AuthScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
+import RAGConfigurationPage from './components/RAGConfigurationPage';
 
 // Services
 import openaiService from './services/openaiService';
 import conversationService from './services/conversationService';
+import ragService from './services/ragService';
 import { initializeAuth } from './services/authService';
 
 // Utils
@@ -25,8 +28,8 @@ import { validateEnvironment, DEFAULT_RESOURCES } from './config/constants';
 
 const AcceleraQA = () => {
   // State management
-  const [messages, setMessages] = useState([]); // Current session messages
-  const [storedMessages, setStoredMessages] = useState([]); // Messages from server
+  const [messages, setMessages] = useState([]);
+  const [storedMessages, setStoredMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentResources, setCurrentResources] = useState([]);
@@ -38,10 +41,12 @@ const AcceleraQA = () => {
   const [error, setError] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isServerAvailable, setIsServerAvailable] = useState(true);
+  const [showRAGConfig, setShowRAGConfig] = useState(false);
+  const [ragEnabled, setRAGEnabled] = useState(false);
   
   const messagesEndRef = useRef(null);
 
-  // Memoized values - combine current and stored messages for notebook display
+  // Memoized values
   const allMessages = useMemo(() => 
     mergeCurrentAndStoredMessages(messages, storedMessages), 
     [messages, storedMessages]
@@ -52,14 +57,13 @@ const AcceleraQA = () => {
     [allMessages]
   );
 
-  // Load stored conversations when component mounts and user is authenticated
+  // Load stored conversations when component mounts
   useEffect(() => {
     const loadStoredConversations = async () => {
       if (!user || isInitialized) return;
 
       try {
-        console.log('=== LOADING CONVERSATIONS FROM SERVER ===');
-        console.log('User:', user.email || user.sub);
+        console.log('Loading conversations from server...');
         
         // Check if server is available
         const serviceAvailable = await conversationService.isServiceAvailable();
@@ -98,7 +102,6 @@ const AcceleraQA = () => {
       } catch (error) {
         console.error('Error loading stored conversations:', error);
         setIsServerAvailable(false);
-        // If loading fails, initialize with welcome message
         initializeWelcomeMessage();
         setIsInitialized(true);
       }
@@ -109,15 +112,13 @@ const AcceleraQA = () => {
     }
   }, [user, isInitialized]);
 
-  // Auto-save conversation to server when session ends or after multiple messages
+  // Auto-save conversation to server
   useEffect(() => {
     const saveConversationToServer = async () => {
       if (!user || !isInitialized || !isServerAvailable || messages.length === 0) return;
       
-      // Only save if we have at least 2 messages (user + ai response)
       if (messages.length < 2) return;
       
-      // Don't save if only welcome message
       const nonWelcomeMessages = messages.filter(msg => 
         !(msg.type === 'ai' && msg.content.includes('Welcome to AcceleraQA'))
       );
@@ -130,37 +131,33 @@ const AcceleraQA = () => {
         const metadata = {
           sessionId: Date.now().toString(),
           userAgent: navigator.userAgent,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          ragEnabled: ragEnabled
         };
         
         await conversationService.saveConversation(messages, metadata);
         console.log('Conversation auto-saved successfully');
       } catch (error) {
         console.error('Failed to auto-save conversation:', error);
-        // Don't show error to user for background saves
       }
     };
 
-    // Debounce saves to avoid excessive server calls
-    const timeoutId = setTimeout(saveConversationToServer, 5000); // Save after 5 seconds of inactivity
+    const timeoutId = setTimeout(saveConversationToServer, 5000);
     return () => clearTimeout(timeoutId);
-  }, [messages, user, isInitialized, isServerAvailable]);
+  }, [messages, user, isInitialized, isServerAvailable, ragEnabled]);
 
   // Initialize environment and authentication
   useEffect(() => {
     const initialize = async () => {
       try {
-        // Validate environment variables
         if (!validateEnvironment()) {
           setError('Application configuration is incomplete. Please check environment variables.');
           setIsLoadingAuth(false);
           return;
         }
 
-        // Initialize authentication
         await initializeAuth(setUser, setIsLoadingAuth, () => {
-          // Don't auto-initialize welcome message here
-          // Let the conversation loading effect handle it
+          // Let the conversation loading effect handle initialization
         });
       } catch (error) {
         console.error('Initialization failed:', error);
@@ -177,11 +174,11 @@ const AcceleraQA = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Initialize welcome message for authenticated users
+  // Initialize welcome message
   const initializeWelcomeMessage = useCallback(() => {
     const welcomeMessage = createMessage(
       'ai',
-      'Welcome to AcceleraQA! I\'m your pharmaceutical quality and compliance AI assistant. I specialize in GMP, validation, CAPA, regulatory requirements, and quality risk management. How can I help you today?',
+      'Welcome to AcceleraQA! I\'m your pharmaceutical quality and compliance AI assistant. I specialize in GMP, validation, CAPA, regulatory requirements, and quality risk management. \n\n💡 **New Feature**: RAG Search is now available! Upload your documents using the "RAG Config" button to search and get answers directly from your own documents.\n\nHow can I help you today?',
       DEFAULT_RESOURCES
     );
     
@@ -189,7 +186,7 @@ const AcceleraQA = () => {
     setCurrentResources(DEFAULT_RESOURCES);
   }, []);
 
-  // Handle sending messages
+  // Enhanced message handling with RAG
   const handleSendMessage = useCallback(async () => {
     if (!inputMessage.trim() || isLoading) return;
 
@@ -202,13 +199,38 @@ const AcceleraQA = () => {
     setError(null);
 
     try {
-      const response = await openaiService.getChatResponse(currentInput);
+      let response;
+      
+      if (ragEnabled) {
+        try {
+          const searchResults = await ragService.searchDocuments(currentInput, {
+            limit: 5,
+            threshold: 0.7
+          });
+
+          if (searchResults.results && searchResults.results.length > 0) {
+            response = await ragService.generateRAGResponse(currentInput, searchResults.results);
+          } else {
+            response = await openaiService.getChatResponse(currentInput);
+          }
+        } catch (ragError) {
+          console.warn('RAG search failed, falling back to standard response:', ragError);
+          response = await openaiService.getChatResponse(currentInput);
+        }
+      } else {
+        response = await openaiService.getChatResponse(currentInput);
+      }
       
       const aiMessage = createMessage(
         'ai',
         response.answer,
         response.resources
       );
+
+      // Add sources if RAG was used
+      if (response.sources) {
+        aiMessage.sources = response.sources;
+      }
 
       setMessages(prev => [...prev, aiMessage]);
       setCurrentResources(response.resources);
@@ -231,7 +253,7 @@ const AcceleraQA = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [inputMessage, isLoading]);
+  }, [inputMessage, isLoading, ragEnabled]);
 
   // Handle input key press
   const handleKeyPress = useCallback((event) => {
@@ -241,12 +263,11 @@ const AcceleraQA = () => {
     }
   }, [handleSendMessage]);
 
-  // Clear chat history with server cleanup
+  // Clear chat history
   const clearChat = useCallback(async () => {
     try {
       console.log('Clearing chat history...');
       
-      // Save current conversation before clearing (if it has content)
       if (messages.length > 1 && isServerAvailable) {
         try {
           await conversationService.saveConversation(messages, {
@@ -258,20 +279,17 @@ const AcceleraQA = () => {
         }
       }
       
-      // Clear local state
       setMessages([]);
       setStoredMessages([]);
       setCurrentResources([]);
       setSelectedMessages(new Set());
       setError(null);
       
-      // Initialize with welcome message
       setTimeout(() => {
         initializeWelcomeMessage();
       }, 100);
     } catch (error) {
       console.error('Error clearing chat history:', error);
-      // Still clear local state even if server operations fail
       setMessages([]);
       setStoredMessages([]);
       setCurrentResources([]);
@@ -281,36 +299,27 @@ const AcceleraQA = () => {
     }
   }, [messages, isServerAvailable, initializeWelcomeMessage]);
 
-  // Clear all conversations from server
+  // Clear all conversations
   const clearAllConversations = useCallback(async () => {
     if (!isServerAvailable) return;
     
-    const confirmed = window.confirm(
-      'Are you sure you want to delete all your conversation history from the server? This action cannot be undone.'
-    );
-    
-    if (confirmed) {
-      try {
-        await conversationService.clearConversations();
-        
-        // Also clear local state
-        setMessages([]);
-        setStoredMessages([]);
-        setCurrentResources([]);
-        setSelectedMessages(new Set());
-        
-        // Initialize with welcome message
-        initializeWelcomeMessage();
-        
-        alert('All conversations cleared successfully!');
-      } catch (error) {
-        console.error('Error clearing all conversations:', error);
-        alert('Failed to clear conversations. Please try again.');
-      }
+    try {
+      await conversationService.clearConversations();
+      
+      setMessages([]);
+      setStoredMessages([]);
+      setCurrentResources([]);
+      setSelectedMessages(new Set());
+      
+      initializeWelcomeMessage();
+      
+    } catch (error) {
+      console.error('Error clearing all conversations:', error);
+      throw error;
     }
   }, [isServerAvailable, initializeWelcomeMessage]);
 
-  // Generate study notes from selected messages
+  // Generate study notes
   const generateStudyNotes = useCallback(async () => {
     if (selectedMessages.size === 0 || isGeneratingNotes) return;
 
@@ -318,7 +327,6 @@ const AcceleraQA = () => {
     setError(null);
 
     try {
-      // Get selected conversation data from allMessages
       const selectedConversationData = allMessages.filter(msg => {
         if (selectedMessages.has(msg.id)) return true;
         const combinedId = `${msg.id}-combined`;
@@ -326,13 +334,11 @@ const AcceleraQA = () => {
         return false;
       });
 
-      // Also check for combined conversations from the notebook view
       const allConversations = combineMessagesIntoConversations(allMessages);
       const selectedCombinedConversations = allConversations.filter(conv => 
         selectedMessages.has(conv.id)
       );
 
-      // Flatten combined conversations back to individual messages
       const messagesFromCombined = selectedCombinedConversations.flatMap(conv => {
         const messages = [];
         if (conv.originalUserMessage) messages.push(conv.originalUserMessage);
@@ -340,10 +346,8 @@ const AcceleraQA = () => {
         return messages;
       });
 
-      // Combine all selected message data
       const allSelectedMessages = [...selectedConversationData, ...messagesFromCombined];
 
-      // Remove duplicates based on message ID
       const uniqueSelectedMessages = allSelectedMessages.reduce((acc, msg) => {
         if (!acc.find(existing => existing.id === msg.id)) {
           acc.push(msg);
@@ -364,7 +368,6 @@ const AcceleraQA = () => {
         true
       );
 
-      // Add study notes data for export
       studyNotesMessage.studyNotesData = {
         content: response.answer,
         selectedTopics: uniqueSelectedMessages
@@ -403,6 +406,15 @@ const AcceleraQA = () => {
       setError('Failed to export notebook. Please try again.');
     }
   }, [allMessages]);
+
+  // RAG config handlers
+  const handleShowRAGConfig = useCallback(() => {
+    setShowRAGConfig(true);
+  }, []);
+
+  const handleCloseRAGConfig = useCallback(() => {
+    setShowRAGConfig(false);
+  }, []);
 
   // Loading screen
   if (isLoadingAuth) {
@@ -449,6 +461,7 @@ const AcceleraQA = () => {
           exportNotebook={handleExport}
           clearAllConversations={clearAllConversations}
           isServerAvailable={isServerAvailable}
+          onShowRAGConfig={handleShowRAGConfig}
         />
 
         <div className="max-w-7xl mx-auto px-6 py-8 h-[calc(100vh-64px)]">
@@ -461,6 +474,8 @@ const AcceleraQA = () => {
               handleSendMessage={handleSendMessage}
               handleKeyPress={handleKeyPress}
               messagesEndRef={messagesEndRef}
+              ragEnabled={ragEnabled}
+              setRAGEnabled={setRAGEnabled}
             />
             
             <Sidebar 
@@ -475,6 +490,14 @@ const AcceleraQA = () => {
             />
           </div>
         </div>
+
+        {/* RAG Configuration Modal */}
+        {showRAGConfig && (
+          <RAGConfigurationPage
+            user={user}
+            onClose={handleCloseRAGConfig}
+          />
+        )}
       </div>
     </ErrorBoundary>
   );
