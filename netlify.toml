@@ -52,11 +52,11 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# Function settings - FIXED for Netlify Blob
+# Function settings - FIXED for Netlify Blobs
 [functions]
-  external_node_modules = ["@netlify/blob", "mammoth"]
+  external_node_modules = ["@netlify/blobs", "mammoth"]
   node_bundler = "zisi"
 
-# Enable Netlify Blob
-[blob]
+# Enable Netlify Blobs
+[blobs]
   enabled = true
