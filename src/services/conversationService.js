@@ -335,10 +335,32 @@ class ConversationService {
    */
   async isServiceAvailable() {
     try {
-      // Try to make a simple request to check connectivity and auth
-      await this.makeAuthenticatedRequest(this.apiUrl, {
+      console.log('Checking conversation service availability...');
+      
+      // First try the test blob function
+      const testResponse = await fetch('/.netlify/functions/test-blob', {
+        method: 'GET'
+      });
+      
+      if (!testResponse.ok) {
+        console.warn('Test blob function not available:', testResponse.status);
+        return false;
+      }
+      
+      const testResult = await testResponse.json();
+      console.log('Test blob function result:', testResult);
+      
+      if (!testResult.summary?.overallSuccess) {
+        console.warn('Blob functionality not working properly:', testResult);
+        return false;
+      }
+      
+      // Now try the actual conversations endpoint
+      const response = await this.makeAuthenticatedRequest(this.apiUrl, {
         method: 'GET',
       });
+      
+      console.log('Conversation service is available');
       return true;
     } catch (error) {
       console.warn('Conversation service not available:', error.message);
