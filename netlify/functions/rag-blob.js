@@ -1,5 +1,5 @@
-// netlify/functions/rag-blob.js - Fixed RAG system using Netlify Blobs
-const { getStore } = require('@netlify/blobs');
+// netlify/functions/rag-blob.js - Fixed with ES modules
+import { getStore } from '@netlify/blobs';
 
 // CORS headers
 const headers = {
@@ -9,7 +9,7 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -226,7 +226,7 @@ async function handleSearch(userId, queryEmbedding, options = {}) {
     
     console.log('Search options:', { limit, threshold, documentIds });
 
-    // Get all chunks for the user (this is simplified - in production you'd want pagination)
+    // Get all chunks for the user (simplified approach)
     const chunks = [];
     
     try {
