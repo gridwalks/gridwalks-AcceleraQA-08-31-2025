@@ -1,15 +1,10 @@
-// netlify/functions/rag-blob.js - RAG system using Netlify Blob
+// netlify/functions/rag-blob.js - Fixed RAG system using Netlify Blobs
 const { getStore } = require('@netlify/blobs');
-
-// Get blob stores for different data types
-const getDocumentStore = () => getStore('rag-documents');
-const getChunkStore = () => getStore('rag-chunks');
-const getUserStore = () => getStore('user-data');
 
 // CORS headers
 const headers = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-user-id',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Content-Type': 'application/json',
 };
@@ -24,21 +19,14 @@ exports.handler = async (event, context) => {
     };
   }
 
-  try {
-    const { body } = event;
-    const { user } = context.clientContext || {};
-    
-    // Extract user ID from Auth0 context
-    const userId = user?.sub || event.headers['x-user-id'];
-    
-    if (!userId) {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'User authentication required' }),
-      };
-    }
+  console.log('RAG Function called:', {
+    method: event.httpMethod,
+    headers: event.headers,
+    hasBody: !!event.body
+  });
 
+  try {
+    // Only allow POST method
     if (event.httpMethod !== 'POST') {
       return {
         statusCode: 405,
@@ -47,34 +35,75 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const requestData = JSON.parse(body);
+    // Parse request body
+    let requestData;
+    try {
+      requestData = JSON.parse(event.body || '{}');
+    } catch (parseError) {
+      console.error('Error parsing request body:', parseError);
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid JSON in request body' }),
+      };
+    }
+
+    console.log('Parsed request data:', { action: requestData.action });
+
+    // Extract user ID from multiple sources
+    const userId = event.headers['x-user-id'] || 
+                   event.headers['X-User-ID'] || 
+                   context.clientContext?.user?.sub ||
+                   'anonymous';
+
+    console.log('User ID:', userId);
+
+    if (!userId || userId === 'anonymous') {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: 'User authentication required' }),
+      };
+    }
+
     const { action } = requestData;
 
+    if (!action) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Action parameter is required' }),
+      };
+    }
+
+    console.log('Processing action:', action);
+
+    // Handle different actions
     switch (action) {
       case 'upload':
-        return await uploadDocument(userId, requestData.document);
+        return await handleUpload(userId, requestData.document);
       
       case 'search':
-        return await searchDocuments(userId, requestData.query, requestData.options);
+        return await handleSearch(userId, requestData.query, requestData.options);
       
       case 'list':
-        return await getDocuments(userId);
+        return await handleList(userId);
       
       case 'delete':
-        return await deleteDocument(userId, requestData.documentId);
+        return await handleDelete(userId, requestData.documentId);
       
       case 'stats':
-        return await getUserStats(userId);
+        return await handleStats(userId);
       
       default:
         return {
           statusCode: 400,
           headers,
-          body: JSON.stringify({ error: 'Invalid action' }),
+          body: JSON.stringify({ error: `Invalid action: ${action}` }),
         };
     }
   } catch (error) {
-    console.error('RAG Blob Function error:', error);
+    console.error('RAG Function error:', error);
     return {
       statusCode: 500,
       headers,
@@ -87,15 +116,28 @@ exports.handler = async (event, context) => {
 };
 
 /**
- * Upload document with chunks and embeddings to Netlify Blob
+ * Handle document upload
  */
-async function uploadDocument(userId, document) {
+async function handleUpload(userId, document) {
   try {
-    const documentStore = getDocumentStore();
-    const chunkStore = getChunkStore();
+    console.log('Starting document upload for user:', userId);
+
+    if (!document || !document.filename || !document.chunks) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid document data' }),
+      };
+    }
+
+    // Get blob stores
+    const documentStore = getStore('rag-documents');
+    const chunkStore = getStore('rag-chunks');
     
     const documentId = `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const timestamp = new Date().toISOString();
+    
+    console.log('Generated document ID:', documentId);
     
     // Prepare document metadata
     const documentMetadata = {
@@ -103,9 +145,9 @@ async function uploadDocument(userId, document) {
       userId,
       filename: document.filename,
       originalFilename: document.filename,
-      fileType: getDocumentType(document.type),
-      fileSize: document.size,
-      textContent: document.text,
+      fileType: getDocumentType(document.type || 'text/plain'),
+      fileSize: document.size || 0,
+      textContent: document.text || '',
       metadata: document.metadata || {},
       category: document.metadata?.category || 'general',
       tags: document.metadata?.tags || [],
@@ -116,6 +158,7 @@ async function uploadDocument(userId, document) {
     
     // Store document metadata
     await documentStore.set(`${userId}/${documentId}`, JSON.stringify(documentMetadata));
+    console.log('Document metadata stored');
     
     // Store document chunks with embeddings
     const chunkPromises = document.chunks.map(async (chunk, index) => {
@@ -124,11 +167,11 @@ async function uploadDocument(userId, document) {
         id: chunkId,
         documentId,
         userId,
-        index: chunk.index,
-        text: chunk.text,
-        wordCount: chunk.wordCount,
-        characterCount: chunk.characterCount,
-        embedding: chunk.embedding, // Store as array
+        index: chunk.index || index,
+        text: chunk.text || '',
+        wordCount: chunk.wordCount || 0,
+        characterCount: chunk.characterCount || 0,
+        embedding: chunk.embedding || [], // Store as array
         createdAt: timestamp
       };
       
@@ -136,11 +179,7 @@ async function uploadDocument(userId, document) {
     });
     
     await Promise.all(chunkPromises);
-    
-    // Update user statistics
-    await updateUserStats(userId, 'documents', 1);
-    await updateUserStats(userId, 'chunks', document.chunks.length);
-    await updateUserStats(userId, 'storage', document.size);
+    console.log('Document chunks stored');
     
     return {
       statusCode: 201,
@@ -154,49 +193,77 @@ async function uploadDocument(userId, document) {
     };
   } catch (error) {
     console.error('Error uploading document:', error);
-    throw error;
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        error: 'Failed to upload document',
+        message: error.message 
+      }),
+    };
   }
 }
 
 /**
- * Search documents using cosine similarity
+ * Handle document search
  */
-async function searchDocuments(userId, queryEmbedding, options = {}) {
+async function handleSearch(userId, queryEmbedding, options = {}) {
   try {
-    const chunkStore = getChunkStore();
-    const documentStore = getDocumentStore();
+    console.log('Starting document search for user:', userId);
+
+    if (!queryEmbedding || !Array.isArray(queryEmbedding)) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Valid query embedding is required' }),
+      };
+    }
+
+    const chunkStore = getStore('rag-chunks');
+    const documentStore = getStore('rag-documents');
     
     const { limit = 10, threshold = 0.7, documentIds = null } = options;
     
-    // Get all chunks for the user
-    const chunksList = chunkStore.list(`${userId}/`);
+    console.log('Search options:', { limit, threshold, documentIds });
+
+    // Get all chunks for the user (this is simplified - in production you'd want pagination)
     const chunks = [];
     
-    // Retrieve all chunks (this could be optimized with pagination)
-    for await (const { key } of chunksList) {
-      try {
-        const chunkData = await chunkStore.get(key);
-        if (chunkData) {
-          const chunk = JSON.parse(chunkData);
-          
-          // Filter by document IDs if specified
-          if (documentIds && !documentIds.includes(chunk.documentId)) {
-            continue;
+    try {
+      const chunksList = chunkStore.list(`${userId}/`);
+      
+      for await (const { key } of chunksList) {
+        try {
+          const chunkData = await chunkStore.get(key);
+          if (chunkData) {
+            const chunk = JSON.parse(chunkData);
+            
+            // Filter by document IDs if specified
+            if (documentIds && !documentIds.includes(chunk.documentId)) {
+              continue;
+            }
+            
+            // Calculate cosine similarity
+            const similarity = cosineSimilarity(queryEmbedding, chunk.embedding);
+            
+            if (similarity >= threshold) {
+              chunks.push({
+                ...chunk,
+                similarity
+              });
+            }
           }
-          
-          // Calculate cosine similarity
-          const similarity = cosineSimilarity(queryEmbedding, chunk.embedding);
-          
-          if (similarity >= threshold) {
-            chunks.push({
-              ...chunk,
-              similarity
-            });
-          }
+        } catch (error) {
+          console.warn(`Error processing chunk ${key}:`, error);
         }
-      } catch (error) {
-        console.warn(`Error processing chunk ${key}:`, error);
       }
+    } catch (error) {
+      console.error('Error listing chunks:', error);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Failed to search chunks' }),
+      };
     }
     
     // Sort by similarity and limit results
@@ -204,34 +271,35 @@ async function searchDocuments(userId, queryEmbedding, options = {}) {
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, limit);
     
+    console.log(`Found ${sortedChunks.length} matching chunks`);
+    
     // Get document metadata for results
-    const results = await Promise.all(
-      sortedChunks.map(async (chunk) => {
-        try {
-          const docData = await documentStore.get(`${userId}/${chunk.documentId}`);
-          const document = docData ? JSON.parse(docData) : null;
-          
-          return {
-            documentId: chunk.documentId,
-            filename: document?.filename || 'Unknown',
-            chunkIndex: chunk.index,
-            text: chunk.text,
-            similarity: chunk.similarity,
-            metadata: document?.metadata || {}
-          };
-        } catch (error) {
-          console.warn(`Error getting document metadata for ${chunk.documentId}:`, error);
-          return {
-            documentId: chunk.documentId,
-            filename: 'Unknown',
-            chunkIndex: chunk.index,
-            text: chunk.text,
-            similarity: chunk.similarity,
-            metadata: {}
-          };
-        }
-      })
-    );
+    const results = [];
+    for (const chunk of sortedChunks) {
+      try {
+        const docData = await documentStore.get(`${userId}/${chunk.documentId}`);
+        const document = docData ? JSON.parse(docData) : null;
+        
+        results.push({
+          documentId: chunk.documentId,
+          filename: document?.filename || 'Unknown',
+          chunkIndex: chunk.index,
+          text: chunk.text,
+          similarity: chunk.similarity,
+          metadata: document?.metadata || {}
+        });
+      } catch (error) {
+        console.warn(`Error getting document metadata for ${chunk.documentId}:`, error);
+        results.push({
+          documentId: chunk.documentId,
+          filename: 'Unknown',
+          chunkIndex: chunk.index,
+          text: chunk.text,
+          similarity: chunk.similarity,
+          metadata: {}
+        });
+      }
+    }
     
     return {
       statusCode: 200,
@@ -248,41 +316,54 @@ async function searchDocuments(userId, queryEmbedding, options = {}) {
     };
   } catch (error) {
     console.error('Error searching documents:', error);
-    throw error;
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        error: 'Search failed',
+        message: error.message 
+      }),
+    };
   }
 }
 
 /**
- * Get list of documents for user
+ * Handle list documents
  */
-async function getDocuments(userId) {
+async function handleList(userId) {
   try {
-    const documentStore = getDocumentStore();
+    console.log('Listing documents for user:', userId);
+
+    const documentStore = getStore('rag-documents');
     const documents = [];
     
-    // List all documents for the user
-    const docsList = documentStore.list(`${userId}/`);
-    
-    for await (const { key } of docsList) {
-      try {
-        const docData = await documentStore.get(key);
-        if (docData) {
-          const document = JSON.parse(docData);
-          documents.push({
-            id: document.id,
-            filename: document.filename,
-            type: `application/${document.fileType}`,
-            size: document.fileSize,
-            chunks: document.chunkCount,
-            category: document.category,
-            tags: document.tags,
-            createdAt: document.createdAt,
-            metadata: document.metadata
-          });
+    try {
+      const docsList = documentStore.list(`${userId}/`);
+      
+      for await (const { key } of docsList) {
+        try {
+          const docData = await documentStore.get(key);
+          if (docData) {
+            const document = JSON.parse(docData);
+            documents.push({
+              id: document.id,
+              filename: document.filename,
+              type: `application/${document.fileType}`,
+              size: document.fileSize,
+              chunks: document.chunkCount,
+              category: document.category,
+              tags: document.tags,
+              createdAt: document.createdAt,
+              metadata: document.metadata
+            });
+          }
+        } catch (error) {
+          console.warn(`Error processing document ${key}:`, error);
         }
-      } catch (error) {
-        console.warn(`Error processing document ${key}:`, error);
       }
+    } catch (error) {
+      console.error('Error listing documents:', error);
+      // Return empty list instead of error
     }
     
     // Sort by creation date (newest first)
@@ -298,17 +379,34 @@ async function getDocuments(userId) {
     };
   } catch (error) {
     console.error('Error getting documents:', error);
-    throw error;
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        error: 'Failed to list documents',
+        message: error.message 
+      }),
+    };
   }
 }
 
 /**
- * Delete a document and its chunks
+ * Handle delete document
  */
-async function deleteDocument(userId, documentId) {
+async function handleDelete(userId, documentId) {
   try {
-    const documentStore = getDocumentStore();
-    const chunkStore = getChunkStore();
+    console.log('Deleting document:', documentId, 'for user:', userId);
+
+    if (!documentId) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Document ID is required' }),
+      };
+    }
+
+    const documentStore = getStore('rag-documents');
+    const chunkStore = getStore('rag-chunks');
     
     // Get document to verify ownership and get metadata
     const docData = await documentStore.get(`${userId}/${documentId}`);
@@ -324,25 +422,24 @@ async function deleteDocument(userId, documentId) {
     const document = JSON.parse(docData);
     
     // Delete all chunks for this document
-    const chunksList = chunkStore.list(`${userId}/`);
-    const chunkDeletePromises = [];
-    
-    for await (const { key } of chunksList) {
-      if (key.includes(`${documentId}_chunk_`)) {
-        chunkDeletePromises.push(chunkStore.delete(key));
+    try {
+      const chunksList = chunkStore.list(`${userId}/`);
+      const chunkDeletePromises = [];
+      
+      for await (const { key } of chunksList) {
+        if (key.includes(`${documentId}_chunk_`)) {
+          chunkDeletePromises.push(chunkStore.delete(key));
+        }
       }
+      
+      // Delete the document
+      await documentStore.delete(`${userId}/${documentId}`);
+      
+      // Delete all chunks
+      await Promise.all(chunkDeletePromises);
+    } catch (error) {
+      console.error('Error deleting document chunks:', error);
     }
-    
-    // Delete the document
-    await documentStore.delete(`${userId}/${documentId}`);
-    
-    // Delete all chunks
-    await Promise.all(chunkDeletePromises);
-    
-    // Update user statistics
-    await updateUserStats(userId, 'documents', -1);
-    await updateUserStats(userId, 'chunks', -document.chunkCount);
-    await updateUserStats(userId, 'storage', -document.fileSize);
     
     return {
       statusCode: 200,
@@ -355,59 +452,58 @@ async function deleteDocument(userId, documentId) {
     };
   } catch (error) {
     console.error('Error deleting document:', error);
-    throw error;
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        error: 'Failed to delete document',
+        message: error.message 
+      }),
+    };
   }
 }
 
 /**
- * Get user statistics
+ * Handle get user statistics
  */
-async function getUserStats(userId) {
+async function handleStats(userId) {
   try {
-    const userStore = getUserStore();
+    console.log('Getting stats for user:', userId);
+
+    const documentStore = getStore('rag-documents');
     
-    // Get user stats
-    const statsData = await userStore.get(`${userId}/stats`);
-    let stats = {
-      documents: 0,
-      chunks: 0,
-      storage: 0,
-      lastUpdated: new Date().toISOString()
-    };
-    
-    if (statsData) {
-      stats = { ...stats, ...JSON.parse(statsData) };
-    }
-    
-    // Get document list to verify stats
-    const documentStore = getDocumentStore();
-    const docsList = documentStore.list(`${userId}/`);
     let docCount = 0;
     let totalSize = 0;
     let totalChunks = 0;
     let oldestDoc = null;
     let newestDoc = null;
     
-    for await (const { key } of docsList) {
-      try {
-        const docData = await documentStore.get(key);
-        if (docData) {
-          const doc = JSON.parse(docData);
-          docCount++;
-          totalSize += doc.fileSize;
-          totalChunks += doc.chunkCount;
-          
-          const docDate = new Date(doc.createdAt);
-          if (!oldestDoc || docDate < new Date(oldestDoc)) {
-            oldestDoc = doc.createdAt;
+    try {
+      const docsList = documentStore.list(`${userId}/`);
+      
+      for await (const { key } of docsList) {
+        try {
+          const docData = await documentStore.get(key);
+          if (docData) {
+            const doc = JSON.parse(docData);
+            docCount++;
+            totalSize += doc.fileSize || 0;
+            totalChunks += doc.chunkCount || 0;
+            
+            const docDate = new Date(doc.createdAt);
+            if (!oldestDoc || docDate < new Date(oldestDoc)) {
+              oldestDoc = doc.createdAt;
+            }
+            if (!newestDoc || docDate > new Date(newestDoc)) {
+              newestDoc = doc.createdAt;
+            }
           }
-          if (!newestDoc || docDate > new Date(newestDoc)) {
-            newestDoc = doc.createdAt;
-          }
+        } catch (error) {
+          console.warn(`Error processing document stats for ${key}:`, error);
         }
-      } catch (error) {
-        console.warn(`Error processing document stats for ${key}:`, error);
       }
+    } catch (error) {
+      console.error('Error getting document stats:', error);
     }
     
     return {
@@ -419,44 +515,19 @@ async function getUserStats(userId) {
         totalSize: totalSize,
         oldestDocument: oldestDoc,
         newestDocument: newestDoc,
-        lastUpdated: stats.lastUpdated
+        lastUpdated: new Date().toISOString()
       }),
     };
   } catch (error) {
     console.error('Error getting user stats:', error);
-    throw error;
-  }
-}
-
-/**
- * Update user statistics
- */
-async function updateUserStats(userId, type, delta) {
-  try {
-    const userStore = getUserStore();
-    const statsKey = `${userId}/stats`;
-    
-    // Get current stats
-    const currentStatsData = await userStore.get(statsKey);
-    let stats = {
-      documents: 0,
-      chunks: 0,
-      storage: 0,
-      lastUpdated: new Date().toISOString()
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        error: 'Failed to get stats',
+        message: error.message 
+      }),
     };
-    
-    if (currentStatsData) {
-      stats = { ...stats, ...JSON.parse(currentStatsData) };
-    }
-    
-    // Update the specific stat
-    stats[type] = Math.max(0, (stats[type] || 0) + delta);
-    stats.lastUpdated = new Date().toISOString();
-    
-    // Save updated stats
-    await userStore.set(statsKey, JSON.stringify(stats));
-  } catch (error) {
-    console.warn('Error updating user stats:', error);
   }
 }
 
@@ -464,7 +535,7 @@ async function updateUserStats(userId, type, delta) {
  * Calculate cosine similarity between two vectors
  */
 function cosineSimilarity(vecA, vecB) {
-  if (!vecA || !vecB || vecA.length !== vecB.length) {
+  if (!vecA || !vecB || !Array.isArray(vecA) || !Array.isArray(vecB) || vecA.length !== vecB.length) {
     return 0;
   }
 
@@ -473,9 +544,12 @@ function cosineSimilarity(vecA, vecB) {
   let normB = 0;
 
   for (let i = 0; i < vecA.length; i++) {
-    dotProduct += vecA[i] * vecB[i];
-    normA += vecA[i] * vecA[i];
-    normB += vecB[i] * vecB[i];
+    const a = Number(vecA[i]) || 0;
+    const b = Number(vecB[i]) || 0;
+    
+    dotProduct += a * b;
+    normA += a * a;
+    normB += b * b;
   }
 
   const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
