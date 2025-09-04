@@ -155,4 +155,276 @@ class RAGService {
   /**
    * Get list of uploaded documents
    */
-  async
+  async getDocuments() {
+    try {
+      console.log('Getting document list from enhanced function...');
+      
+      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
+        action: 'list'
+      });
+      
+      return result.documents || [];
+
+    } catch (error) {
+      console.error('Error getting documents:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a document
+   */
+  async deleteDocument(documentId) {
+    try {
+      console.log('Deleting document:', documentId);
+      
+      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
+        action: 'delete',
+        documentId
+      });
+      
+      return result;
+
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search documents using real semantic similarity
+   */
+  async searchDocuments(query, options = {}) {
+    try {
+      if (!query || !query.trim()) {
+        throw new Error('Search query is required');
+      }
+
+      console.log('Searching documents with enhanced function:', query);
+      
+      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
+        action: 'search',
+        query: query.trim(), // Send the actual query text, not embedding
+        options: {
+          limit: options.limit || 10,
+          threshold: options.threshold || 0.7
+        }
+      });
+      
+      console.log('Enhanced search results:', result);
+      return result;
+
+    } catch (error) {
+      console.error('Error searching documents:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate AI response using enhanced RAG context
+   */
+  async generateRAGResponse(query, searchResults) {
+    try {
+      if (!searchResults || searchResults.length === 0) {
+        console.log('No search results, using standard OpenAI response');
+        return await openaiService.getChatResponse(query);
+      }
+
+      console.log(`Generating RAG response with ${searchResults.length} source documents`);
+
+      const context = searchResults
+        .map((result, index) => 
+          `[Document: ${result.filename}]\n${result.text}\n`
+        )
+        .join('\n---\n');
+
+      const ragPrompt = `You are AcceleraQA, an AI assistant specialized in pharmaceutical quality and compliance. 
+
+Use the following document context to answer the user's question. The documents have been retrieved using semantic search and are relevant to the user's query.
+
+DOCUMENT CONTEXT:
+${context.substring(0, 12000)} ${context.length > 12000 ? '...[truncated]' : ''}
+
+USER QUESTION: ${query}
+
+Please provide a comprehensive answer that:
+1. References the relevant information from the documents
+2. Maintains your pharmaceutical expertise
+3. Cites specific documents when appropriate
+4. Provides actionable guidance based on the context
+
+Answer:`;
+
+      const response = await openaiService.getChatResponse(ragPrompt);
+      
+      // Enhanced source attribution
+      const sourceDocs = [...new Set(searchResults.map(r => r.filename))];
+      const highConfidenceSources = searchResults.filter(r => r.similarity > 0.8);
+      
+      let sourceAttribution = '';
+      if (sourceDocs.length > 0) {
+        sourceAttribution = `\n\n📄 **Sources Referenced:**\n`;
+        sourceDocs.forEach(doc => {
+          const docResults = searchResults.filter(r => r.filename === doc);
+          const avgSimilarity = docResults.reduce((sum, r) => sum + r.similarity, 0) / docResults.length;
+          sourceAttribution += `• ${doc} (${(avgSimilarity * 100).toFixed(1)}% relevant)\n`;
+        });
+        
+        if (highConfidenceSources.length > 0) {
+          sourceAttribution += `\n🎯 **High-confidence matches:** ${highConfidenceSources.length} chunks with >80% relevance`;
+        }
+      }
+
+      return {
+        ...response,
+        answer: response.answer + sourceAttribution,
+        sources: searchResults,
+        ragMetadata: {
+          totalSources: searchResults.length,
+          highConfidenceSources: highConfidenceSources.length,
+          avgSimilarity: searchResults.reduce((sum, r) => sum + r.similarity, 0) / searchResults.length,
+          searchType: 'semantic',
+          embeddingsUsed: true
+        }
+      };
+
+    } catch (error) {
+      console.error('Error generating enhanced RAG response:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get enhanced statistics
+   */
+  async getStats() {
+    try {
+      console.log('Getting enhanced stats...');
+      
+      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
+        action: 'stats'
+      });
+      
+      return result;
+
+    } catch (error) {
+      console.error('Error getting enhanced stats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Test all enhanced functionality
+   */
+  async runDiagnostics() {
+    try {
+      console.log('Running enhanced RAG diagnostics...');
+      
+      const diagnostics = {
+        timestamp: new Date().toISOString(),
+        tests: {}
+      };
+      
+      // Test basic connectivity
+      try {
+        const connectionTest = await this.testConnection();
+        diagnostics.tests.connectivity = connectionTest;
+      } catch (error) {
+        diagnostics.tests.connectivity = {
+          success: false,
+          error: error.message
+        };
+      }
+      
+      // Test document listing
+      try {
+        const documents = await this.getDocuments();
+        diagnostics.tests.documentListing = {
+          success: true,
+          documentCount: documents.length
+        };
+      } catch (error) {
+        diagnostics.tests.documentListing = {
+          success: false,
+          error: error.message
+        };
+      }
+      
+      // Test search (if documents exist)
+      try {
+        const searchResult = await this.searchDocuments('pharmaceutical quality', { limit: 3 });
+        diagnostics.tests.search = {
+          success: true,
+          resultsFound: searchResult.results?.length || 0,
+          searchType: searchResult.searchType
+        };
+      } catch (error) {
+        diagnostics.tests.search = {
+          success: false,
+          error: error.message
+        };
+      }
+      
+      // Test stats
+      try {
+        const stats = await this.getStats();
+        diagnostics.tests.stats = {
+          success: true,
+          ...stats
+        };
+      } catch (error) {
+        diagnostics.tests.stats = {
+          success: false,
+          error: error.message
+        };
+      }
+      
+      // Overall health assessment
+      const successfulTests = Object.values(diagnostics.tests).filter(test => test.success).length;
+      const totalTests = Object.keys(diagnostics.tests).length;
+      
+      diagnostics.health = {
+        score: (successfulTests / totalTests) * 100,
+        status: successfulTests === totalTests ? 'healthy' : 
+                successfulTests > totalTests / 2 ? 'partial' : 'unhealthy',
+        recommendations: []
+      };
+      
+      if (!diagnostics.tests.connectivity?.success) {
+        diagnostics.health.recommendations.push('Check Netlify function deployment');
+      }
+      
+      if (!diagnostics.tests.search?.success) {
+        diagnostics.health.recommendations.push('Upload test documents to enable search testing');
+      }
+      
+      return diagnostics;
+      
+    } catch (error) {
+      console.error('Error running diagnostics:', error);
+      return {
+        timestamp: new Date().toISOString(),
+        health: {
+          score: 0,
+          status: 'error',
+          error: error.message
+        }
+      };
+    }
+  }
+}
+
+// Create singleton instance
+const ragService = new RAGService();
+
+export default ragService;
+
+// Export convenience functions
+export const uploadDocument = (file, metadata) => ragService.uploadDocument(file, metadata);
+export const searchDocuments = (query, options) => ragService.searchDocuments(query, options);
+export const getDocuments = () => ragService.getDocuments();
+export const deleteDocument = (documentId) => ragService.deleteDocument(documentId);
+export const generateRAGResponse = (query, searchResults) => ragService.generateRAGResponse(query, searchResults);
+export const testConnection = () => ragService.testConnection();
+export const getStats = () => ragService.getStats();
+export const runDiagnostics = () => ragService.runDiagnostics();
