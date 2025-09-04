@@ -1,4 +1,4 @@
-// src/services/ragService.js - Improved version with better error handling
+// src/services/ragService.js - Debug version to test different endpoints
 import openaiService from './openaiService';
 import { getToken } from './authService';
 
@@ -7,7 +7,8 @@ const API_BASE_URL = '/.netlify/functions';
 class RAGService {
   constructor() {
     this.apiUrl = `${API_BASE_URL}/rag-blob`;
-    this.testUrl = `${API_BASE_URL}/rag-test`;
+    this.simpleUrl = `${API_BASE_URL}/rag-simple`;
+    this.testUrl = `${API_BASE_URL}/test-simple`;
     this.embeddingModel = 'text-embedding-3-small';
     this.maxChunkSize = 1000;
     this.chunkOverlap = 200;
@@ -23,7 +24,6 @@ class RAGService {
 
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
-        // Add user ID for blob functions
         try {
           const tokenParts = token.split('.');
           if (tokenParts.length === 3) {
@@ -69,69 +69,113 @@ class RAGService {
   }
 
   /**
-   * Test the RAG function connectivity
+   * Test the RAG function connectivity with multiple endpoints
    */
   async testConnection() {
     try {
       console.log('Testing RAG function connectivity...');
       
-      // First test GET request
-      const getResponse = await fetch(this.testUrl, {
-        method: 'GET'
-      });
+      const tests = {};
       
-      if (!getResponse.ok) {
-        throw new Error(`GET test failed: ${getResponse.status}`);
+      // Test 1: Simple test function (no imports)
+      try {
+        console.log('Testing simple function...');
+        const simpleResponse = await fetch(this.testUrl, {
+          method: 'GET'
+        });
+        
+        if (simpleResponse.ok) {
+          tests.simpleFunction = {
+            success: true,
+            data: await simpleResponse.json()
+          };
+        } else {
+          tests.simpleFunction = {
+            success: false,
+            error: `HTTP ${simpleResponse.status}`
+          };
+        }
+      } catch (error) {
+        tests.simpleFunction = {
+          success: false,
+          error: error.message
+        };
       }
       
-      const getResult = await getResponse.json();
-      console.log('GET test result:', getResult);
+      // Test 2: Simple RAG function (no blob imports)
+      try {
+        console.log('Testing simple RAG function...');
+        const ragSimpleResult = await this.makeAuthenticatedRequest(this.simpleUrl, {
+          action: 'list'
+        });
+        
+        tests.simpleRAG = {
+          success: true,
+          data: ragSimpleResult
+        };
+      } catch (error) {
+        tests.simpleRAG = {
+          success: false,
+          error: error.message
+        };
+      }
       
-      // Then test POST request
-      const postResult = await this.makeAuthenticatedRequest(this.testUrl, {
-        test: 'connection',
-        timestamp: new Date().toISOString()
-      });
+      // Test 3: Full RAG function (with blobs)
+      try {
+        console.log('Testing full RAG function...');
+        const ragFullResult = await this.makeAuthenticatedRequest(this.apiUrl, {
+          action: 'list'
+        });
+        
+        tests.fullRAG = {
+          success: true,
+          data: ragFullResult
+        };
+      } catch (error) {
+        tests.fullRAG = {
+          success: false,
+          error: error.message
+        };
+      }
       
-      console.log('POST test result:', postResult);
+      // Determine overall success
+      const anySuccess = Object.values(tests).some(test => test.success);
       
       return {
-        success: true,
-        getTest: getResult,
-        postTest: postResult
+        success: anySuccess,
+        tests,
+        recommendation: this.getRecommendation(tests)
       };
       
     } catch (error) {
       console.error('Connection test failed:', error);
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        tests: {}
       };
     }
   }
 
+  getRecommendation(tests) {
+    if (tests.fullRAG?.success) {
+      return 'All functions working! Use full RAG functionality.';
+    } else if (tests.simpleRAG?.success) {
+      return 'Simple RAG working. Issue with Netlify Blobs. Use mock storage for now.';
+    } else if (tests.simpleFunction?.success) {
+      return 'Basic functions working. Issue with RAG logic or authentication.';
+    } else {
+      return 'All functions failing. Check Netlify deployment and function logs.';
+    }
+  }
+
   /**
-   * Upload and process a document for RAG search
+   * Upload document - tries different endpoints based on what's working
    */
   async uploadDocument(file, metadata = {}) {
     try {
       if (!file) {
         throw new Error('File is required');
-      }
-
-      const allowedTypes = [
-        'application/pdf',
-        'text/plain',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ];
-
-      if (!allowedTypes.includes(file.type)) {
-        throw new Error('Unsupported file type. Please upload PDF, DOC, DOCX, or TXT files.');
-      }
-
-      if (file.size > 10 * 1024 * 1024) {
-        throw new Error('File size must be less than 10MB');
       }
 
       console.log('Starting document upload process...');
@@ -144,28 +188,58 @@ class RAGService {
       const chunks = this.chunkText(text);
       console.log('Text chunked into', chunks.length, 'chunks');
       
-      // Generate embeddings for chunks (limit to first 5 for testing)
-      const limitedChunks = chunks.slice(0, Math.min(chunks.length, 5));
-      const chunksWithEmbeddings = await this.generateEmbeddings(limitedChunks);
-      console.log('Embeddings generated for', chunksWithEmbeddings.length, 'chunks');
+      // For testing, create simple chunks without embeddings first
+      const simpleChunks = chunks.slice(0, 3).map(chunk => ({
+        ...chunk,
+        embedding: new Array(1536).fill(0.1) // Mock embedding
+      }));
       
-      // Save to server
-      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
-        action: 'upload',
-        document: {
-          filename: file.name,
-          type: file.type,
-          size: file.size,
-          text: text.substring(0, 10000), // Limit text size for testing
-          chunks: chunksWithEmbeddings,
-          metadata: {
-            uploadedAt: new Date().toISOString(),
-            processedChunks: chunksWithEmbeddings.length,
-            originalChunks: chunks.length,
-            ...metadata
+      console.log('Using simple chunks for testing:', simpleChunks.length);
+      
+      // Try simple RAG function first
+      let result;
+      try {
+        result = await this.makeAuthenticatedRequest(this.simpleUrl, {
+          action: 'upload',
+          document: {
+            filename: file.name,
+            type: file.type,
+            size: file.size,
+            text: text.substring(0, 1000), // Limit for testing
+            chunks: simpleChunks,
+            metadata: {
+              uploadedAt: new Date().toISOString(),
+              processedChunks: simpleChunks.length,
+              originalChunks: chunks.length,
+              testMode: true,
+              ...metadata
+            }
           }
-        }
-      });
+        });
+        
+        console.log('Upload successful with simple RAG function');
+      } catch (simpleError) {
+        console.warn('Simple RAG failed, trying full RAG:', simpleError);
+        
+        // Fallback to full RAG function
+        result = await this.makeAuthenticatedRequest(this.apiUrl, {
+          action: 'upload',
+          document: {
+            filename: file.name,
+            type: file.type,
+            size: file.size,
+            text: text.substring(0, 1000),
+            chunks: simpleChunks,
+            metadata: {
+              uploadedAt: new Date().toISOString(),
+              processedChunks: simpleChunks.length,
+              originalChunks: chunks.length,
+              testMode: true,
+              ...metadata
+            }
+          }
+        });
+      }
 
       return result;
 
@@ -187,8 +261,19 @@ class RAGService {
           if (file.type === 'text/plain') {
             resolve(e.target.result);
           } else {
-            // For non-text files, return a placeholder for testing
-            const placeholder = `This is a test document: ${file.name}\n\nThis would normally contain the extracted text from the ${file.type} file. For testing purposes, we're using this placeholder text to verify that the upload process works correctly.\n\nThe file was uploaded on ${new Date().toISOString()} and has a size of ${file.size} bytes.`;
+            // For non-text files, return a test placeholder
+            const placeholder = `Test Document: ${file.name}
+
+This is a test document for the RAG system. It contains sample pharmaceutical quality content to test the document upload and search functionality.
+
+Key topics covered:
+- Good Manufacturing Practice (GMP)
+- Quality Control procedures
+- Validation protocols
+- CAPA systems
+- Regulatory compliance
+
+This content can be used to test semantic search and retrieval functionality in the RAG system.`;
             resolve(placeholder);
           }
         } catch (error) {
@@ -197,7 +282,6 @@ class RAGService {
       };
 
       reader.onerror = () => reject(new Error('Failed to read file'));
-      
       reader.readAsText(file);
     });
   }
@@ -207,8 +291,6 @@ class RAGService {
    */
   chunkText(text) {
     const chunks = [];
-    
-    // Simple chunking by character count for testing
     const chunkSize = this.maxChunkSize;
     
     for (let i = 0; i < text.length; i += chunkSize) {
@@ -226,147 +308,24 @@ class RAGService {
   }
 
   /**
-   * Generate embeddings for text chunks using OpenAI
-   */
-  async generateEmbeddings(chunks) {
-    console.log(`Generating embeddings for ${chunks.length} chunks...`);
-    
-    const chunksWithEmbeddings = [];
-    
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      
-      try {
-        console.log(`Processing chunk ${i + 1}/${chunks.length}`);
-        const embeddedChunk = await this.generateSingleEmbedding(chunk);
-        chunksWithEmbeddings.push(embeddedChunk);
-        
-        // Add delay to avoid rate limiting
-        if (i < chunks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-        
-      } catch (error) {
-        console.error(`Error processing chunk ${i}:`, error);
-        
-        // Add chunk without embedding as fallback
-        chunksWithEmbeddings.push({
-          ...chunk,
-          embedding: new Array(1536).fill(0) // Fallback empty embedding
-        });
-      }
-    }
-
-    return chunksWithEmbeddings;
-  }
-
-  /**
-   * Generate embedding for a single chunk
-   */
-  async generateSingleEmbedding(chunk) {
-    try {
-      const response = await fetch('https://api.openai.com/v1/embeddings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.REACT_APP_OPENAI_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: this.embeddingModel,
-          input: chunk.text.substring(0, 8000) // Limit input size
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
-      }
-
-      const data = await response.json();
-      
-      return {
-        ...chunk,
-        embedding: data.data[0].embedding
-      };
-      
-    } catch (error) {
-      console.error('Error generating embedding:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Search documents using semantic similarity
-   */
-  async searchDocuments(query, options = {}) {
-    try {
-      if (!query || !query.trim()) {
-        throw new Error('Search query is required');
-      }
-
-      console.log('Generating query embedding...');
-      const queryEmbedding = await this.generateQueryEmbedding(query);
-      
-      console.log('Searching documents...');
-      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
-        action: 'search',
-        query: queryEmbedding,
-        options: {
-          limit: options.limit || 10,
-          threshold: options.threshold || 0.7,
-          documentIds: options.documentIds || null
-        }
-      });
-      
-      return result;
-
-    } catch (error) {
-      console.error('Error searching documents:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Generate embedding for search query
-   */
-  async generateQueryEmbedding(query) {
-    try {
-      const response = await fetch('https://api.openai.com/v1/embeddings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.REACT_APP_OPENAI_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: this.embeddingModel,
-          input: query.substring(0, 8000) // Limit input size
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
-      }
-
-      const data = await response.json();
-      return data.data[0].embedding;
-
-    } catch (error) {
-      console.error('Error generating query embedding:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Get list of uploaded documents
    */
   async getDocuments() {
     try {
       console.log('Getting document list...');
       
-      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
-        action: 'list'
-      });
+      // Try simple RAG first
+      let result;
+      try {
+        result = await this.makeAuthenticatedRequest(this.simpleUrl, {
+          action: 'list'
+        });
+      } catch (simpleError) {
+        console.warn('Simple RAG failed, trying full RAG:', simpleError);
+        result = await this.makeAuthenticatedRequest(this.apiUrl, {
+          action: 'list'
+        });
+      }
       
       return result.documents || [];
 
@@ -383,10 +342,20 @@ class RAGService {
     try {
       console.log('Deleting document:', documentId);
       
-      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
-        action: 'delete',
-        documentId
-      });
+      // Try simple RAG first
+      let result;
+      try {
+        result = await this.makeAuthenticatedRequest(this.simpleUrl, {
+          action: 'delete',
+          documentId
+        });
+      } catch (simpleError) {
+        console.warn('Simple RAG failed, trying full RAG:', simpleError);
+        result = await this.makeAuthenticatedRequest(this.apiUrl, {
+          action: 'delete',
+          documentId
+        });
+      }
       
       return result;
 
@@ -397,20 +366,46 @@ class RAGService {
   }
 
   /**
-   * Get user statistics
+   * Search documents using semantic similarity
    */
-  async getUserStats() {
+  async searchDocuments(query, options = {}) {
     try {
-      console.log('Getting user stats...');
+      if (!query || !query.trim()) {
+        throw new Error('Search query is required');
+      }
+
+      console.log('Searching documents for:', query);
       
-      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
-        action: 'stats'
-      });
+      // For testing, create a mock embedding
+      const mockEmbedding = new Array(1536).fill(0).map(() => Math.random() * 0.1);
+      
+      // Try simple RAG first
+      let result;
+      try {
+        result = await this.makeAuthenticatedRequest(this.simpleUrl, {
+          action: 'search',
+          query: mockEmbedding,
+          options: {
+            limit: options.limit || 10,
+            threshold: options.threshold || 0.7
+          }
+        });
+      } catch (simpleError) {
+        console.warn('Simple RAG search failed, trying full RAG:', simpleError);
+        result = await this.makeAuthenticatedRequest(this.apiUrl, {
+          action: 'search',
+          query: mockEmbedding,
+          options: {
+            limit: options.limit || 10,
+            threshold: options.threshold || 0.7
+          }
+        });
+      }
       
       return result;
 
     } catch (error) {
-      console.error('Error getting stats:', error);
+      console.error('Error searching documents:', error);
       throw error;
     }
   }
@@ -432,19 +427,14 @@ class RAGService {
 
       const ragPrompt = `You are AcceleraQA, an AI assistant specialized in pharmaceutical quality and compliance. 
 
-Use the following document context to answer the user's question. If the context contains relevant information, prioritize it in your response. If the context doesn't fully address the question, supplement with your general knowledge but clearly indicate what comes from the provided documents vs. your general knowledge.
+Use the following document context to answer the user's question:
 
 DOCUMENT CONTEXT:
-${context.substring(0, 15000)} ${context.length > 15000 ? '...[truncated]' : ''}
+${context.substring(0, 10000)} ${context.length > 10000 ? '...[truncated]' : ''}
 
 USER QUESTION: ${query}
 
-Provide a comprehensive answer that:
-1. Directly addresses the user's question
-2. References specific information from the provided documents when relevant
-3. Includes document names when citing information
-4. Supplements with general pharmaceutical quality knowledge when needed
-5. Maintains focus on practical implementation and current best practices`;
+Provide a comprehensive answer referencing the document content where relevant.`;
 
       const response = await openaiService.getChatResponse(ragPrompt);
       
