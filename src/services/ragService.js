@@ -361,3 +361,83 @@ Answer:`;
         }
       };
     }
+  }
+
+  async testUpload() {
+    try {
+      const testContent = `Test Document for AcceleraQA RAG System
+
+This is a small test document to verify the upload functionality works correctly.
+
+Key Topics:
+- Good Manufacturing Practice (GMP)
+- Quality Control Testing
+- Process Validation
+- Regulatory Compliance
+
+This test ensures the RAG system can process documents quickly without timeouts.`;
+
+      const testFile = new File([testContent], 'test-document.txt', { type: 'text/plain' });
+      
+      const result = await this.uploadDocument(testFile, {
+        category: 'test',
+        tags: ['test', 'upload-verification'],
+        testDocument: true
+      });
+      
+      return {
+        success: true,
+        uploadResult: result,
+        message: 'Test upload completed successfully'
+      };
+      
+    } catch (error) {
+      console.error('Test upload failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        message: 'Test upload failed'
+      };
+    }
+  }
+
+  async testSearch() {
+    try {
+      const searchResult = await this.searchDocuments('GMP quality manufacturing', {
+        limit: 5,
+        threshold: 0.2
+      });
+      
+      return {
+        success: true,
+        searchResult: searchResult,
+        message: `Search test completed - found ${searchResult.results?.length || 0} results`
+      };
+      
+    } catch (error) {
+      console.error('Test search failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        message: 'Test search failed'
+      };
+    }
+  }
+}
+
+// Create singleton instance
+const ragService = new RAGService();
+
+export default ragService;
+
+// Export convenience functions
+export const uploadDocument = (file, metadata) => ragService.uploadDocument(file, metadata);
+export const searchDocuments = (query, options) => ragService.searchDocuments(query, options);
+export const getDocuments = () => ragService.getDocuments();
+export const deleteDocument = (documentId) => ragService.deleteDocument(documentId);
+export const generateRAGResponse = (query, searchResults) => ragService.generateRAGResponse(query, searchResults);
+export const testConnection = () => ragService.testConnection();
+export const getStats = () => ragService.getStats();
+export const runDiagnostics = () => ragService.runDiagnostics();
+export const testUpload = () => ragService.testUpload();
+export const testSearch = () => ragService.testSearch();
