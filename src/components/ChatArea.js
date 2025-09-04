@@ -31,15 +31,15 @@ const ChatArea = memo(({
   };
 
   return (
-    <div className="lg:col-span-2 bg-gray-900/60 backdrop-blur-sm rounded-lg border border-gray-700 flex flex-col shadow-lg h-full text-gray-100">
+    <div className="lg:col-span-2 rounded-lg border border-gray-200 p-6 h-full shadow-sm bg-gray-900/60 backdrop-blur-sm flex flex-col text-gray-100">
       {/* Chat Messages - Scrollable window that grows with available space */}
-      <div className="flex-1 h-full overflow-y-auto p-8 space-y-6 min-h-0" style={{ scrollBehavior: 'smooth' }}>
+      <div className="flex-1 h-full overflow-y-auto p-8 space-y-6 min-h-0 bg-white text-gray-900" style={{ scrollBehavior: 'smooth' }}>
           {messages.length === 0 ? (
             <div className="text-center py-16">
               <div className="w-16 h-16 bg-gradient-to-r from-primary to-primary-light rounded-lg mx-auto mb-6 flex items-center justify-center">
                 <MessageSquare className="h-8 w-8 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-100 mb-4">Welcome to AcceleraQA</h3>
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">Welcome to AcceleraQA</h3>
               <p className="text-gray-400 mb-8 text-lg">
                 Ask questions about pharmaceutical quality and compliance topics
               </p>
