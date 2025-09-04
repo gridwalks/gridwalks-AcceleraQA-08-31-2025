@@ -1,5 +1,5 @@
-// netlify/functions/conversations-blob.js - Conversations with Netlify Blob
-const { getStore } = require('@netlify/blobs');
+// netlify/functions/conversations-blob.js - Fixed with ES modules
+import { getStore } from '@netlify/blobs';
 
 // Get blob store for conversations
 const getConversationStore = () => getStore('conversations');
@@ -13,7 +13,7 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -142,6 +142,64 @@ async function saveConversation(userId, conversationData) {
   } catch (error) {
     console.error('Error saving conversation:', error);
     throw error;
+  }
+}
+
+/**
+ * Update user conversation statistics
+ */
+async function updateUserConversationStats(userId, deltas) {
+  try {
+    const userStore = getUserStore();
+    const statsKey = `${userId}/conversation_stats`;
+    
+    // Get current stats
+    const currentStatsData = await userStore.get(statsKey);
+    let stats = {
+      conversations: 0,
+      messages: 0,
+      ragConversations: 0,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    if (currentStatsData) {
+      stats = { ...stats, ...JSON.parse(currentStatsData) };
+    }
+    
+    // Update stats with deltas
+    Object.keys(deltas).forEach(key => {
+      stats[key] = Math.max(0, (stats[key] || 0) + deltas[key]);
+    });
+    
+    stats.lastUpdated = new Date().toISOString();
+    
+    // Save updated stats
+    await userStore.set(statsKey, JSON.stringify(stats));
+  } catch (error) {
+    console.warn('Error updating user conversation stats:', error);
+  }
+}
+
+/**
+ * Reset user conversation statistics
+ */
+async function resetUserConversationStats(userId) {
+  try {
+    const userStore = getUserStore();
+    const statsKey = `${userId}/conversation_stats`;
+    
+    const resetStats = {
+      conversations: 0,
+      messages: 0,
+      ragConversations: 0,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    await userStore.set(statsKey, JSON.stringify(resetStats));
+  } catch (error) {
+    console.warn('Error resetting user conversation stats:', error);
+  }
+};
   }
 }
 
@@ -304,62 +362,4 @@ async function getConversationStats(userId) {
     };
   } catch (error) {
     console.error('Error getting conversation stats:', error);
-    throw error;
-  }
-}
-
-/**
- * Update user conversation statistics
- */
-async function updateUserConversationStats(userId, deltas) {
-  try {
-    const userStore = getUserStore();
-    const statsKey = `${userId}/conversation_stats`;
-    
-    // Get current stats
-    const currentStatsData = await userStore.get(statsKey);
-    let stats = {
-      conversations: 0,
-      messages: 0,
-      ragConversations: 0,
-      lastUpdated: new Date().toISOString()
-    };
-    
-    if (currentStatsData) {
-      stats = { ...stats, ...JSON.parse(currentStatsData) };
-    }
-    
-    // Update stats with deltas
-    Object.keys(deltas).forEach(key => {
-      stats[key] = Math.max(0, (stats[key] || 0) + deltas[key]);
-    });
-    
-    stats.lastUpdated = new Date().toISOString();
-    
-    // Save updated stats
-    await userStore.set(statsKey, JSON.stringify(stats));
-  } catch (error) {
-    console.warn('Error updating user conversation stats:', error);
-  }
-}
-
-/**
- * Reset user conversation statistics
- */
-async function resetUserConversationStats(userId) {
-  try {
-    const userStore = getUserStore();
-    const statsKey = `${userId}/conversation_stats`;
-    
-    const resetStats = {
-      conversations: 0,
-      messages: 0,
-      ragConversations: 0,
-      lastUpdated: new Date().toISOString()
-    };
-    
-    await userStore.set(statsKey, JSON.stringify(resetStats));
-  } catch (error) {
-    console.warn('Error resetting user conversation stats:', error);
-  }
-}
+    throw error
