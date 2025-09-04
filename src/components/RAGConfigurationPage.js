@@ -1,4 +1,4 @@
-// src/components/RAGConfigurationPage.js
+// src/components/RAGConfigurationPage.js - Improved with debugging
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Upload, 
@@ -13,7 +13,8 @@ import {
   Loader,
   X,
   Eye,
-  BarChart3
+  BarChart3,
+  Bug
 } from 'lucide-react';
 import ragService from '../services/ragService';
 
@@ -27,6 +28,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [activeTab, setActiveTab] = useState('documents');
   const [error, setError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
   const [uploadMetadata, setUploadMetadata] = useState({
     title: '',
     description: '',
@@ -37,7 +39,24 @@ const RAGConfigurationPage = ({ user, onClose }) => {
   // Load documents on component mount
   useEffect(() => {
     loadDocuments();
+    testConnection();
   }, []);
+
+  const testConnection = async () => {
+    try {
+      console.log('Testing RAG function connection...');
+      const result = await ragService.testConnection();
+      setDebugInfo(result);
+      
+      if (!result.success) {
+        setError(`Connection test failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Connection test error:', error);
+      setDebugInfo({ success: false, error: error.message });
+      setError(`Connection test failed: ${error.message}`);
+    }
+  };
 
   const loadDocuments = useCallback(async () => {
     setIsLoading(true);
@@ -46,9 +65,10 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     try {
       const docs = await ragService.getDocuments();
       setDocuments(docs);
+      console.log('Loaded documents:', docs);
     } catch (error) {
       console.error('Error loading documents:', error);
-      setError('Failed to load documents. Please try again.');
+      setError(`Failed to load documents: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -76,11 +96,15 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     setError(null);
 
     try {
+      console.log('Starting upload process...');
+      
       // Prepare metadata
       const metadata = {
         ...uploadMetadata,
         tags: uploadMetadata.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
       };
+
+      console.log('Upload metadata:', metadata);
 
       const result = await ragService.uploadDocument(selectedFile, metadata);
       
@@ -109,8 +133,9 @@ const RAGConfigurationPage = ({ user, onClose }) => {
       console.error('Error uploading document:', error);
       setUploadStatus({ 
         type: 'error', 
-        message: error.message || 'Failed to upload document' 
+        message: `Upload failed: ${error.message}` 
       });
+      setError(`Upload failed: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -130,7 +155,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
       
     } catch (error) {
       console.error('Error deleting document:', error);
-      setError(`Failed to delete "${filename}". Please try again.`);
+      setError(`Failed to delete "${filename}": ${error.message}`);
     }
   };
 
@@ -144,20 +169,23 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     setError(null);
 
     try {
+      console.log('Searching for:', searchQuery);
+      
       const results = await ragService.searchDocuments(searchQuery, {
         limit: 20,
         threshold: 0.6
       });
       
+      console.log('Search results:', results);
       setSearchResults(results.results || []);
       
-      if (results.results.length === 0) {
+      if (!results.results || results.results.length === 0) {
         setError('No relevant documents found for your query');
       }
       
     } catch (error) {
       console.error('Error searching documents:', error);
-      setError('Failed to search documents. Please try again.');
+      setError(`Search failed: ${error.message}`);
       setSearchResults([]);
     } finally {
       setIsSearching(false);
@@ -174,13 +202,15 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     setError(null);
 
     try {
+      console.log('Testing RAG with query:', searchQuery);
+      
       // First search for relevant documents
       const searchResults = await ragService.searchDocuments(searchQuery, {
         limit: 5,
         threshold: 0.7
       });
 
-      if (searchResults.results.length === 0) {
+      if (!searchResults.results || searchResults.results.length === 0) {
         setError('No relevant documents found to generate response');
         return;
       }
@@ -228,7 +258,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
       
     } catch (error) {
       console.error('Error testing RAG:', error);
-      setError('Failed to test RAG response. Please try again.');
+      setError(`RAG test failed: ${error.message}`);
     } finally {
       setIsSearching(false);
     }
@@ -270,6 +300,25 @@ const RAGConfigurationPage = ({ user, onClose }) => {
           </button>
         </div>
 
+        {/* Debug Info */}
+        {debugInfo && (
+          <div className={`p-4 border-b ${debugInfo.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+            <div className="flex items-center space-x-2">
+              {debugInfo.success ? (
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-red-600" />
+              )}
+              <span className={`text-sm font-medium ${debugInfo.success ? 'text-green-800' : 'text-red-800'}`}>
+                Function Status: {debugInfo.success ? 'Connected' : 'Error'}
+              </span>
+            </div>
+            {!debugInfo.success && (
+              <p className="text-sm text-red-700 mt-1">Error: {debugInfo.error}</p>
+            )}
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="border-b border-gray-200">
           <nav className="flex space-x-8 px-6" aria-label="Tabs">
@@ -300,23 +349,23 @@ const RAGConfigurationPage = ({ user, onClose }) => {
               </div>
             </button>
             <button
-              onClick={() => setActiveTab('settings')}
+              onClick={() => setActiveTab('debug')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'settings'
+                activeTab === 'debug'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               <div className="flex items-center space-x-2">
-                <Settings className="h-4 w-4" />
-                <span>Settings</span>
+                <Bug className="h-4 w-4" />
+                <span>Debug</span>
               </div>
             </button>
           </nav>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-220px)]">
           {/* Error Display */}
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
@@ -382,23 +431,23 @@ const RAGConfigurationPage = ({ user, onClose }) => {
               <div className="bg-gray-50 p-6 rounded-lg">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center space-x-2">
                   <Upload className="h-5 w-5" />
-                  <span>Upload Document</span>
+                  <span>Upload Document (Simplified for Testing)</span>
                 </h3>
                 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select File
+                      Select File (Text files work best for testing)
                     </label>
                     <input
                       id="file-upload"
                       type="file"
-                      accept=".pdf,.doc,.docx,.txt"
+                      accept=".txt,.pdf,.doc,.docx"
                       onChange={handleFileSelect}
                       className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Supported formats: PDF, DOC, DOCX, TXT (max 10MB)
+                      For testing: TXT files work best. PDF/DOC will use placeholder text.
                     </p>
                   </div>
 
@@ -434,32 +483,6 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                         <option value="sop">SOP</option>
                         <option value="training">Training</option>
                       </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Description
-                      </label>
-                      <textarea
-                        value={uploadMetadata.description}
-                        onChange={(e) => setUploadMetadata(prev => ({ ...prev, description: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        rows={3}
-                        placeholder="Brief description of the document"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Tags
-                      </label>
-                      <input
-                        type="text"
-                        value={uploadMetadata.tags}
-                        onChange={(e) => setUploadMetadata(prev => ({ ...prev, tags: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Comma-separated tags"
-                      />
                     </div>
                   </div>
                 </div>
@@ -643,91 +666,92 @@ const RAGConfigurationPage = ({ user, onClose }) => {
             </div>
           )}
 
-          {/* Settings Tab */}
-          {activeTab === 'settings' && (
+          {/* Debug Tab */}
+          {activeTab === 'debug' && (
             <div className="space-y-6">
               <div className="bg-gray-50 p-6 rounded-lg">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center space-x-2">
-                  <Settings className="h-5 w-5" />
-                  <span>RAG Settings</span>
+                  <Bug className="h-5 w-5" />
+                  <span>Debug Information</span>
                 </h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Search Similarity Threshold
-                      </label>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="0.95"
-                        step="0.05"
-                        className="w-full"
-                        defaultValue="0.7"
-                      />
-                      <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>Less Strict (0.5)</span>
-                        <span>More Strict (0.95)</span>
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium text-gray-800 mb-2">Connection Test</h4>
+                    <button
+                      onClick={testConnection}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      Run Connection Test
+                    </button>
+                    
+                    {debugInfo && (
+                      <div className="mt-3 p-3 bg-white border rounded-md">
+                        <pre className="text-xs text-gray-600 whitespace-pre-wrap">
+                          {JSON.stringify(debugInfo, null, 2)}
+                        </pre>
                       </div>
-                    </div>
+                    )}
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Maximum Results
-                      </label>
-                      <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <option value="5">5 results</option>
-                        <option value="10" selected>10 results</option>
-                        <option value="20">20 results</option>
-                        <option value="50">50 results</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Chunk Size
-                      </label>
-                      <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <option value="500">500 characters</option>
-                        <option value="1000" selected>1000 characters</option>
-                        <option value="1500">1500 characters</option>
-                        <option value="2000">2000 characters</option>
-                      </select>
+                  <div>
+                    <h4 className="font-medium text-gray-800 mb-2">User Information</h4>
+                    <div className="p-3 bg-white border rounded-md">
+                      <p className="text-sm"><strong>User ID:</strong> {user?.sub || 'Not available'}</p>
+                      <p className="text-sm"><strong>Email:</strong> {user?.email || 'Not available'}</p>
+                      <p className="text-sm"><strong>Name:</strong> {user?.name || 'Not available'}</p>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <h4 className="font-medium text-blue-900 mb-2">RAG Statistics</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-blue-700">Total Documents:</span>
-                          <span className="font-medium text-blue-900">{documents.length}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-blue-700">Total Chunks:</span>
-                          <span className="font-medium text-blue-900">
-                            {documents.reduce((total, doc) => total + doc.chunks, 0)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-blue-700">Storage Used:</span>
-                          <span className="font-medium text-blue-900">
-                            {formatFileSize(documents.reduce((total, doc) => total + doc.size, 0))}
-                          </span>
-                        </div>
-                      </div>
+                  <div>
+                    <h4 className="font-medium text-gray-800 mb-2">Environment Check</h4>
+                    <div className="p-3 bg-white border rounded-md space-y-2">
+                      <p className="text-sm">
+                        <strong>OpenAI API Key:</strong> 
+                        <span className={process.env.REACT_APP_OPENAI_API_KEY ? 'text-green-600' : 'text-red-600'}>
+                          {process.env.REACT_APP_OPENAI_API_KEY ? ' ✓ Set' : ' ✗ Missing'}
+                        </span>
+                      </p>
+                      <p className="text-sm">
+                        <strong>Auth0 Domain:</strong> 
+                        <span className={process.env.REACT_APP_AUTH0_DOMAIN ? 'text-green-600' : 'text-red-600'}>
+                          {process.env.REACT_APP_AUTH0_DOMAIN ? ' ✓ Set' : ' ✗ Missing'}
+                        </span>
+                      </p>
+                      <p className="text-sm">
+                        <strong>Current URL:</strong> {window.location.origin}
+                      </p>
                     </div>
+                  </div>
 
-                    <div className="bg-yellow-50 p-4 rounded-lg">
-                      <h4 className="font-medium text-yellow-900 mb-2">Best Practices</h4>
-                      <ul className="text-sm text-yellow-800 space-y-1">
-                        <li>• Use descriptive filenames and titles</li>
-                        <li>• Add relevant tags and categories</li>
-                        <li>• Keep documents focused on specific topics</li>
-                        <li>• Test search queries regularly</li>
-                        <li>• Remove outdated documents</li>
+                  <div>
+                    <h4 className="font-medium text-gray-800 mb-2">Function Endpoints</h4>
+                    <div className="p-3 bg-white border rounded-md space-y-2">
+                      <p className="text-sm">
+                        <strong>RAG Function:</strong> 
+                        <code className="ml-2 px-2 py-1 bg-gray-100 rounded text-xs">
+                          {window.location.origin}/.netlify/functions/rag-blob
+                        </code>
+                      </p>
+                      <p className="text-sm">
+                        <strong>Test Function:</strong> 
+                        <code className="ml-2 px-2 py-1 bg-gray-100 rounded text-xs">
+                          {window.location.origin}/.netlify/functions/rag-test
+                        </code>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-medium text-gray-800 mb-2">Common 502 Causes</h4>
+                    <div className="p-3 bg-white border rounded-md">
+                      <ul className="text-sm space-y-1 text-gray-600">
+                        <li>• Function timeout (10 second limit)</li>
+                        <li>• Missing environment variables</li>
+                        <li>• Invalid return format from function</li>
+                        <li>• Package import errors</li>
+                        <li>• Authentication/authorization issues</li>
+                        <li>• Large payload sizes</li>
                       </ul>
                     </div>
                   </div>
