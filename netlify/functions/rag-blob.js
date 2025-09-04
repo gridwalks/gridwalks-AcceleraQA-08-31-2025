@@ -93,7 +93,6 @@ async function uploadDocument(userId, document) {
   try {
     const documentStore = getDocumentStore();
     const chunkStore = getChunkStore();
-    const userStore = getUserStore();
     
     const documentId = `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const timestamp = new Date().toISOString();
