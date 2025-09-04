@@ -1,7 +1,7 @@
 import React, { memo, useState, useEffect } from 'react';
-import { Download, Clock, MessageSquare, LogOut, User, Database, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Download, Clock, MessageSquare, LogOut, User, Database, AlertTriangle, CheckCircle, FileSearch } from 'lucide-react';
 import { handleLogout } from '../services/authService';
-import { getStorageStats, getStorageHealthReport, performStorageMaintenance, clearStorageData } from '../utils/storageUtils';
+import { getStorageStats, getStorageHealthReport, performStorageMaintenance, clearStorageData } from '../
 
 const Header = memo(({ 
   user, 
