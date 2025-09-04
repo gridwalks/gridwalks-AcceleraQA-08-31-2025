@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { Send, MessageSquare, FileText, Database } from 'lucide-react';
+import { Send, MessageSquare, FileText, Database, Cloud } from 'lucide-react';
 import { exportToWord } from '../utils/exportUtils';
 import { sanitizeMessageContent } from '../utils/messageUtils';
 
@@ -12,7 +12,8 @@ const ChatArea = memo(({
   handleKeyPress, 
   messagesEndRef,
   ragEnabled,
-  setRAGEnabled
+  setRAGEnabled,
+  isSaving = false
 }) => {
   const handleInputChange = (e) => {
     setInputMessage(e.target.value);
@@ -116,6 +117,12 @@ const ChatArea = memo(({
                           🔍 RAG Enhanced
                         </span>
                       )}
+                      {message.isStored && (
+                        <span className="text-xs text-green-400 font-medium flex items-center space-x-1">
+                          <Cloud className="h-3 w-3" />
+                          <span>Saved</span>
+                        </span>
+                      )}
                     </div>
 
                     {message.isStudyNotes && (
@@ -153,7 +160,7 @@ const ChatArea = memo(({
 
       {/* Input Area */}
       <div className="border-t border-gray-700 bg-gray-900 p-8 flex-shrink-0">
-        {/* RAG Toggle */}
+        {/* RAG Toggle and Save Status */}
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <button
@@ -177,6 +184,14 @@ const ChatArea = memo(({
               }
             </div>
           </div>
+
+          {/* Save Status Indicator */}
+          {isSaving && (
+            <div className="flex items-center space-x-2 text-blue-400 text-sm">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400" />
+              <span>Auto-saving to cloud...</span>
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="flex space-x-4">
@@ -190,7 +205,7 @@ const ChatArea = memo(({
                 : "Ask about GMP, validation, CAPA, regulations..."
               }
               className="w-full px-4 py-4 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-base text-gray-100 placeholder-gray-500 resize-none min-h-[60px] max-h-32"
-              disabled={isLoading}
+              disabled={isLoading || isSaving}
               rows={1}
               aria-label="Enter your pharmaceutical quality question"
             />
@@ -204,7 +219,7 @@ const ChatArea = memo(({
           
           <button
             type="submit"
-            disabled={isLoading || !inputMessage.trim()}
+            disabled={isLoading || isSaving || !inputMessage.trim()}
             className="px-8 py-4 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-primary-light flex-shrink-0"
             aria-label="Send message"
           >
@@ -213,26 +228,26 @@ const ChatArea = memo(({
         </form>
 
         {/* Quick action suggestions */}
-        {messages.length === 0 && (
+        {messages.length === 0 && !isLoading && (
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               onClick={() => setInputMessage("What are the key requirements for GMP compliance?")}
               className="text-sm px-3 py-1 bg-gray-800 border border-gray-700 text-gray-200 rounded-full hover:bg-gray-700 transition-colors"
-              disabled={isLoading}
+              disabled={isLoading || isSaving}
             >
               GMP compliance requirements
             </button>
             <button
               onClick={() => setInputMessage("How do I develop a validation master plan?")}
               className="text-sm px-3 py-1 bg-gray-800 border border-gray-700 text-gray-200 rounded-full hover:bg-gray-700 transition-colors"
-              disabled={isLoading}
+              disabled={isLoading || isSaving}
             >
               Validation master plan
             </button>
             <button
               onClick={() => setInputMessage("What is the CAPA process?")}
               className="text-sm px-3 py-1 bg-gray-800 border border-gray-700 text-gray-200 rounded-full hover:bg-gray-700 transition-colors"
-              disabled={isLoading}
+              disabled={isLoading || isSaving}
             >
               CAPA process
             </button>
@@ -240,7 +255,7 @@ const ChatArea = memo(({
               <button
                 onClick={() => setInputMessage("Search my documents for quality procedures")}
                 className="text-sm px-3 py-1 bg-blue-800 border border-blue-700 text-blue-200 rounded-full hover:bg-blue-700 transition-colors"
-                disabled={isLoading}
+                disabled={isLoading || isSaving}
               >
                 Search my documents
               </button>
