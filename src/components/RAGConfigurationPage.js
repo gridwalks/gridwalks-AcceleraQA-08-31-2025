@@ -1,4 +1,4 @@
-// src/components/RAGConfigurationPage.js - Improved with debugging
+// src/components/RAGConfigurationPage.js - Complete RAG configuration component
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Upload, 
@@ -36,7 +36,6 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     category: 'general'
   });
 
-  // Load documents on component mount
   useEffect(() => {
     loadDocuments();
     testConnection();
@@ -44,7 +43,6 @@ const RAGConfigurationPage = ({ user, onClose }) => {
 
   const testConnection = async () => {
     try {
-      console.log('Testing RAG function connection...');
       const result = await ragService.testConnection();
       setDebugInfo(result);
       
@@ -65,7 +63,6 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     try {
       const docs = await ragService.getDocuments();
       setDocuments(docs);
-      console.log('Loaded documents:', docs);
     } catch (error) {
       console.error('Error loading documents:', error);
       setError(`Failed to load documents: ${error.message}`);
@@ -80,7 +77,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
       setSelectedFile(file);
       setUploadMetadata(prev => ({
         ...prev,
-        title: file.name.replace(/\.[^/.]+$/, '') // Remove file extension
+        title: file.name.replace(/\.[^/.]+$/, '')
       }));
     }
   };
@@ -96,15 +93,10 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     setError(null);
 
     try {
-      console.log('Starting upload process...');
-      
-      // Prepare metadata
       const metadata = {
         ...uploadMetadata,
         tags: uploadMetadata.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
       };
-
-      console.log('Upload metadata:', metadata);
 
       const result = await ragService.uploadDocument(selectedFile, metadata);
       
@@ -113,7 +105,6 @@ const RAGConfigurationPage = ({ user, onClose }) => {
         message: `Successfully uploaded "${selectedFile.name}" with ${result.chunks} chunks processed` 
       });
       
-      // Clear form
       setSelectedFile(null);
       setUploadMetadata({
         title: '',
@@ -122,11 +113,9 @@ const RAGConfigurationPage = ({ user, onClose }) => {
         category: 'general'
       });
       
-      // Reset file input
       const fileInput = document.getElementById('file-upload');
       if (fileInput) fileInput.value = '';
       
-      // Reload documents
       await loadDocuments();
       
     } catch (error) {
@@ -149,8 +138,6 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     try {
       await ragService.deleteDocument(documentId);
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
-      
-      // Clear search results if they contain the deleted document
       setSearchResults(prev => prev.filter(result => result.documentId !== documentId));
       
     } catch (error) {
@@ -169,14 +156,11 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     setError(null);
 
     try {
-      console.log('Searching for:', searchQuery);
-      
       const results = await ragService.searchDocuments(searchQuery, {
         limit: 20,
-        threshold: 0.6
+        threshold: 0.3
       });
       
-      console.log('Search results:', results);
       setSearchResults(results.results || []);
       
       if (!results.results || results.results.length === 0) {
@@ -202,12 +186,9 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     setError(null);
 
     try {
-      console.log('Testing RAG with query:', searchQuery);
-      
-      // First search for relevant documents
       const searchResults = await ragService.searchDocuments(searchQuery, {
         limit: 5,
-        threshold: 0.7
+        threshold: 0.4
       });
 
       if (!searchResults.results || searchResults.results.length === 0) {
@@ -215,10 +196,8 @@ const RAGConfigurationPage = ({ user, onClose }) => {
         return;
       }
 
-      // Generate RAG response
       const ragResponse = await ragService.generateRAGResponse(searchQuery, searchResults.results);
       
-      // Show results in a modal or new tab
       const newWindow = window.open('', '_blank');
       newWindow.document.write(`
         <!DOCTYPE html>
@@ -431,13 +410,13 @@ const RAGConfigurationPage = ({ user, onClose }) => {
               <div className="bg-gray-50 p-6 rounded-lg">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center space-x-2">
                   <Upload className="h-5 w-5" />
-                  <span>Upload Document (Simplified for Testing)</span>
+                  <span>Upload Document (Fast Processing)</span>
                 </h3>
                 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select File (Text files work best for testing)
+                      Select File (Text files work best)
                     </label>
                     <input
                       id="file-upload"
@@ -447,7 +426,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                       className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      For testing: TXT files work best. PDF/DOC will use placeholder text.
+                      Fast processing mode: instant upload with text-based search
                     </p>
                   </div>
 
@@ -561,9 +540,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                         <div className="text-sm text-gray-600 space-y-1">
                           <p><span className="font-medium">Category:</span> {doc.metadata?.category || 'General'}</p>
                           <p><span className="font-medium">Uploaded:</span> {new Date(doc.createdAt).toLocaleDateString()}</p>
-                          {doc.metadata?.description && (
-                            <p><span className="font-medium">Description:</span> {doc.metadata.description}</p>
-                          )}
+                          <p><span className="font-medium">Search Type:</span> Text-based</p>
                           {doc.metadata?.tags && doc.metadata.tags.length > 0 && (
                             <div className="flex items-center space-x-1 mt-2">
                               <span className="font-medium">Tags:</span>
@@ -628,7 +605,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                 </div>
 
                 <p className="text-sm text-gray-600">
-                  Search your uploaded documents using semantic similarity. "Test RAG" will generate an AI response using the search results as context.
+                  Search your uploaded documents using fast text-based matching. "Test RAG" will generate an AI response using the search results as context.
                 </p>
               </div>
 
@@ -730,28 +707,22 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                       <p className="text-sm">
                         <strong>RAG Function:</strong> 
                         <code className="ml-2 px-2 py-1 bg-gray-100 rounded text-xs">
-                          {window.location.origin}/.netlify/functions/rag-blob
-                        </code>
-                      </p>
-                      <p className="text-sm">
-                        <strong>Test Function:</strong> 
-                        <code className="ml-2 px-2 py-1 bg-gray-100 rounded text-xs">
-                          {window.location.origin}/.netlify/functions/rag-test
+                          {window.location.origin}/.netlify/functions/rag-fast
                         </code>
                       </p>
                     </div>
                   </div>
 
                   <div>
-                    <h4 className="font-medium text-gray-800 mb-2">Common 502 Causes</h4>
+                    <h4 className="font-medium text-gray-800 mb-2">System Capabilities</h4>
                     <div className="p-3 bg-white border rounded-md">
                       <ul className="text-sm space-y-1 text-gray-600">
-                        <li>• Function timeout (10 second limit)</li>
-                        <li>• Missing environment variables</li>
-                        <li>• Invalid return format from function</li>
-                        <li>• Package import errors</li>
-                        <li>• Authentication/authorization issues</li>
-                        <li>• Large payload sizes</li>
+                        <li>✅ Instant document upload</li>
+                        <li>✅ Text-based search</li>
+                        <li>✅ RAG response generation</li>
+                        <li>✅ Fast processing (no timeouts)</li>
+                        <li>❌ Semantic embeddings (disabled for speed)</li>
+                        <li>❌ Persistent storage (memory-based)</li>
                       </ul>
                     </div>
                   </div>
