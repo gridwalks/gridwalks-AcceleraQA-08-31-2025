@@ -1,14 +1,18 @@
+// src/components/Header.js - Updated to include RAG configuration button
 import React, { memo, useState, useEffect } from 'react';
 import { Download, Clock, MessageSquare, LogOut, User, Database, AlertTriangle, CheckCircle, FileSearch } from 'lucide-react';
 import { handleLogout } from '../services/authService';
-import { getStorageStats, getStorageHealthReport, performStorageMaintenance, clearStorageData } from '../
+import { getStorageStats, getStorageHealthReport, performStorageMaintenance, clearStorageData } from '../utils/storageUtils';
 
 const Header = memo(({ 
   user, 
   showNotebook, 
   setShowNotebook, 
   clearChat, 
-  exportNotebook 
+  exportNotebook,
+  clearAllConversations,
+  isServerAvailable,
+  onShowRAGConfig // New prop for showing RAG configuration
 }) => {
   const [storageInfo, setStorageInfo] = useState(null);
   const [showStorageMenu, setShowStorageMenu] = useState(false);
@@ -52,6 +56,12 @@ const Header = memo(({
     } catch (error) {
       console.error('Logout failed:', error);
       // Could show toast notification here
+    }
+  };
+
+  const handleRAGConfigClick = () => {
+    if (onShowRAGConfig) {
+      onShowRAGConfig();
     }
   };
 
@@ -143,17 +153,12 @@ const Header = memo(({
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-4">
             <div className="flex items-center">
-
               <img
                 src="/AceleraQA_logo.png"
                 alt="AcceleraQA logo"
                 width="180"
                 height="20"
               />
-
-            </div>
-            <div className="hidden md:block text-sm text-primary-light/70">
-             
             </div>
           </div>
           
@@ -165,6 +170,17 @@ const Header = memo(({
                 {user?.email || user?.name || 'User'}
               </span>
             </div>
+
+            {/* RAG Configuration Button */}
+            <button
+              onClick={handleRAGConfigClick}
+              className="flex items-center space-x-2 px-4 py-2 bg-purple-600 rounded hover:bg-purple-700 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500"
+              aria-label="Configure RAG search"
+              title="Configure document search and RAG capabilities"
+            >
+              <FileSearch className="h-4 w-4" />
+              <span className="hidden sm:block">RAG Config</span>
+            </button>
 
             {/* Storage Status Dropdown */}
             <div className="relative">
@@ -369,3 +385,409 @@ const Header = memo(({
 Header.displayName = 'Header';
 
 export default Header;
+
+// ===========================================
+// src/App.js - Updated to integrate RAG functionality
+// ===========================================
+
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+
+// Components
+import Header from './components/Header';
+import ChatArea from './components/ChatArea';
+import Sidebar from './components/Sidebar';
+import AuthScreen from './components/AuthScreen';
+import LoadingScreen from './components/LoadingScreen';
+import ErrorBoundary from './components/ErrorBoundary';
+import RAGConfigurationPage from './components/RAGConfigurationPage'; // New import
+
+// Services
+import openaiService from './services/openaiService';
+import conversationService from './services/conversationService';
+import ragService from './services/ragService'; // New import
+import { initializeAuth } from './services/authService';
+
+// Utils
+import { exportNotebook } from './utils/exportUtils';
+import { 
+  getMessagesByDays, 
+  createMessage, 
+  combineMessagesIntoConversations,
+  mergeCurrentAndStoredMessages 
+} from './utils/messageUtils';
+import { validateEnvironment, DEFAULT_RESOURCES } from './config/constants';
+
+const AcceleraQA = () => {
+  // State management
+  const [messages, setMessages] = useState([]); // Current session messages
+  const [storedMessages, setStoredMessages] = useState([]); // Messages from server
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentResources, setCurrentResources] = useState([]);
+  const [showNotebook, setShowNotebook] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState(new Set());
+  const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
+  const [user, setUser] = useState(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [error, setError] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [isServerAvailable, setIsServerAvailable] = useState(true);
+  const [showRAGConfig, setShowRAGConfig] = useState(false); // New state for RAG config modal
+  const [ragEnabled, setRAGEnabled] = useState(false); // New state for RAG toggle
+  
+  const messagesEndRef = useRef(null);
+
+  // Memoized values - combine current and stored messages for notebook display
+  const allMessages = useMemo(() => 
+    mergeCurrentAndStoredMessages(messages, storedMessages), 
+    [messages, storedMessages]
+  );
+
+  const thirtyDayMessages = useMemo(() => 
+    getMessagesByDays(allMessages), 
+    [allMessages]
+  );
+
+  // Load stored conversations when component mounts and user is authenticated
+  useEffect(() => {
+    const loadStoredConversations = async () => {
+      if (!user || isInitialized) return;
+
+      try {
+        console.log('=== LOADING CONVERSATIONS FROM SERVER ===');
+        console.log('User:', user.email || user.sub);
+        
+        // Check if server is available
+        const serviceAvailable = await conversationService.isServiceAvailable();
+        setIsServerAvailable(serviceAvailable);
+        
+        if (!serviceAvailable) {
+          console.warn('Server-side conversation service not available, using session-only mode');
+          initializeWelcomeMessage();
+          setIsInitialized(true);
+          return;
+        }
+        
+        // Load conversations from server
+        const loadedMessages = await conversationService.loadConversations();
+        
+        if (loadedMessages && loadedMessages.length > 0) {
+          console.log(`Successfully loaded ${loadedMessages.length} messages from server`);
+          setStoredMessages(loadedMessages);
+          
+          // Set current resources from the last AI message
+          const lastAiMessage = loadedMessages
+            .filter(msg => msg.type === 'ai' && msg.resources && msg.resources.length > 0)
+            .pop();
+          
+          if (lastAiMessage) {
+            setCurrentResources(lastAiMessage.resources);
+          } else {
+            setCurrentResources(DEFAULT_RESOURCES);
+          }
+        } else {
+          console.log('No stored conversations found, initializing welcome message');
+          initializeWelcomeMessage();
+        }
+        
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Error loading stored conversations:', error);
+        setIsServerAvailable(false);
+        // If loading fails, initialize with welcome message
+        initializeWelcomeMessage();
+        setIsInitialized(true);
+      }
+    };
+
+    if (user && !isInitialized) {
+      loadStoredConversations();
+    }
+  }, [user, isInitialized]);
+
+  // Auto-save conversation to server when session ends or after multiple messages
+  useEffect(() => {
+    const saveConversationToServer = async () => {
+      if (!user || !isInitialized || !isServerAvailable || messages.length === 0) return;
+      
+      // Only save if we have at least 2 messages (user + ai response)
+      if (messages.length < 2) return;
+      
+      // Don't save if only welcome message
+      const nonWelcomeMessages = messages.filter(msg => 
+        !(msg.type === 'ai' && msg.content.includes('Welcome to AcceleraQA'))
+      );
+      
+      if (nonWelcomeMessages.length === 0) return;
+
+      try {
+        console.log('Auto-saving conversation to server...', { messageCount: messages.length });
+        
+        const metadata = {
+          sessionId: Date.now().toString(),
+          userAgent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+          ragEnabled: ragEnabled
+        };
+        
+        await conversationService.saveConversation(messages, metadata);
+        console.log('Conversation auto-saved successfully');
+      } catch (error) {
+        console.error('Failed to auto-save conversation:', error);
+        // Don't show error to user for background saves
+      }
+    };
+
+    // Debounce saves to avoid excessive server calls
+    const timeoutId = setTimeout(saveConversationToServer, 5000); // Save after 5 seconds of inactivity
+    return () => clearTimeout(timeoutId);
+  }, [messages, user, isInitialized, isServerAvailable, ragEnabled]);
+
+  // Initialize environment and authentication
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        // Validate environment variables
+        if (!validateEnvironment()) {
+          setError('Application configuration is incomplete. Please check environment variables.');
+          setIsLoadingAuth(false);
+          return;
+        }
+
+        // Initialize authentication
+        await initializeAuth(setUser, setIsLoadingAuth, () => {
+          // Don't auto-initialize welcome message here
+          // Let the conversation loading effect handle it
+        });
+      } catch (error) {
+        console.error('Initialization failed:', error);
+        setError('Failed to initialize application. Please refresh the page.');
+        setIsLoadingAuth(false);
+      }
+    };
+
+    initialize();
+  }, []);
+
+  // Auto-scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Initialize welcome message for authenticated users
+  const initializeWelcomeMessage = useCallback(() => {
+    const welcomeMessage = createMessage(
+      'ai',
+      'Welcome to AcceleraQA! I\'m your pharmaceutical quality and compliance AI assistant. I specialize in GMP, validation, CAPA, regulatory requirements, and quality risk management. \n\n💡 **New Feature**: RAG Search is now available! Upload your documents using the "RAG Config" button to search and get answers directly from your own documents.\n\nHow can I help you today?',
+      DEFAULT_RESOURCES
+    );
+    
+    setMessages([welcomeMessage]);
+    setCurrentResources(DEFAULT_RESOURCES);
+  }, []);
+
+  // Enhanced message handling with RAG capability
+  const handleSendMessage = useCallback(async () => {
+    if (!inputMessage.trim() || isLoading) return;
+
+    const userMessage = createMessage('user', inputMessage);
+    const currentInput = inputMessage.trim();
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      let response;
+      
+      // Check if RAG should be used for this query
+      if (ragEnabled) {
+        try {
+          // Search for relevant documents
+          const searchResults = await ragService.searchDocuments(currentInput, {
+            limit: 5,
+            threshold: 0.7
+          });
+
+          if (searchResults.results && searchResults.results.length > 0) {
+            // Use RAG response with document context
+            response = await ragService.generateRAGResponse(currentInput, searchResults.results);
+          } else {
+            // No relevant documents found, use standard response
+            response = await openaiService.getChatResponse(currentInput);
+          }
+        } catch (ragError) {
+          console.warn('RAG search failed, falling back to standard response:', ragError);
+          response = await openaiService.getChatResponse(currentInput);
+        }
+      } else {
+        // Standard OpenAI response
+        response = await openaiService.getChatResponse(currentInput);
+      }
+      
+      const aiMessage = createMessage(
+        'ai',
+        response.answer,
+        response.resources
+      );
+
+      setMessages(prev => [...prev, aiMessage]);
+      setCurrentResources(response.resources);
+
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      
+      const errorMessage = createMessage(
+        'ai',
+        error.message,
+        [
+          { title: "OpenAI API Documentation", type: "Documentation", url: "https://platform.openai.com/docs/api-reference" },
+          { title: "OpenAI API Key Management", type: "Dashboard", url: "https://platform.openai.com/account/api-keys" },
+          { title: "OpenAI Usage Dashboard", type: "Dashboard", url: "https://platform.openai.com/account/usage" }
+        ]
+      );
+      
+      setMessages(prev => [...prev, errorMessage]);
+      setCurrentResources(errorMessage.resources);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [inputMessage, isLoading, ragEnabled]);
+
+  // Handle input key press
+  const handleKeyPress = useCallback((event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      handleSendMessage();
+    }
+  }, [handleSendMessage]);
+
+  // Clear chat history with server cleanup
+  const clearChat = useCallback(async () => {
+    try {
+      console.log('Clearing chat history...');
+      
+      // Save current conversation before clearing (if it has content)
+      if (messages.length > 1 && isServerAvailable) {
+        try {
+          await conversationService.saveConversation(messages, {
+            clearedAt: new Date().toISOString(),
+            reason: 'user_initiated_clear'
+          });
+        } catch (saveError) {
+          console.warn('Failed to save conversation before clearing:', saveError);
+        }
+      }
+      
+      // Clear local state
+      setMessages([]);
+      setStoredMessages([]);
+      setCurrentResources([]);
+      setSelectedMessages(new Set());
+      setError(null);
+      
+      // Initialize with welcome message
+      setTimeout(() => {
+        initializeWelcomeMessage();
+      }, 100);
+    } catch (error) {
+      console.error('Error clearing chat history:', error);
+      // Still clear local state even if server operations fail
+      setMessages([]);
+      setStoredMessages([]);
+      setCurrentResources([]);
+      setSelectedMessages(new Set());
+      setError(null);
+      initializeWelcomeMessage();
+    }
+  }, [messages, isServerAvailable, initializeWelcomeMessage]);
+
+  // Clear all conversations from server
+  const clearAllConversations = useCallback(async () => {
+    if (!isServerAvailable) return;
+    
+    const confirmed = window.confirm(
+      'Are you sure you want to delete all your conversation history from the server? This action cannot be undone.'
+    );
+    
+    if (confirmed) {
+      try {
+        await conversationService.clearConversations();
+        
+        // Also clear local state
+        setMessages([]);
+        setStoredMessages([]);
+        setCurrentResources([]);
+        setSelectedMessages(new Set());
+        
+        // Initialize with welcome message
+        initializeWelcomeMessage();
+        
+        alert('All conversations cleared successfully!');
+      } catch (error) {
+        console.error('Error clearing all conversations:', error);
+        alert('Failed to clear conversations. Please try again.');
+      }
+    }
+  }, [isServerAvailable, initializeWelcomeMessage]);
+
+  // Generate study notes from selected messages
+  const generateStudyNotes = useCallback(async () => {
+    if (selectedMessages.size === 0 || isGeneratingNotes) return;
+
+    setIsGeneratingNotes(true);
+    setError(null);
+
+    try {
+      // Get selected conversation data from allMessages
+      const selectedConversationData = allMessages.filter(msg => {
+        if (selectedMessages.has(msg.id)) return true;
+        const combinedId = `${msg.id}-combined`;
+        if (selectedMessages.has(combinedId)) return true;
+        return false;
+      });
+
+      // Also check for combined conversations from the notebook view
+      const allConversations = combineMessagesIntoConversations(allMessages);
+      const selectedCombinedConversations = allConversations.filter(conv => 
+        selectedMessages.has(conv.id)
+      );
+
+      // Flatten combined conversations back to individual messages
+      const messagesFromCombined = selectedCombinedConversations.flatMap(conv => {
+        const messages = [];
+        if (conv.originalUserMessage) messages.push(conv.originalUserMessage);
+        if (conv.originalAiMessage) messages.push(conv.originalAiMessage);
+        return messages;
+      });
+
+      // Combine all selected message data
+      const allSelectedMessages = [...selectedConversationData, ...messagesFromCombined];
+
+      // Remove duplicates based on message ID
+      const uniqueSelectedMessages = allSelectedMessages.reduce((acc, msg) => {
+        if (!acc.find(existing => existing.id === msg.id)) {
+          acc.push(msg);
+        }
+        return acc;
+      }, []);
+
+      if (uniqueSelectedMessages.length === 0) {
+        throw new Error('No valid messages found in selection. Please ensure you have selected conversations from the notebook.');
+      }
+
+      const response = await openaiService.generateStudyNotes(uniqueSelectedMessages);
+      
+      const studyNotesMessage = createMessage(
+        'ai',
+        `📚 **Study Notes Generated**\n\nBased on your selected conversations, here are comprehensive study notes:\n\n${response.answer}\n\n---\n*Study notes generated from ${selectedMessages.size} selected conversation items on ${new Date().toLocaleDateString()}*`,
+        response.resources,
+        true
+      );
+
+      // Add study notes data for export
+      studyNotesMessage.studyNotesData = {
+        content: response.answer,
+        selectedTopics: uniqueSelectedMessages
+          .filter(msg => msg.content && msg.type ===
