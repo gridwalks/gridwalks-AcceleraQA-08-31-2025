@@ -1,5 +1,5 @@
 // netlify/functions/conversations-blob.js - Conversations with Netlify Blob
-const { getStore } = require('@netlify/blob');
+const { getStore } = require('@netlify/blobs');
 
 // Get blob store for conversations
 const getConversationStore = () => getStore('conversations');
