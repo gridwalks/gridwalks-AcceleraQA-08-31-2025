@@ -437,4 +437,73 @@ code {
 
 .storage-health.healthy {
   background-color: #f0fdf4;
-  border: 1px solid #bbf7
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+}
+
+.storage-health.warning {
+  background-color: #fefce8;
+  border: 1px solid #fde047;
+  color: #ca8a04;
+}
+
+.storage-health.error {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
+/* Sync status animation */
+.sync-status {
+  position: relative;
+}
+
+.sync-status.syncing::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+  animation: syncSweep 2s infinite;
+}
+
+@keyframes syncSweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Message persistence indicator */
+.message-persistent {
+  position: relative;
+}
+
+.message-persistent::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #10b981;
+  box-shadow: 0 0 0 2px white;
+}
+
+.message-temporary::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #f59e0b;
+  box-shadow: 0 0 0 2px white;
+  animation: pulse 2s infinite;
+}
