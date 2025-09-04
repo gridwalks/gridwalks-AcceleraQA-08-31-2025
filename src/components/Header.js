@@ -1,6 +1,6 @@
-// src/components/Header.js - Fixed version without duplicate React import
-import React, { memo, useState, useEffect } from 'react';
-import { Download, Clock, MessageSquare, LogOut, User, Database, AlertTriangle, CheckCircle, FileSearch } from 'lucide-react';
+// src/components/Header.js - Without storage status indicator
+import React, { memo } from 'react';
+import { Download, Clock, MessageSquare, LogOut, User, AlertTriangle, FileSearch } from 'lucide-react';
 import { handleLogout } from '../services/authService';
 
 const Header = memo(({ 
@@ -11,10 +11,8 @@ const Header = memo(({
   exportNotebook,
   clearAllConversations,
   isServerAvailable,
-  onShowRAGConfig // New prop for showing RAG configuration
+  onShowRAGConfig
 }) => {
-  const [showStorageMenu, setShowStorageMenu] = useState(false);
-
   const handleToggleView = () => {
     setShowNotebook(!showNotebook);
   };
@@ -24,7 +22,6 @@ const Header = memo(({
       exportNotebook();
     } catch (error) {
       console.error('Export failed:', error);
-      // Could show toast notification here
     }
   };
 
@@ -33,7 +30,6 @@ const Header = memo(({
       await handleLogout();
     } catch (error) {
       console.error('Logout failed:', error);
-      // Could show toast notification here
     }
   };
 
@@ -95,12 +91,6 @@ const Header = memo(({
               <FileSearch className="h-4 w-4" />
               <span className="hidden sm:block">RAG Config</span>
             </button>
-
-            {/* Storage Status Indicator (Simplified) */}
-            <div className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-300">
-              <Database className="h-4 w-4" />
-              <span className="hidden sm:block">Storage</span>
-            </div>
             
             {/* Clear Chat */}
             <button
