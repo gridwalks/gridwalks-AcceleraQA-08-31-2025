@@ -25,13 +25,18 @@
   to = "/index.html"
   status = 200
 
-# API routes
+# API routes for Blob functions
 [[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  from = "/api/rag/*"
+  to = "/.netlify/functions/rag-blob"
   status = 200
 
-# Enhanced security headers for Auth0 compatibility
+[[redirects]]
+  from = "/api/conversations/*"
+  to = "/.netlify/functions/conversations-blob"
+  status = 200
+
+# Enhanced security headers
 [[headers]]
   for = "/*"
   [headers.values]
@@ -39,7 +44,7 @@
     X-XSS-Protection = "1; mode=block"  
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' https://*.auth0.com https://cdn.auth0.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.openai.com https://*.auth0.com https://*.auth0.io https://*.netlify.app https://db.fauna.com; font-src 'self'; frame-src https://*.auth0.com; worker-src 'self' blob:;"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://*.auth0.com https://cdn.auth0.com https://api.openai.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.openai.com https://*.auth0.com https://*.auth0.io https://*.netlify.app; font-src 'self'; frame-src https://*.auth0.com; worker-src 'self' blob:; object-src 'none';"
 
 # Cache static assets
 [[headers]]
@@ -47,10 +52,11 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# Function settings
+# Function settings - FIXED for Netlify Blob
 [functions]
-  external_node_modules = ["faunadb"]
+  external_node_modules = ["@netlify/blob", "mammoth"]
+  node_bundler = "zisi"
 
-# Build plugin for enhanced error reporting (optional)
-[[plugins]]
-  package = "@netlify/plugin-sitemap"
+# Enable Netlify Blob
+[blob]
+  enabled = true
