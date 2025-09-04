@@ -1,4 +1,4 @@
-// src/services/ragService.js - Fast version to avoid timeouts
+// src/services/ragService.js - Fixed version with proper syntax
 import openaiService from './openaiService';
 import { getToken } from './authService';
 
@@ -354,4 +354,163 @@ Answer:`;
       try {
         const searchResult = await this.searchDocuments('pharmaceutical quality', { limit: 3 });
         diagnostics.tests.search = {
-          success:
+          success: true,
+          resultsFound: searchResult.results?.length || 0,
+          searchType: searchResult.searchType || 'text-based'
+        };
+      } catch (error) {
+        diagnostics.tests.search = {
+          success: false,
+          error: error.message
+        };
+      }
+      
+      // Test stats
+      try {
+        const stats = await this.getStats();
+        diagnostics.tests.stats = {
+          success: true,
+          ...stats
+        };
+      } catch (error) {
+        diagnostics.tests.stats = {
+          success: false,
+          error: error.message
+        };
+      }
+      
+      // Overall health assessment
+      const successfulTests = Object.values(diagnostics.tests).filter(test => test.success).length;
+      const totalTests = Object.keys(diagnostics.tests).length;
+      
+      diagnostics.health = {
+        score: (successfulTests / totalTests) * 100,
+        status: successfulTests === totalTests ? 'healthy' : 
+                successfulTests > totalTests / 2 ? 'partial' : 'unhealthy',
+        mode: 'fast-processing',
+        features: {
+          instantUpload: true,
+          textSearch: true,
+          semanticSearch: false,
+          embeddingGeneration: false
+        },
+        recommendations: []
+      };
+      
+      if (!diagnostics.tests.connectivity?.success) {
+        diagnostics.health.recommendations.push('Check Netlify function deployment');
+      }
+      
+      if (!diagnostics.tests.search?.success) {
+        diagnostics.health.recommendations.push('Upload test documents to enable search testing');
+      }
+      
+      if (diagnostics.health.status === 'healthy') {
+        diagnostics.health.recommendations.push('System working well! Upload documents and try search functionality.');
+      }
+      
+      return diagnostics;
+      
+    } catch (error) {
+      console.error('Error running diagnostics:', error);
+      return {
+        timestamp: new Date().toISOString(),
+        mode: 'fast-processing',
+        health: {
+          score: 0,
+          status: 'error',
+          error: error.message
+        }
+      };
+    }
+  }
+
+  /**
+   * Quick upload test with small sample document
+   */
+  async testUpload() {
+    try {
+      console.log('Testing upload functionality...');
+      
+      // Create a small test file
+      const testContent = `Test Document for AcceleraQA RAG System
+
+This is a small test document to verify the upload functionality works correctly.
+
+Key Topics:
+- Good Manufacturing Practice (GMP)
+- Quality Control Testing
+- Process Validation
+- Regulatory Compliance
+
+This test ensures the RAG system can process documents quickly without timeouts.`;
+
+      const testFile = new File([testContent], 'test-document.txt', { type: 'text/plain' });
+      
+      const result = await this.uploadDocument(testFile, {
+        category: 'test',
+        tags: ['test', 'upload-verification'],
+        testDocument: true
+      });
+      
+      return {
+        success: true,
+        uploadResult: result,
+        message: 'Test upload completed successfully'
+      };
+      
+    } catch (error) {
+      console.error('Test upload failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        message: 'Test upload failed'
+      };
+    }
+  }
+
+  /**
+   * Quick search test
+   */
+  async testSearch() {
+    try {
+      console.log('Testing search functionality...');
+      
+      const searchResult = await this.searchDocuments('GMP quality manufacturing', {
+        limit: 5,
+        threshold: 0.2
+      });
+      
+      return {
+        success: true,
+        searchResult: searchResult,
+        message: `Search test completed - found ${searchResult.results?.length || 0} results`
+      };
+      
+    } catch (error) {
+      console.error('Test search failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        message: 'Test search failed'
+      };
+    }
+  }
+}
+
+// Create singleton instance
+const ragService = new RAGService();
+
+export default ragService;
+
+// Export convenience functions
+export const uploadDocument = (file, metadata) => ragService.uploadDocument(file, metadata);
+export const searchDocuments = (query, options) => ragService.searchDocuments(query, options);
+export const getDocuments = () => ragService.getDocuments();
+export const deleteDocument = (documentId) => ragService.deleteDocument(documentId);
+export const generateRAGResponse = (query, searchResults) => ragService.generateRAGResponse(query, searchResults);
+export const testConnection = () => ragService.testConnection();
+export const getStats = () => ragService.getStats();
+export const runDiagnostics = () => ragService.runDiagnostics();
+export const testUpload = () => ragService.testUpload();
+export const testSearch = () => ragService.testSearch();
