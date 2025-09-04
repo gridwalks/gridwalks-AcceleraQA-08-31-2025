@@ -1,12 +1,11 @@
-// netlify/functions/conversations.js
-const faunadb = require('faunadb');
+// netlify/functions/conversations.js - Updated for Neon PostgreSQL
+const { Pool } = require('pg');
 
-// Initialize FaunaDB client
-const client = new faunadb.Client({
-  secret: process.env.FAUNA_SECRET_KEY,
+// Initialize Neon PostgreSQL connection
+const pool = new Pool({
+  connectionString: process.env.NEON_DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
-
-const q = faunadb.query;
 
 // CORS headers for all responses
 const headers = {
@@ -26,8 +25,10 @@ exports.handler = async (event, context) => {
     };
   }
 
+  let client;
+
   try {
-    const { httpMethod, path, body } = event;
+    const { httpMethod, body } = event;
     const { user } = context.clientContext || {};
     
     // Extract user ID from Auth0 context
@@ -41,15 +42,21 @@ exports.handler = async (event, context) => {
       };
     }
 
+    // Get database connection
+    client = await pool.connect();
+
     switch (httpMethod) {
       case 'GET':
-        return await getConversations(userId);
+        if (event.path.endsWith('/stats')) {
+          return await getConversationStats(client, userId);
+        }
+        return await getConversations(client, userId);
       
       case 'POST':
-        return await saveConversation(userId, JSON.parse(body));
+        return await saveConversation(client, userId, JSON.parse(body));
       
       case 'DELETE':
-        return await deleteConversations(userId);
+        return await deleteConversations(client, userId);
       
       default:
         return {
@@ -59,7 +66,7 @@ exports.handler = async (event, context) => {
         };
     }
   } catch (error) {
-    console.error('Function error:', error);
+    console.error('Conversations Function error:', error);
     return {
       statusCode: 500,
       headers,
@@ -68,50 +75,17 @@ exports.handler = async (event, context) => {
         message: error.message 
       }),
     };
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 };
 
-async function getConversations(userId) {
-  try {
-    const result = await client.query(
-      q.Map(
-        q.Paginate(
-          q.Match(q.Index('conversations_by_user'), userId),
-          { size: 100 }
-        ),
-        q.Lambda('ref', q.Get(q.Var('ref')))
-      )
-    );
-
-    const conversations = result.data.map(doc => ({
-      id: doc.ref.id,
-      ...doc.data
-    }));
-
-    // Sort by timestamp (most recent first)
-    conversations.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        conversations,
-        total: conversations.length
-      }),
-    };
-  } catch (error) {
-    if (error.name === 'NotFound') {
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ conversations: [], total: 0 }),
-      };
-    }
-    throw error;
-  }
-}
-
-async function saveConversation(userId, conversationData) {
+/**
+ * Save conversation with enhanced RAG tracking
+ */
+async function saveConversation(client, userId, conversationData) {
   try {
     const { messages, metadata } = conversationData;
     
@@ -124,63 +98,162 @@ async function saveConversation(userId, conversationData) {
       };
     }
 
-    // Create conversation document
-    const conversationDoc = {
-      userId,
-      messages: messages.map(msg => ({
-        id: msg.id,
-        type: msg.type,
-        content: msg.content,
-        timestamp: msg.timestamp,
-        resources: msg.resources || [],
-        isStudyNotes: msg.isStudyNotes || false
-      })),
-      metadata: {
-        messageCount: messages.length,
-        lastUserMessage: messages.filter(m => m.type === 'user').pop()?.content?.substring(0, 100),
-        topics: metadata?.topics || [],
-        ...metadata
-      },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    const result = await client.query(
-      q.Create(q.Collection('conversations'), {
-        data: conversationDoc
-      })
+    // Extract RAG information
+    const ragMessages = messages.filter(msg => 
+      msg.sources && msg.sources.length > 0
     );
+    
+    const ragDocuments = [...new Set(
+      ragMessages.flatMap(msg => 
+        msg.sources?.map(source => source.documentId) || []
+      )
+    )];
+
+    // Insert conversation
+    const result = await client.query(`
+      INSERT INTO conversations (
+        user_id, messages, metadata, message_count, 
+        used_rag, rag_documents_referenced
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, created_at
+    `, [
+      userId,
+      JSON.stringify(messages),
+      JSON.stringify(metadata || {}),
+      messages.length,
+      ragMessages.length > 0,
+      ragDocuments
+    ]);
 
     return {
       statusCode: 201,
       headers,
       body: JSON.stringify({
-        id: result.ref.id,
+        id: result.rows[0].id,
+        created_at: result.rows[0].created_at,
         message: 'Conversation saved successfully',
-        messageCount: messages.length
+        messageCount: messages.length,
+        ragUsed: ragMessages.length > 0,
+        ragDocuments: ragDocuments.length
       }),
     };
   } catch (error) {
+    console.error('Error saving conversation:', error);
     throw error;
   }
 }
 
-async function deleteConversations(userId) {
+/**
+ * Get conversations for user
+ */
+async function getConversations(client, userId) {
   try {
-    // Delete all conversations for the user
-    await client.query(
-      q.Map(
-        q.Paginate(q.Match(q.Index('conversations_by_user'), userId)),
-        q.Lambda('ref', q.Delete(q.Var('ref')))
-      )
-    );
+    const result = await client.query(`
+      SELECT 
+        id, messages, metadata, message_count, 
+        used_rag, rag_documents_referenced, 
+        created_at, updated_at
+      FROM conversations
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 100
+    `, [userId]);
+
+    const conversations = result.rows.map(row => ({
+      id: row.id,
+      messages: row.messages,
+      metadata: row.metadata,
+      messageCount: row.message_count,
+      used_rag: row.used_rag,
+      rag_documents_referenced: row.rag_documents_referenced,
+      created_at: row.created_at.toISOString(),
+      updated_at: row.updated_at.toISOString()
+    }));
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ message: 'All conversations deleted successfully' }),
+      body: JSON.stringify({
+        conversations,
+        total: conversations.length
+      }),
     };
   } catch (error) {
+    console.error('Error getting conversations:', error);
+    
+    // Return empty result if no conversations found
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ conversations: [], total: 0 }),
+    };
+  }
+}
+
+/**
+ * Delete all conversations for user
+ */
+async function deleteConversations(client, userId) {
+  try {
+    const result = await client.query(`
+      DELETE FROM conversations 
+      WHERE user_id = $1
+    `, [userId]);
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ 
+        message: 'All conversations deleted successfully',
+        deletedCount: result.rowCount
+      }),
+    };
+  } catch (error) {
+    console.error('Error deleting conversations:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get conversation statistics
+ */
+async function getConversationStats(client, userId) {
+  try {
+    const result = await client.query(`
+      SELECT 
+        COUNT(*) as total_conversations,
+        SUM(message_count) as total_messages,
+        COUNT(*) FILTER (WHERE used_rag = true) as rag_conversations,
+        ROUND(
+          COUNT(*) FILTER (WHERE used_rag = true)::numeric / 
+          COUNT(*)::numeric * 100, 2
+        ) as rag_usage_percentage,
+        AVG(message_count) as avg_messages_per_conversation,
+        MIN(created_at) as oldest_conversation,
+        MAX(created_at) as newest_conversation
+      FROM conversations
+      WHERE user_id = $1
+    `, [userId]);
+
+    const stats = result.rows[0];
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        stats: {
+          totalConversations: parseInt(stats.total_conversations) || 0,
+          totalMessages: parseInt(stats.total_messages) || 0,
+          ragConversations: parseInt(stats.rag_conversations) || 0,
+          ragUsagePercentage: parseFloat(stats.rag_usage_percentage) || 0,
+          avgMessagesPerConversation: parseFloat(stats.avg_messages_per_conversation) || 0,
+          oldestConversation: stats.oldest_conversation?.toISOString() || null,
+          newestConversation: stats.newest_conversation?.toISOString() || null
+        }
+      }),
+    };
+  } catch (error) {
+    console.error('Error getting conversation stats:', error);
     throw error;
   }
 }
