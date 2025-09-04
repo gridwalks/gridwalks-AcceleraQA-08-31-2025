@@ -1,11 +1,11 @@
-// src/services/conversationService.js
+// src/services/conversationService.js - Updated for Netlify Blob
 import { getToken } from './authService';
 
 const API_BASE_URL = '/.netlify/functions';
 
 class ConversationService {
   constructor() {
-    this.apiUrl = `${API_BASE_URL}/conversations`;
+    this.apiUrl = `${API_BASE_URL}/conversations-blob`;
   }
 
   async makeAuthenticatedRequest(endpoint, options = {}) {
@@ -43,7 +43,7 @@ class ConversationService {
   }
 
   /**
-   * Save a conversation to the server
+   * Save a conversation to the server with enhanced RAG tracking
    * @param {Object[]} messages - Array of messages in the conversation
    * @param {Object} metadata - Optional metadata about the conversation
    * @returns {Promise<Object>} - Save result
@@ -52,6 +52,17 @@ class ConversationService {
     console.log('Saving conversation to server...', { messageCount: messages.length });
     
     try {
+      // Analyze messages for RAG usage
+      const ragMessages = messages.filter(msg => 
+        msg.sources && msg.sources.length > 0
+      );
+      
+      const ragDocuments = [...new Set(
+        ragMessages.flatMap(msg => 
+          msg.sources?.map(source => source.documentId) || []
+        )
+      )];
+
       const payload = {
         messages: messages.map(msg => ({
           id: msg.id,
@@ -59,12 +70,16 @@ class ConversationService {
           content: msg.content,
           timestamp: msg.timestamp,
           resources: msg.resources || [],
+          sources: msg.sources || [],
           isStudyNotes: msg.isStudyNotes || false
         })),
         metadata: {
           topics: this.extractTopics(messages),
           messageCount: messages.length,
           lastActivity: new Date().toISOString(),
+          ragUsed: ragMessages.length > 0,
+          ragDocuments: ragDocuments,
+          ragMessageCount: ragMessages.length,
           ...metadata
         }
       };
@@ -150,7 +165,9 @@ class ConversationService {
         isStored: true,
         isCurrent: false,
         conversationId: conversation.id,
-        conversationCreated: conversation.createdAt
+        conversationCreated: conversation.created_at,
+        ragUsed: conversation.used_rag || false,
+        ragDocuments: conversation.rag_documents_referenced || []
       }))
     );
 
@@ -210,31 +227,30 @@ class ConversationService {
   }
 
   /**
-   * Get conversation statistics
+   * Get conversation statistics including RAG usage
    * @returns {Promise<Object>} - Conversation statistics
    */
   async getConversationStats() {
     try {
-      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
+      const result = await this.makeAuthenticatedRequest(`${this.apiUrl}/stats`, {
         method: 'GET',
       });
 
-      const conversations = result.conversations || [];
-      const totalMessages = conversations.reduce((sum, conv) => sum + (conv.messages?.length || 0), 0);
-      
-      return {
-        totalConversations: conversations.length,
-        totalMessages,
-        oldestConversation: conversations.length > 0 ? 
-          conversations[conversations.length - 1]?.createdAt : null,
-        newestConversation: conversations.length > 0 ? 
-          conversations[0]?.createdAt : null,
+      return result.stats || {
+        totalConversations: 0,
+        totalMessages: 0,
+        ragConversations: 0,
+        ragUsagePercentage: 0,
+        oldestConversation: null,
+        newestConversation: null,
       };
     } catch (error) {
       console.error('Failed to get conversation stats:', error);
       return {
         totalConversations: 0,
         totalMessages: 0,
+        ragConversations: 0,
+        ragUsagePercentage: 0,
         oldestConversation: null,
         newestConversation: null,
       };
