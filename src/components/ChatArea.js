@@ -31,7 +31,7 @@ const ChatArea = memo(({
   };
 
   return (
-    <div className="lg:col-span-2 bg-gray-900/60 backdrop-blur-sm rounded-lg border border-gray-700 flex flex-col shadow-lg h-full text-gray-100">
+    <div className="lg:col-span-2 rounded-lg border border-gray-200 p-6 h-full shadow-sm bg-gray-900/60 backdrop-blur-sm flex flex-col text-gray-100">
       {/* Chat Messages - Scrollable window that grows with available space */}
       <div className="flex-1 h-full overflow-y-auto p-8 space-y-6 min-h-0 bg-white text-gray-900" style={{ scrollBehavior: 'smooth' }}>
           {messages.length === 0 ? (
