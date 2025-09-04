@@ -1,4 +1,4 @@
-// src/services/conversationService.js - Updated for Netlify Blob
+// src/services/conversationService.js - Updated for persistent Netlify Blob storage
 import { getToken } from './authService';
 
 const API_BASE_URL = '/.netlify/functions';
@@ -6,8 +6,25 @@ const API_BASE_URL = '/.netlify/functions';
 class ConversationService {
   constructor() {
     this.apiUrl = `${API_BASE_URL}/conversations-blob`;
+    this.isInitialized = false;
+    this.userId = null;
+    this.cachedConversations = null;
   }
 
+  /**
+   * Initialize the service with user authentication
+   */
+  async initialize(user) {
+    if (user && user.sub) {
+      this.userId = user.sub;
+      this.isInitialized = true;
+      console.log('ConversationService initialized for user:', this.userId);
+    }
+  }
+
+  /**
+   * Make authenticated request to Netlify function
+   */
   async makeAuthenticatedRequest(endpoint, options = {}) {
     try {
       // Get Auth0 token
@@ -17,9 +34,27 @@ class ConversationService {
         'Content-Type': 'application/json',
       };
 
-      // Add authorization header if token is available
+      // Add user ID and authorization
       if (token) {
         defaultHeaders['Authorization'] = `Bearer ${token}`;
+        
+        // Extract user ID from token for header
+        try {
+          const tokenParts = token.split('.');
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(atob(tokenParts[1]));
+            if (payload.sub) {
+              defaultHeaders['x-user-id'] = payload.sub;
+            }
+          }
+        } catch (parseError) {
+          console.warn('Could not parse token for user ID:', parseError);
+        }
+      }
+
+      // Fallback to stored user ID
+      if (!defaultHeaders['x-user-id'] && this.userId) {
+        defaultHeaders['x-user-id'] = this.userId;
       }
 
       const response = await fetch(endpoint, {
@@ -43,17 +78,34 @@ class ConversationService {
   }
 
   /**
-   * Save a conversation to the server with enhanced RAG tracking
+   * Save a conversation to Netlify Blob storage
    * @param {Object[]} messages - Array of messages in the conversation
    * @param {Object} metadata - Optional metadata about the conversation
    * @returns {Promise<Object>} - Save result
    */
   async saveConversation(messages, metadata = {}) {
-    console.log('Saving conversation to server...', { messageCount: messages.length });
+    if (!this.isInitialized) {
+      throw new Error('ConversationService not initialized');
+    }
+
+    console.log('Saving conversation to Netlify Blob...', { 
+      messageCount: messages.length,
+      userId: this.userId 
+    });
     
     try {
+      // Filter out invalid messages
+      const validMessages = messages.filter(msg => 
+        msg && msg.id && msg.type && msg.content && msg.timestamp
+      );
+
+      if (validMessages.length === 0) {
+        console.warn('No valid messages to save');
+        return { success: false, error: 'No valid messages' };
+      }
+
       // Analyze messages for RAG usage
-      const ragMessages = messages.filter(msg => 
+      const ragMessages = validMessages.filter(msg => 
         msg.sources && msg.sources.length > 0
       );
       
@@ -64,7 +116,7 @@ class ConversationService {
       )];
 
       const payload = {
-        messages: messages.map(msg => ({
+        messages: validMessages.map(msg => ({
           id: msg.id,
           type: msg.type,
           content: msg.content,
@@ -74,12 +126,14 @@ class ConversationService {
           isStudyNotes: msg.isStudyNotes || false
         })),
         metadata: {
-          topics: this.extractTopics(messages),
-          messageCount: messages.length,
+          topics: this.extractTopics(validMessages),
+          messageCount: validMessages.length,
           lastActivity: new Date().toISOString(),
           ragUsed: ragMessages.length > 0,
           ragDocuments: ragDocuments,
           ragMessageCount: ragMessages.length,
+          sessionId: Date.now().toString(),
+          userAgent: navigator.userAgent,
           ...metadata
         }
       };
@@ -89,34 +143,53 @@ class ConversationService {
         body: JSON.stringify(payload),
       });
 
-      console.log('Conversation saved successfully:', result);
+      console.log('Conversation saved successfully to Netlify Blob:', result);
+      
+      // Clear cached conversations to force reload
+      this.cachedConversations = null;
+      
       return result;
     } catch (error) {
-      console.error('Failed to save conversation:', error);
+      console.error('Failed to save conversation to Netlify Blob:', error);
       throw new Error(`Failed to save conversation: ${error.message}`);
     }
   }
 
   /**
-   * Load all conversations for the authenticated user
-   * @returns {Promise<Object[]>} - Array of conversations
+   * Load all conversations for the authenticated user from Netlify Blob
+   * @param {boolean} useCache - Whether to use cached data if available
+   * @returns {Promise<Object[]>} - Array of conversations converted to messages
    */
-  async loadConversations() {
-    console.log('Loading conversations from server...');
+  async loadConversations(useCache = true) {
+    if (!this.isInitialized) {
+      console.warn('ConversationService not initialized, returning empty array');
+      return [];
+    }
+
+    // Return cached conversations if available and cache is enabled
+    if (useCache && this.cachedConversations) {
+      console.log('Returning cached conversations:', this.cachedConversations.length);
+      return this.cachedConversations;
+    }
+
+    console.log('Loading conversations from Netlify Blob for user:', this.userId);
     
     try {
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         method: 'GET',
       });
 
-      console.log(`Loaded ${result.total} conversations from server`);
+      console.log(`Loaded ${result.total || 0} conversations from Netlify Blob`);
       
       // Convert server format back to message format
-      const messages = this.conversationsToMessages(result.conversations);
+      const messages = this.conversationsToMessages(result.conversations || []);
+      
+      // Cache the results
+      this.cachedConversations = messages;
       
       return messages;
     } catch (error) {
-      console.error('Failed to load conversations:', error);
+      console.error('Failed to load conversations from Netlify Blob:', error);
       
       // Return empty array instead of throwing to allow app to continue
       if (error.message.includes('401') || error.message.includes('authentication')) {
@@ -124,6 +197,8 @@ class ConversationService {
         return [];
       }
       
+      // For other errors, return empty array but log warning
+      console.warn('Returning empty conversations due to error:', error.message);
       return [];
     }
   }
@@ -133,19 +208,64 @@ class ConversationService {
    * @returns {Promise<Object>} - Deletion result
    */
   async clearConversations() {
-    console.log('Clearing all conversations from server...');
+    if (!this.isInitialized) {
+      throw new Error('ConversationService not initialized');
+    }
+
+    console.log('Clearing all conversations from Netlify Blob for user:', this.userId);
     
     try {
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         method: 'DELETE',
       });
 
-      console.log('All conversations cleared successfully');
+      console.log('All conversations cleared successfully from Netlify Blob');
+      
+      // Clear cache
+      this.cachedConversations = null;
+      
       return result;
     } catch (error) {
-      console.error('Failed to clear conversations:', error);
+      console.error('Failed to clear conversations from Netlify Blob:', error);
       throw new Error(`Failed to clear conversations: ${error.message}`);
     }
+  }
+
+  /**
+   * Auto-save current conversation with debouncing
+   * @param {Object[]} messages - Current conversation messages
+   * @param {Object} metadata - Optional metadata
+   */
+  async autoSaveConversation(messages, metadata = {}) {
+    if (!this.isInitialized || !messages || messages.length === 0) {
+      return;
+    }
+
+    // Clear any existing auto-save timeout
+    if (this.autoSaveTimeout) {
+      clearTimeout(this.autoSaveTimeout);
+    }
+
+    // Debounce auto-save by 3 seconds
+    this.autoSaveTimeout = setTimeout(async () => {
+      try {
+        // Only auto-save if we have a meaningful conversation
+        const nonWelcomeMessages = messages.filter(msg => 
+          !(msg.type === 'ai' && msg.content.includes('Welcome to AcceleraQA'))
+        );
+
+        if (nonWelcomeMessages.length >= 2) { // At least 1 user + 1 AI message
+          console.log('Auto-saving conversation...');
+          await this.saveConversation(messages, {
+            ...metadata,
+            autoSaved: true,
+            autoSaveTime: new Date().toISOString()
+          });
+        }
+      } catch (error) {
+        console.warn('Auto-save failed:', error);
+      }
+    }, 3000); // 3 second delay
   }
 
   /**
@@ -231,30 +351,71 @@ class ConversationService {
    * @returns {Promise<Object>} - Conversation statistics
    */
   async getConversationStats() {
+    if (!this.isInitialized) {
+      return this.getEmptyStats();
+    }
+
     try {
       const result = await this.makeAuthenticatedRequest(`${this.apiUrl}/stats`, {
         method: 'GET',
       });
 
-      return result.stats || {
-        totalConversations: 0,
-        totalMessages: 0,
-        ragConversations: 0,
-        ragUsagePercentage: 0,
-        oldestConversation: null,
-        newestConversation: null,
-      };
+      return result.stats || this.getEmptyStats();
     } catch (error) {
       console.error('Failed to get conversation stats:', error);
-      return {
-        totalConversations: 0,
-        totalMessages: 0,
-        ragConversations: 0,
-        ragUsagePercentage: 0,
-        oldestConversation: null,
-        newestConversation: null,
-      };
+      return this.getEmptyStats();
     }
+  }
+
+  /**
+   * Get empty stats object
+   * @returns {Object} - Empty statistics
+   */
+  getEmptyStats() {
+    return {
+      totalConversations: 0,
+      totalMessages: 0,
+      ragConversations: 0,
+      ragUsagePercentage: 0,
+      oldestConversation: null,
+      newestConversation: null,
+    };
+  }
+
+  /**
+   * Force refresh conversations from server
+   * @returns {Promise<Object[]>} - Fresh conversations
+   */
+  async refreshConversations() {
+    this.cachedConversations = null;
+    return await this.loadConversations(false);
+  }
+
+  /**
+   * Get cache status
+   * @returns {Object} - Cache information
+   */
+  getCacheStatus() {
+    return {
+      isInitialized: this.isInitialized,
+      userId: this.userId,
+      hasCachedConversations: !!this.cachedConversations,
+      cachedMessageCount: this.cachedConversations?.length || 0,
+      lastCacheTime: this.lastCacheTime || null
+    };
+  }
+
+  /**
+   * Cleanup method to clear timeouts and cache
+   */
+  cleanup() {
+    if (this.autoSaveTimeout) {
+      clearTimeout(this.autoSaveTimeout);
+      this.autoSaveTimeout = null;
+    }
+    this.cachedConversations = null;
+    this.isInitialized = false;
+    this.userId = null;
   }
 }
 
@@ -264,14 +425,26 @@ const conversationService = new ConversationService();
 export default conversationService;
 
 // Export convenience functions
+export const initializeConversationService = (user) => 
+  conversationService.initialize(user);
+
 export const saveConversation = (messages, metadata) => 
   conversationService.saveConversation(messages, metadata);
 
-export const loadConversations = () => 
-  conversationService.loadConversations();
+export const loadConversations = (useCache = true) => 
+  conversationService.loadConversations(useCache);
 
 export const clearConversations = () => 
   conversationService.clearConversations();
 
+export const autoSaveConversation = (messages, metadata) => 
+  conversationService.autoSaveConversation(messages, metadata);
+
 export const getConversationStats = () => 
   conversationService.getConversationStats();
+
+export const refreshConversations = () => 
+  conversationService.refreshConversations();
+
+export const isServiceAvailable = () => 
+  conversationService.isServiceAvailable();
