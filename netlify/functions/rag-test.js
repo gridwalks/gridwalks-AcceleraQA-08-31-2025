@@ -1,4 +1,5 @@
-// netlify/functions/rag-test.js - Simple test function to debug RAG issues
+// netlify/functions/rag-test.js - Fixed with ES modules
+import { getStore } from '@netlify/blobs';
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -7,7 +8,7 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   console.log('RAG Test Function called');
   console.log('Method:', event.httpMethod);
   console.log('Headers:', JSON.stringify(event.headers, null, 2));
@@ -62,7 +63,6 @@ exports.handler = async (event, context) => {
       // Test blob store access
       let blobTestResult = 'Not tested';
       try {
-        const { getStore } = require('@netlify/blobs');
         const testStore = getStore('test-store');
         
         // Try to set and get a test value
