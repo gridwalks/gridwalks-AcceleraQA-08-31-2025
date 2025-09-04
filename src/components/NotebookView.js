@@ -1,5 +1,6 @@
 import React, { memo, useMemo } from 'react';
 import { combineMessagesIntoConversations } from '../utils/messageUtils';
+import { Cloud, Smartphone } from 'lucide-react';
 
 const NotebookView = memo(({ 
   messages, // Current session messages
@@ -7,7 +8,9 @@ const NotebookView = memo(({
   selectedMessages, 
   setSelectedMessages, 
   generateStudyNotes, 
-  isGeneratingNotes 
+  isGeneratingNotes,
+  storedMessageCount = 0,
+  isServerAvailable = true
 }) => {
   
   // Use ALL available messages - try thirtyDayMessages first, fallback to messages
@@ -43,25 +46,18 @@ const NotebookView = memo(({
     generateStudyNotes();
   };
 
-  // Simple separation based on message flags or recency
+  // Separate conversations based on storage status
   const currentConversations = conversations.filter(conv => {
-    // Consider a conversation "current" if:
-    // 1. It has the isCurrent flag, or
-    // 2. It was created in the last hour (likely from current session)
-    if (conv.isCurrent) return true;
-    
-    const conversationTime = new Date(conv.timestamp);
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    return conversationTime > oneHourAgo;
+    // Consider a conversation "current" if any of its messages are marked as current
+    return conv.isCurrent || 
+           (conv.originalUserMessage?.isCurrent) || 
+           (conv.originalAiMessage?.isCurrent);
   });
   
   const storedConversations = conversations.filter(conv => {
-    // Everything else is considered "stored"
-    if (conv.isCurrent) return false;
-    
-    const conversationTime = new Date(conv.timestamp);
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    return conversationTime <= oneHourAgo;
+    // Consider stored if it's not current and has stored messages
+    return !conv.isCurrent && 
+           (conv.originalUserMessage?.isStored || conv.originalAiMessage?.isStored);
   });
 
   return (
@@ -74,12 +70,25 @@ const NotebookView = memo(({
             {availableMessages.length} messages • {conversations.length} conversations
           </p>
           
-          {/* Debug info */}
-          <div className="text-xs text-gray-400 mt-1">
-            Current: {currentConversations.length} | Stored: {storedConversations.length}
-            <br />
-            Using: {thirtyDayMessages.length > 0 ? 'thirtyDayMessages' : 'messages'} 
-            ({thirtyDayMessages.length} vs {messages.length})
+          {/* Storage Status Summary */}
+          <div className="flex items-center space-x-4 mt-2 text-xs">
+            {isServerAvailable ? (
+              <>
+                <div className="flex items-center space-x-1 text-green-600">
+                  <Cloud className="h-3 w-3" />
+                  <span>{storedConversations.length} saved to cloud</span>
+                </div>
+                <div className="flex items-center space-x-1 text-blue-600">
+                  <Smartphone className="h-3 w-3" />
+                  <span>{currentConversations.length} current session</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center space-x-1 text-orange-600">
+                <Smartphone className="h-3 w-3" />
+                <span>Session only - {conversations.length} conversations</span>
+              </div>
+            )}
           </div>
         </div>
         
@@ -123,7 +132,7 @@ const NotebookView = memo(({
       </div>
       
       {/* Conversations List */}
-      <div className="space-y-3 overflow-y-auto h-[calc(100%-120px)]">
+      <div className="space-y-3 overflow-y-auto h-[calc(100%-140px)]">
         {conversations.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-gray-400 mb-4">
@@ -135,28 +144,72 @@ const NotebookView = memo(({
             <p className="text-gray-600">
               Start chatting to see your conversation history here
             </p>
-            <div className="mt-4 text-xs text-gray-400">
-              Available messages: {availableMessages.length}
-              <br />
-              ThirtyDay: {thirtyDayMessages.length} | Current: {messages.length}
-            </div>
+            {!isServerAvailable && (
+              <div className="mt-4 text-xs text-orange-600 bg-orange-50 p-3 rounded-lg">
+                <strong>Note:</strong> Cloud storage is unavailable. Conversations will be lost on page refresh.
+              </div>
+            )}
           </div>
         ) : (
-          <>
-            {/* Show ALL conversations in one list for debugging */}
-            <div className="space-y-3">
-              {conversations.map((conversation, index) => (
-                <ConversationCard
-                  key={conversation.id}
-                  conversation={conversation}
-                  isSelected={selectedMessages.has(conversation.id)}
-                  onToggleSelection={toggleMessageSelection}
-                  isCurrentSession={currentConversations.includes(conversation)}
-                  debugIndex={index}
-                />
-              ))}
-            </div>
-          </>
+          <div className="space-y-6">
+            {/* Current Session Conversations */}
+            {currentConversations.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-blue-700 flex items-center space-x-2">
+                    <Smartphone className="h-4 w-4" />
+                    <span>Current Session ({currentConversations.length})</span>
+                  </h4>
+                  {!isServerAvailable && (
+                    <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
+                      Not saved
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  {currentConversations.map((conversation, index) => (
+                    <ConversationCard
+                      key={conversation.id}
+                      conversation={conversation}
+                      isSelected={selectedMessages.has(conversation.id)}
+                      onToggleSelection={toggleMessageSelection}
+                      isCurrentSession={true}
+                      debugIndex={index}
+                      storageStatus="current"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Stored Conversations */}
+            {storedConversations.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-green-700 flex items-center space-x-2">
+                    <Cloud className="h-4 w-4" />
+                    <span>Saved to Cloud ({storedConversations.length})</span>
+                  </h4>
+                  <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                    Persistent
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {storedConversations.map((conversation, index) => (
+                    <ConversationCard
+                      key={conversation.id}
+                      conversation={conversation}
+                      isSelected={selectedMessages.has(conversation.id)}
+                      onToggleSelection={toggleMessageSelection}
+                      isCurrentSession={false}
+                      debugIndex={index + currentConversations.length}
+                      storageStatus="stored"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -164,18 +217,39 @@ const NotebookView = memo(({
 });
 
 // Individual conversation card component
-const ConversationCard = memo(({ conversation, isSelected, onToggleSelection, isCurrentSession, debugIndex }) => {
+const ConversationCard = memo(({ 
+  conversation, 
+  isSelected, 
+  onToggleSelection, 
+  isCurrentSession, 
+  debugIndex, 
+  storageStatus = 'unknown' 
+}) => {
   const handleToggle = () => {
     onToggleSelection(conversation.id);
+  };
+
+  const getStorageStatusColor = () => {
+    switch (storageStatus) {
+      case 'current': return 'bg-blue-50 border-blue-200';
+      case 'stored': return 'bg-green-50 border-green-200';
+      default: return 'bg-gray-50 border-gray-200';
+    }
+  };
+
+  const getStorageIcon = () => {
+    switch (storageStatus) {
+      case 'current': return <Smartphone className="h-3 w-3 text-blue-600" />;
+      case 'stored': return <Cloud className="h-3 w-3 text-green-600" />;
+      default: return null;
+    }
   };
 
   return (
     <div className={`p-4 rounded-lg border transition-all cursor-pointer ${
       isSelected 
         ? 'bg-blue-50 border-blue-300 shadow-sm' 
-        : isCurrentSession
-        ? 'bg-green-50 border-green-200 hover:border-green-300 hover:shadow-sm'
-        : 'bg-gray-50 border-gray-200 hover:border-gray-300 hover:shadow-sm'
+        : getStorageStatusColor() + ' hover:border-gray-300 hover:shadow-sm'
     }`}>
       <div className="flex items-start space-x-3">
         <input
@@ -190,15 +264,12 @@ const ConversationCard = memo(({ conversation, isSelected, onToggleSelection, is
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
               <span className={`text-xs font-semibold uppercase tracking-wide ${
-                isCurrentSession ? 'text-green-600' : 'text-purple-600'
+                storageStatus === 'current' ? 'text-blue-600' : 
+                storageStatus === 'stored' ? 'text-green-600' : 'text-purple-600'
               }`}>
                 Conversation #{debugIndex + 1}
               </span>
-              {isCurrentSession && (
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                  Recent
-                </span>
-              )}
+              {getStorageIcon()}
               <span className="text-xs bg-gray-100 text-gray-600 px-1 py-0.5 rounded font-mono">
                 {conversation.isCurrent ? 'C' : ''}{conversation.isStored ? 'S' : ''}
               </span>
