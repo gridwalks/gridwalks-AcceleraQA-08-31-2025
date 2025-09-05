@@ -1,4 +1,4 @@
-// src/services/ragService.js - Updated RAG service for Neon PostgreSQL
+// src/services/ragService.js - Updated RAG service with FIXED authentication
 import openaiService from './openaiService';
 import { getToken } from './authService';
 
@@ -6,7 +6,6 @@ const API_BASE_URL = '/.netlify/functions';
 
 class RAGService {
   constructor() {
-    // TEMPORARY: Use the fixed function endpoint
     this.apiUrl = `${API_BASE_URL}/neon-rag-fixed`;
     this.maxChunkSize = 1000;
     this.chunkOverlap = 200;
@@ -14,54 +13,125 @@ class RAGService {
 
   async makeAuthenticatedRequest(endpoint, data = {}) {
     try {
-      const token = await getToken();
+      console.log('=== RAG SERVICE AUTH REQUEST ===');
+      console.log('Endpoint:', endpoint);
+      console.log('Data action:', data.action);
       
+      // CRITICAL FIX: Get token with retry and better error handling
+      let token = null;
+      try {
+        token = await getToken();
+        console.log('Token retrieved:', !!token);
+        console.log('Token length:', token?.length || 0);
+        console.log('Token starts correctly:', token?.startsWith('eyJ') || false);
+      } catch (tokenError) {
+        console.error('Failed to get token:', tokenError);
+        throw new Error('Authentication failed: Could not retrieve access token');
+      }
+
+      // Prepare headers with BOTH methods for maximum compatibility
       const headers = {
         'Content-Type': 'application/json',
       };
 
       if (token) {
+        // Method 1: Standard Authorization Bearer header
         headers['Authorization'] = `Bearer ${token}`;
+        console.log('Added Authorization header');
+
+        // Method 2: Extract user ID and add as x-user-id header
         try {
           const tokenParts = token.split('.');
           if (tokenParts.length === 3) {
-            const payload = JSON.parse(atob(tokenParts[1]));
-            if (payload.sub) {
-              headers['x-user-id'] = payload.sub;
+            // Properly decode JWT payload with padding
+            let payload = tokenParts[1];
+            while (payload.length % 4) {
+              payload += '=';
             }
+            
+            const decoded = atob(payload);
+            const parsed = JSON.parse(decoded);
+            
+            if (parsed.sub) {
+              headers['x-user-id'] = parsed.sub;
+              console.log('Added x-user-id header:', parsed.sub.substring(0, 10) + '...');
+            } else {
+              console.warn('No sub field in JWT token');
+            }
+          } else {
+            console.warn('Invalid JWT format - parts:', tokenParts.length);
           }
-        } catch (parseError) {
-          console.warn('Could not parse token for user ID:', parseError);
+        } catch (jwtError) {
+          console.warn('Could not parse JWT for x-user-id:', jwtError.message);
+          // Continue anyway - the function should handle JWT parsing server-side
         }
+      } else {
+        console.error('No token available for authentication');
+        throw new Error('Authentication required: No access token available');
       }
 
+      // ENHANCED: Add additional headers for debugging
+      headers['X-Requested-With'] = 'XMLHttpRequest';
+      headers['X-Client-Version'] = '2.1.0';
+      headers['X-Timestamp'] = new Date().toISOString();
+
+      console.log('Request headers prepared:', Object.keys(headers));
+      console.log('Making request to:', endpoint);
+
+      // Make the request with proper error handling
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
         body: JSON.stringify(data)
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       if (!response.ok) {
+        console.error('Request failed with status:', response.status);
+        
         let errorData;
         try {
           errorData = await response.json();
-        } catch {
-          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+          console.error('Error response data:', errorData);
+        } catch (parseError) {
+          console.error('Could not parse error response:', parseError);
+          errorData = { 
+            error: `HTTP ${response.status}: ${response.statusText}`,
+            details: 'Could not parse error response'
+          };
         }
-        throw new Error(errorData.error || `Server error: ${response.status}`);
+
+        // Enhanced error messages based on status code
+        if (response.status === 401) {
+          throw new Error(`Authentication failed: ${errorData.error || 'Unauthorized'}. Please try signing out and signing in again.`);
+        } else if (response.status === 403) {
+          throw new Error(`Access forbidden: ${errorData.error || 'Insufficient permissions'}`);
+        } else if (response.status >= 500) {
+          throw new Error(`Server error: ${errorData.error || 'Internal server error'}. Please try again later.`);
+        } else {
+          throw new Error(errorData.error || `Request failed with status ${response.status}`);
+        }
       }
 
       const result = await response.json();
+      console.log('Request successful, response keys:', Object.keys(result));
+      console.log('=== REQUEST COMPLETED ===');
       return result;
 
     } catch (error) {
-      console.error('Neon RAG API request failed:', error);
+      console.error('=== REQUEST FAILED ===');
+      console.error('Error type:', error.constructor.name);
+      console.error('Error message:', error.message);
+      console.error('=======================');
       throw error;
     }
   }
 
   async testConnection() {
     try {
+      console.log('Testing RAG connection...');
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         action: 'test'
       });
@@ -73,11 +143,11 @@ class RAGService {
       };
       
     } catch (error) {
-      console.error('Neon RAG connection test failed:', error);
+      console.error('RAG connection test failed:', error);
       return {
         success: false,
         error: error.message,
-        recommendation: 'Check Neon database connection and try again'
+        recommendation: 'Check authentication and database connection'
       };
     }
   }
@@ -88,6 +158,7 @@ class RAGService {
         throw new Error('File is required');
       }
 
+      console.log('Uploading document:', file.name);
       const text = await this.extractTextFromFile(file);
       
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
@@ -110,7 +181,7 @@ class RAGService {
       return result;
 
     } catch (error) {
-      console.error('Error uploading document to Neon:', error);
+      console.error('Error uploading document:', error);
       throw error;
     }
   }
@@ -124,7 +195,6 @@ class RAGService {
         reader.readAsText(file);
       } else {
         // For non-text files, return empty string for now
-        // In a full implementation, you'd use libraries like pdf-parse for PDFs
         resolve('');
       }
     });
@@ -132,6 +202,7 @@ class RAGService {
 
   async getDocuments() {
     try {
+      console.log('Getting documents list...');
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         action: 'list'
       });
@@ -139,7 +210,7 @@ class RAGService {
       return result.documents || [];
 
     } catch (error) {
-      console.error('Error getting documents from Neon:', error);
+      console.error('Error getting documents:', error);
       throw error;
     }
   }
@@ -154,7 +225,7 @@ class RAGService {
       return result;
 
     } catch (error) {
-      console.error('Error deleting document from Neon:', error);
+      console.error('Error deleting document:', error);
       throw error;
     }
   }
@@ -178,7 +249,7 @@ class RAGService {
       return result;
 
     } catch (error) {
-      console.error('Error searching documents in Neon:', error);
+      console.error('Error searching documents:', error);
       throw error;
     }
   }
@@ -245,7 +316,7 @@ Answer:`;
       };
 
     } catch (error) {
-      console.error('Error generating Neon RAG response:', error);
+      console.error('Error generating RAG response:', error);
       throw error;
     }
   }
@@ -259,7 +330,7 @@ Answer:`;
       return result;
 
     } catch (error) {
-      console.error('Error getting Neon stats:', error);
+      console.error('Error getting stats:', error);
       throw error;
     }
   }
@@ -344,7 +415,7 @@ Answer:`;
       };
       
       if (!diagnostics.tests.connectivity?.success) {
-        diagnostics.health.recommendations.push('Check Neon database connection and credentials');
+        diagnostics.health.recommendations.push('Check authentication and database connection');
       }
       
       if (!diagnostics.tests.search?.success) {
@@ -358,7 +429,7 @@ Answer:`;
       return diagnostics;
       
     } catch (error) {
-      console.error('Error running Neon diagnostics:', error);
+      console.error('Error running diagnostics:', error);
       return {
         timestamp: new Date().toISOString(),
         mode: 'neon-postgresql',
@@ -383,21 +454,7 @@ Key Topics Covered:
 - Process Validation lifecycle and documentation
 - Regulatory Compliance with FDA and ICH guidelines
 
-Database Features Tested:
-- Document storage with full metadata
-- Text chunking for optimal search performance
-- Full-text search capabilities using PostgreSQL
-- Persistent storage with backup and recovery
-
-This test ensures the Neon RAG system can process documents efficiently and provide reliable search functionality for pharmaceutical quality professionals.
-
-Quality Assurance Notes:
-- All processes must follow validated procedures
-- Documentation must be complete and auditable
-- Change control processes must be implemented
-- Regular review and updates are required
-
-This document will be stored in Neon PostgreSQL database and indexed for fast retrieval.`;
+This test ensures the Neon RAG system can process documents efficiently and provide reliable search functionality for pharmaceutical quality professionals.`;
 
       const testFile = new File([testContent], 'neon-test-document.txt', { type: 'text/plain' });
       
@@ -415,7 +472,7 @@ This document will be stored in Neon PostgreSQL database and indexed for fast re
       };
       
     } catch (error) {
-      console.error('Neon test upload failed:', error);
+      console.error('Test upload failed:', error);
       return {
         success: false,
         error: error.message,
@@ -434,15 +491,15 @@ This document will be stored in Neon PostgreSQL database and indexed for fast re
       return {
         success: true,
         searchResult: searchResult,
-        message: `Neon search test completed - found ${searchResult.results?.length || 0} results using PostgreSQL full-text search`
+        message: `Search test completed - found ${searchResult.results?.length || 0} results using PostgreSQL full-text search`
       };
       
     } catch (error) {
-      console.error('Neon test search failed:', error);
+      console.error('Test search failed:', error);
       return {
         success: false,
         error: error.message,
-        message: 'Test search in Neon failed'
+        message: 'Test search failed'
       };
     }
   }
