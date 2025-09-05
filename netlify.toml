@@ -25,15 +25,15 @@
   to = "/index.html"
   status = 200
 
-# API routes for Blob functions
+# API routes for Neon functions
 [[redirects]]
   from = "/api/rag/*"
-  to = "/.netlify/functions/rag-blob"
+  to = "/.netlify/functions/neon-rag"
   status = 200
 
 [[redirects]]
   from = "/api/conversations/*"
-  to = "/.netlify/functions/conversations-blob"
+  to = "/.netlify/functions/neon-db"
   status = 200
 
 # Enhanced security headers
@@ -52,12 +52,12 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# Function settings - Updated for ES Modules and Netlify Blobs
+# Function settings - Updated for ES Modules and Neon
 [functions]
-  external_node_modules = ["@netlify/blobs", "mammoth"]
+  external_node_modules = ["@neondatabase/serverless", "mammoth"]
   node_bundler = "esbuild"
   directory = "netlify/functions"
 
-# Enable Netlify Blobs
-[blobs]
-  enabled = true
+# Environment variables needed for functions (add these in Netlify dashboard)
+# NEON_DATABASE_URL = "postgresql://..."
+# REACT_APP_OPENAI_API_KEY = "sk-..."
