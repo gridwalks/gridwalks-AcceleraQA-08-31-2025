@@ -24,12 +24,13 @@ import { initializeAuth } from './services/authService';
 
 // Utils
 import { exportNotebook } from './utils/exportUtils';
-import { 
-  getMessagesByDays, 
-  createMessage, 
+import {
+  getMessagesByDays,
+  createMessage,
   combineMessagesIntoConversations,
-  mergeCurrentAndStoredMessages 
+  mergeCurrentAndStoredMessages
 } from './utils/messageUtils';
+import { hasAdminRole } from './utils/auth';
 import { validateEnvironment, DEFAULT_RESOURCES } from './config/constants';
 
 const AcceleraQA = () => {
@@ -55,7 +56,7 @@ const AcceleraQA = () => {
   
   const messagesEndRef = useRef(null);
 
-  const isAdmin = user?.roles?.includes('admin');
+  const isAdmin = hasAdminRole(user);
 
   // Memoized values
   const allMessages = useMemo(() => 
@@ -463,10 +464,10 @@ const AcceleraQA = () => {
   }, []);
 
   const handleShowAdmin = useCallback(() => {
-    if (isAdmin) {
+    if (hasAdminRole(user)) {
       setShowAdmin(true);
     }
-  }, [isAdmin]);
+  }, [user]);
 
   const handleCloseAdmin = useCallback(() => {
     setShowAdmin(false);

@@ -2,6 +2,7 @@
 import React, { memo, useMemo } from 'react';
 import { Download, Clock, MessageSquare, LogOut, User, AlertTriangle, FileSearch, RefreshCw, Cloud, CloudOff, Shield } from 'lucide-react';
 import { handleLogout } from '../services/authService';
+import { hasAdminRole } from '../utils/auth';
 
 const Header = memo(({ 
   user, 
@@ -18,23 +19,7 @@ const Header = memo(({
   onShowAdmin // Make sure this prop is being passed
 }) => {
   // Enhanced admin detection with debugging
-  const isAdmin = useMemo(() => {
-    if (!user || !user.roles) {
-      console.log('Header: No user or roles found');
-      return false;
-    }
-    
-    console.log('Header: Checking admin roles:', user.roles);
-    
-    // Check for various admin role formats
-    const adminRoles = ['admin', 'administrator', 'Admin', 'Administrator'];
-    const hasAdminRole = adminRoles.some(role => 
-      user.roles.includes(role)
-    );
-    
-    console.log('Header: Has admin role:', hasAdminRole);
-    return hasAdminRole;
-  }, [user]);
+  const isAdmin = useMemo(() => hasAdminRole(user), [user]);
 
   // Debug user object in development
   React.useEffect(() => {
@@ -44,8 +29,7 @@ const Header = memo(({
       console.log('User roles:', user.roles);
       console.log('User roles type:', typeof user.roles);
       console.log('Is array?:', Array.isArray(user.roles));
-      console.log('Roles includes admin?:', user.roles?.includes('admin'));
-      console.log('Roles includes administrator?:', user.roles?.includes('administrator'));
+      console.log('Has admin role:', hasAdminRole(user));
       console.log('isAdmin result:', isAdmin);
       console.log('=========================');
     }
