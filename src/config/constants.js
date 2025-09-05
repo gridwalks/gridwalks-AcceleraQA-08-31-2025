@@ -38,6 +38,7 @@ export const AUTH0_CONFIG = {
   DOMAIN: process.env.REACT_APP_AUTH0_DOMAIN,
   CLIENT_ID: process.env.REACT_APP_AUTH0_CLIENT_ID,
   AUDIENCE: process.env.REACT_APP_AUTH0_AUDIENCE,
+  ROLES_CLAIM: process.env.REACT_APP_AUTH0_ROLES_CLAIM,
   REDIRECT_URI: window.location.origin,
   LOGOUT_URI: window.location.origin,
   SCOPE: 'openid profile email'
