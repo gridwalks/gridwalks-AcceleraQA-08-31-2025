@@ -1,4 +1,4 @@
-// src/services/ragService.js - Complete RAG service
+// src/services/ragService.js - Updated RAG service for Neon PostgreSQL
 import openaiService from './openaiService';
 import { getToken } from './authService';
 
@@ -6,9 +6,9 @@ const API_BASE_URL = '/.netlify/functions';
 
 class RAGService {
   constructor() {
-    this.apiUrl = `${API_BASE_URL}/rag-fast`;
-    this.maxChunkSize = 500;
-    this.chunkOverlap = 100;
+    this.apiUrl = `${API_BASE_URL}/neon-rag`;
+    this.maxChunkSize = 1000;
+    this.chunkOverlap = 200;
   }
 
   async makeAuthenticatedRequest(endpoint, data = {}) {
@@ -54,7 +54,7 @@ class RAGService {
       return result;
 
     } catch (error) {
-      console.error('RAG API request failed:', error);
+      console.error('Neon RAG API request failed:', error);
       throw error;
     }
   }
@@ -68,15 +68,15 @@ class RAGService {
       return {
         success: true,
         data: result,
-        recommendation: 'Fast RAG function working! Instant uploads, text-based search.'
+        recommendation: 'Neon PostgreSQL RAG system working! Full-text search with persistent storage.'
       };
       
     } catch (error) {
-      console.error('Fast RAG connection test failed:', error);
+      console.error('Neon RAG connection test failed:', error);
       return {
         success: false,
         error: error.message,
-        recommendation: 'Check function deployment and try again'
+        recommendation: 'Check Neon database connection and try again'
       };
     }
   }
@@ -100,7 +100,7 @@ class RAGService {
             uploadedAt: new Date().toISOString(),
             originalSize: file.size,
             textLength: text.length,
-            processingMode: 'fast',
+            processingMode: 'neon-postgresql',
             ...metadata
           }
         }
@@ -109,7 +109,7 @@ class RAGService {
       return result;
 
     } catch (error) {
-      console.error('Error uploading document:', error);
+      console.error('Error uploading document to Neon:', error);
       throw error;
     }
   }
@@ -122,6 +122,8 @@ class RAGService {
         reader.onerror = () => reject(new Error('Failed to read text file'));
         reader.readAsText(file);
       } else {
+        // For non-text files, return empty string for now
+        // In a full implementation, you'd use libraries like pdf-parse for PDFs
         resolve('');
       }
     });
@@ -136,7 +138,7 @@ class RAGService {
       return result.documents || [];
 
     } catch (error) {
-      console.error('Error getting documents:', error);
+      console.error('Error getting documents from Neon:', error);
       throw error;
     }
   }
@@ -151,7 +153,7 @@ class RAGService {
       return result;
 
     } catch (error) {
-      console.error('Error deleting document:', error);
+      console.error('Error deleting document from Neon:', error);
       throw error;
     }
   }
@@ -167,14 +169,15 @@ class RAGService {
         query: query.trim(),
         options: {
           limit: options.limit || 10,
-          threshold: options.threshold || 0.3
+          threshold: options.threshold || 0.3,
+          documentIds: options.documentIds || null
         }
       });
       
       return result;
 
     } catch (error) {
-      console.error('Error searching documents:', error);
+      console.error('Error searching documents in Neon:', error);
       throw error;
     }
   }
@@ -193,7 +196,7 @@ class RAGService {
 
       const ragPrompt = `You are AcceleraQA, an AI assistant specialized in pharmaceutical quality and compliance. 
 
-Use the following document context to answer the user's question. The documents have been retrieved using text-based search and contain relevant information.
+Use the following document context to answer the user's question. The documents have been retrieved using full-text search from a PostgreSQL database and contain relevant information.
 
 DOCUMENT CONTEXT:
 ${context.substring(0, 10000)} ${context.length > 10000 ? '...[truncated]' : ''}
@@ -219,7 +222,7 @@ Answer:`;
         sourceDocs.forEach(doc => {
           const docResults = searchResults.filter(r => r.filename === doc);
           const avgScore = docResults.reduce((sum, r) => sum + r.similarity, 0) / docResults.length;
-          sourceAttribution += `• ${doc} (${(avgScore * 100).toFixed(1)}% match)\n`;
+          sourceAttribution += `• ${doc} (${(avgScore * 100).toFixed(1)}% relevance)\n`;
         });
         
         if (highScoreResults.length > 0) {
@@ -235,13 +238,13 @@ Answer:`;
           totalSources: searchResults.length,
           highScoreSources: highScoreResults.length,
           avgScore: searchResults.reduce((sum, r) => sum + r.similarity, 0) / searchResults.length,
-          searchType: 'text-based',
-          processingMode: 'fast'
+          searchType: 'full-text-postgresql',
+          processingMode: 'neon-database'
         }
       };
 
     } catch (error) {
-      console.error('Error generating fast RAG response:', error);
+      console.error('Error generating Neon RAG response:', error);
       throw error;
     }
   }
@@ -255,7 +258,7 @@ Answer:`;
       return result;
 
     } catch (error) {
-      console.error('Error getting fast stats:', error);
+      console.error('Error getting Neon stats:', error);
       throw error;
     }
   }
@@ -264,10 +267,11 @@ Answer:`;
     try {
       const diagnostics = {
         timestamp: new Date().toISOString(),
-        mode: 'fast-processing',
+        mode: 'neon-postgresql',
         tests: {}
       };
       
+      // Test connection
       try {
         const connectionTest = await this.testConnection();
         diagnostics.tests.connectivity = connectionTest;
@@ -278,6 +282,7 @@ Answer:`;
         };
       }
       
+      // Test document listing
       try {
         const documents = await this.getDocuments();
         diagnostics.tests.documentListing = {
@@ -291,12 +296,13 @@ Answer:`;
         };
       }
       
+      // Test search functionality
       try {
-        const searchResult = await this.searchDocuments('pharmaceutical quality', { limit: 3 });
+        const searchResult = await this.searchDocuments('pharmaceutical quality gmp', { limit: 3 });
         diagnostics.tests.search = {
           success: true,
           resultsFound: searchResult.results?.length || 0,
-          searchType: searchResult.searchType || 'text-based'
+          searchType: searchResult.searchType || 'full-text'
         };
       } catch (error) {
         diagnostics.tests.search = {
@@ -305,6 +311,7 @@ Answer:`;
         };
       }
       
+      // Test stats
       try {
         const stats = await this.getStats();
         diagnostics.tests.stats = {
@@ -325,18 +332,18 @@ Answer:`;
         score: (successfulTests / totalTests) * 100,
         status: successfulTests === totalTests ? 'healthy' : 
                 successfulTests > totalTests / 2 ? 'partial' : 'unhealthy',
-        mode: 'fast-processing',
+        mode: 'neon-postgresql',
         features: {
-          instantUpload: true,
-          textSearch: true,
-          semanticSearch: false,
-          embeddingGeneration: false
+          persistentStorage: true,
+          fullTextSearch: true,
+          scalableDatabase: true,
+          backupAndRecovery: true
         },
         recommendations: []
       };
       
       if (!diagnostics.tests.connectivity?.success) {
-        diagnostics.health.recommendations.push('Check Netlify function deployment');
+        diagnostics.health.recommendations.push('Check Neon database connection and credentials');
       }
       
       if (!diagnostics.tests.search?.success) {
@@ -344,16 +351,16 @@ Answer:`;
       }
       
       if (diagnostics.health.status === 'healthy') {
-        diagnostics.health.recommendations.push('System working well! Upload documents and try search functionality.');
+        diagnostics.health.recommendations.push('System working well! Neon PostgreSQL provides robust, scalable document storage and search.');
       }
       
       return diagnostics;
       
     } catch (error) {
-      console.error('Error running diagnostics:', error);
+      console.error('Error running Neon diagnostics:', error);
       return {
         timestamp: new Date().toISOString(),
-        mode: 'fast-processing',
+        mode: 'neon-postgresql',
         health: {
           score: 0,
           status: 'error',
@@ -365,45 +372,60 @@ Answer:`;
 
   async testUpload() {
     try {
-      const testContent = `Test Document for AcceleraQA RAG System
+      const testContent = `Test Document for AcceleraQA Neon RAG System
 
-This is a small test document to verify the upload functionality works correctly.
+This is a comprehensive test document to verify the Neon PostgreSQL upload functionality works correctly.
 
-Key Topics:
-- Good Manufacturing Practice (GMP)
-- Quality Control Testing
-- Process Validation
-- Regulatory Compliance
+Key Topics Covered:
+- Good Manufacturing Practice (GMP) compliance requirements
+- Quality Control Testing procedures and protocols
+- Process Validation lifecycle and documentation
+- Regulatory Compliance with FDA and ICH guidelines
 
-This test ensures the RAG system can process documents quickly without timeouts.`;
+Database Features Tested:
+- Document storage with full metadata
+- Text chunking for optimal search performance
+- Full-text search capabilities using PostgreSQL
+- Persistent storage with backup and recovery
 
-      const testFile = new File([testContent], 'test-document.txt', { type: 'text/plain' });
+This test ensures the Neon RAG system can process documents efficiently and provide reliable search functionality for pharmaceutical quality professionals.
+
+Quality Assurance Notes:
+- All processes must follow validated procedures
+- Documentation must be complete and auditable
+- Change control processes must be implemented
+- Regular review and updates are required
+
+This document will be stored in Neon PostgreSQL database and indexed for fast retrieval.`;
+
+      const testFile = new File([testContent], 'neon-test-document.txt', { type: 'text/plain' });
       
       const result = await this.uploadDocument(testFile, {
         category: 'test',
-        tags: ['test', 'upload-verification'],
-        testDocument: true
+        tags: ['test', 'neon-verification', 'postgresql'],
+        testDocument: true,
+        description: 'Test document for Neon PostgreSQL RAG system'
       });
       
       return {
         success: true,
         uploadResult: result,
-        message: 'Test upload completed successfully'
+        message: 'Test upload to Neon completed successfully'
       };
       
     } catch (error) {
-      console.error('Test upload failed:', error);
+      console.error('Neon test upload failed:', error);
       return {
         success: false,
         error: error.message,
-        message: 'Test upload failed'
+        message: 'Test upload to Neon failed'
       };
     }
   }
 
   async testSearch() {
     try {
-      const searchResult = await this.searchDocuments('GMP quality manufacturing', {
+      const searchResult = await this.searchDocuments('GMP quality manufacturing validation compliance', {
         limit: 5,
         threshold: 0.2
       });
@@ -411,15 +433,15 @@ This test ensures the RAG system can process documents quickly without timeouts.
       return {
         success: true,
         searchResult: searchResult,
-        message: `Search test completed - found ${searchResult.results?.length || 0} results`
+        message: `Neon search test completed - found ${searchResult.results?.length || 0} results using PostgreSQL full-text search`
       };
       
     } catch (error) {
-      console.error('Test search failed:', error);
+      console.error('Neon test search failed:', error);
       return {
         success: false,
         error: error.message,
-        message: 'Test search failed'
+        message: 'Test search in Neon failed'
       };
     }
   }
