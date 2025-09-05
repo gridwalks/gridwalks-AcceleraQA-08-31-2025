@@ -9,8 +9,7 @@ const client = jwksClient({
   timeout: 30000,
   cache: true,
   rateLimit: true,
-  jwksRequestsPerMinute: 5,
-  jwksUri: `https://${process.env.REACT_APP_AUTH0_DOMAIN}/.well-known/jwks.json`
+  jwksRequestsPerMinute: 5
 });
 
 function getKey(header, callback) {
