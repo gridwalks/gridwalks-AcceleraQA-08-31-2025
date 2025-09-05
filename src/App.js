@@ -9,6 +9,7 @@ import AuthScreen from './components/AuthScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 import RAGConfigurationPage from './components/RAGConfigurationPage';
+import AdminScreen from './components/AdminScreen';
 
 // Services
 import openaiService from './services/openaiService';
@@ -47,11 +48,14 @@ const AcceleraQA = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isServerAvailable, setIsServerAvailable] = useState(true);
   const [showRAGConfig, setShowRAGConfig] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const [ragEnabled, setRAGEnabled] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState(null);
   
   const messagesEndRef = useRef(null);
+
+  const isAdmin = user?.roles?.includes('admin');
 
   // Memoized values
   const allMessages = useMemo(() => 
@@ -458,6 +462,16 @@ const AcceleraQA = () => {
     setShowRAGConfig(false);
   }, []);
 
+  const handleShowAdmin = useCallback(() => {
+    if (isAdmin) {
+      setShowAdmin(true);
+    }
+  }, [isAdmin]);
+
+  const handleCloseAdmin = useCallback(() => {
+    setShowAdmin(false);
+  }, []);
+
   // Force refresh conversations from server
   const handleRefreshConversations = useCallback(async () => {
     if (!isServerAvailable || !user) return;
@@ -511,11 +525,16 @@ const AcceleraQA = () => {
     return <AuthScreen />;
   }
 
+  // Admin interface
+  if (showAdmin && isAdmin) {
+    return <AdminScreen onBack={handleCloseAdmin} />;
+  }
+
   // Main authenticated interface
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-gray-50">
-        <Header 
+        <Header
           user={user}
           showNotebook={showNotebook}
           setShowNotebook={setShowNotebook}
@@ -524,6 +543,8 @@ const AcceleraQA = () => {
           clearAllConversations={clearAllConversations}
           isServerAvailable={isServerAvailable}
           onShowRAGConfig={handleShowRAGConfig}
+          isAdmin={isAdmin}
+          onShowAdmin={handleShowAdmin}
           isSaving={isSaving}
           lastSaveTime={lastSaveTime}
           onRefresh={handleRefreshConversations}
