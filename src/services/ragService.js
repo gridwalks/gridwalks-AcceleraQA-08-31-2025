@@ -6,10 +6,14 @@ const API_BASE_URL = '/.netlify/functions';
 
 class RAGService {
   constructor() {
-    this.apiUrl = `${API_BASE_URL}/neon-rag`;
+    // TEMPORARY: Use the fixed function endpoint
+    this.apiUrl = `${API_BASE_URL}/neon-rag-fixed`;
     this.maxChunkSize = 1000;
     this.chunkOverlap = 200;
   }
+
+  // ... rest of your RAGService code stays the same
+}
 
   async makeAuthenticatedRequest(endpoint, data = {}) {
     try {
