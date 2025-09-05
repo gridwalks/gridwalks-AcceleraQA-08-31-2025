@@ -58,6 +58,19 @@ class RAGService {
             } else {
               console.warn('No sub field in JWT token');
             }
+          } else if (tokenParts.length === 5) {
+            console.log('Encrypted token detected - fetching user profile for x-user-id');
+            try {
+              const user = await authService.getUser();
+              if (user?.sub) {
+                headers['x-user-id'] = user.sub;
+                console.log('Added x-user-id header from profile for encrypted token:', user.sub.substring(0, 10) + '...');
+              } else {
+                console.warn('Could not retrieve user profile for x-user-id');
+              }
+            } catch (profileError) {
+              console.warn('Error fetching user profile for x-user-id:', profileError.message);
+            }
           } else {
             console.warn('Invalid JWT format - parts:', tokenParts.length);
             try {
