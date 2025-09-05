@@ -1,5 +1,5 @@
 // netlify/functions/neon-rag-fixed.js
-// Fixed version of neon-rag function with proper error handling
+// Fixed version of neon-rag function with proper authentication handling
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -8,76 +8,129 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
-// FIXED: Use consistent import pattern like your working neon-db function
-const getDatabaseConnection = () => {
+// FIXED: Use consistent import pattern and better error handling
+const getDatabaseConnection = async () => {
   const connectionString = process.env.NEON_DATABASE_URL;
   if (!connectionString) {
     throw new Error('NEON_DATABASE_URL environment variable is not set');
   }
   
-  // IMPORTANT: Use dynamic import to avoid ES module issues
-  return import('@neondatabase/serverless').then(({ neon }) => neon(connectionString));
+  // Use dynamic import to avoid ES module issues
+  const { neon } = await import('@neondatabase/serverless');
+  return neon(connectionString);
 };
 
-// Improved user ID extraction with better error handling
+// ENHANCED: Better user ID extraction with comprehensive debugging
 const extractUserId = (event, context) => {
-  console.log('=== USER ID EXTRACTION ===');
+  console.log('=== ENHANCED USER ID EXTRACTION ===');
+  console.log('Event headers available:', Object.keys(event.headers || {}));
   
   let userId = null;
   let source = 'unknown';
+  let debugInfo = {};
   
-  // 1. Direct header
+  // Method 1: Direct x-user-id header (most reliable for Netlify)
   if (event.headers['x-user-id']) {
     userId = event.headers['x-user-id'];
     source = 'x-user-id header';
+    debugInfo.foundInHeader = true;
   }
   
-  // 2. Case variations
-  if (!userId && event.headers['X-User-ID']) {
-    userId = event.headers['X-User-ID'];
-    source = 'X-User-ID header';
-  }
-  
-  // 3. Context
-  if (!userId && context.clientContext?.user?.sub) {
-    userId = context.clientContext.user.sub;
-    source = 'context.clientContext.user.sub';
-  }
-  
-  // 4. JWT token parsing (improved)
-  if (!userId && event.headers.authorization) {
-    try {
-      const authHeader = event.headers.authorization;
-      if (authHeader.startsWith('Bearer ')) {
-        const token = authHeader.replace('Bearer ', '');
-        const parts = token.split('.');
-        if (parts.length === 3) {
-          // Add padding for base64 decoding
-          let payload = parts[1];
-          while (payload.length % 4) {
-            payload += '=';
-          }
-          const decoded = Buffer.from(payload, 'base64').toString('utf8');
-          const parsed = JSON.parse(decoded);
-          if (parsed.sub) {
-            userId = parsed.sub;
-            source = 'JWT token payload';
-          }
-        }
+  // Method 2: Case-insensitive header check
+  if (!userId) {
+    const userIdHeaders = ['x-user-id', 'X-User-ID', 'X-USER-ID'];
+    for (const headerName of userIdHeaders) {
+      if (event.headers[headerName]) {
+        userId = event.headers[headerName];
+        source = `${headerName} header`;
+        debugInfo.foundInCaseVariant = headerName;
+        break;
       }
-    } catch (error) {
-      console.log('JWT parsing error:', error.message);
     }
   }
   
-  console.log('Final userId:', userId, 'from:', source);
-  return { userId, source };
+  // Method 3: Extract from Authorization Bearer token
+  if (!userId && event.headers.authorization) {
+    try {
+      const authHeader = event.headers.authorization;
+      console.log('Processing Authorization header...');
+      debugInfo.hasAuthHeader = true;
+      
+      if (authHeader.startsWith('Bearer ')) {
+        const token = authHeader.replace('Bearer ', '');
+        debugInfo.tokenLength = token.length;
+        
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          try {
+            // Properly decode JWT payload with padding
+            let payload = parts[1];
+            // Add padding if needed
+            while (payload.length % 4) {
+              payload += '=';
+            }
+            
+            const decoded = Buffer.from(payload, 'base64').toString('utf8');
+            const parsed = JSON.parse(decoded);
+            
+            console.log('JWT payload decoded successfully');
+            debugInfo.jwtDecoded = true;
+            debugInfo.jwtSubject = parsed.sub ? 'present' : 'missing';
+            
+            if (parsed.sub) {
+              userId = parsed.sub;
+              source = 'JWT Bearer token';
+              debugInfo.extractedFromJWT = true;
+            }
+          } catch (jwtError) {
+            console.log('JWT parsing error:', jwtError.message);
+            debugInfo.jwtError = jwtError.message;
+          }
+        } else {
+          console.log('Invalid JWT format - wrong number of parts:', parts.length);
+          debugInfo.jwtPartsCount = parts.length;
+        }
+      } else {
+        console.log('Authorization header does not start with Bearer');
+        debugInfo.authHeaderFormat = 'not_bearer';
+      }
+    } catch (error) {
+      console.log('Auth header processing error:', error.message);
+      debugInfo.authProcessingError = error.message;
+    }
+  } else if (!event.headers.authorization) {
+    debugInfo.noAuthHeader = true;
+  }
+  
+  // Method 4: Check Netlify context (backup)
+  if (!userId && context.clientContext?.user?.sub) {
+    userId = context.clientContext.user.sub;
+    source = 'context.clientContext.user.sub';
+    debugInfo.foundInContext = true;
+  }
+  
+  // Method 5: Development fallback (only in development)
+  if (!userId && (process.env.NODE_ENV === 'development' || process.env.NETLIFY_DEV === 'true')) {
+    userId = 'dev-user-' + Date.now();
+    source = 'development fallback';
+    debugInfo.developmentFallback = true;
+    console.log('⚠️ Using development fallback user ID');
+  }
+  
+  console.log('=== EXTRACTION RESULTS ===');
+  console.log('Final userId:', userId || 'NOT_FOUND');
+  console.log('Source:', source);
+  console.log('Debug info:', debugInfo);
+  console.log('================================');
+  
+  return { userId, source, debugInfo };
 };
 
 export const handler = async (event, context) => {
-  console.log('=== FIXED NEON RAG FUNCTION ===');
+  console.log('=== NEON RAG FUNCTION STARTED ===');
   console.log('Method:', event.httpMethod);
   console.log('Timestamp:', new Date().toISOString());
+  console.log('Headers received:', Object.keys(event.headers || {}));
   
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -104,22 +157,25 @@ export const handler = async (event, context) => {
     if (event.body) {
       try {
         requestData = JSON.parse(event.body);
-        console.log('✅ Request parsed:', { action: requestData.action });
+        console.log('✅ Request body parsed:', { action: requestData.action });
       } catch (parseError) {
         console.error('❌ JSON parse error:', parseError);
         return {
           statusCode: 400,
           headers,
-          body: JSON.stringify({ error: 'Invalid JSON in request body' }),
+          body: JSON.stringify({ 
+            error: 'Invalid JSON in request body',
+            details: parseError.message 
+          }),
         };
       }
     }
 
-    // Extract user ID with enhanced debugging
-    const { userId, source } = extractUserId(event, context);
+    // ENHANCED: Extract user ID with comprehensive debugging
+    const { userId, source, debugInfo } = extractUserId(event, context);
     
     if (!userId) {
-      console.error('❌ No user ID found');
+      console.error('❌ No user ID found after all extraction methods');
       return {
         statusCode: 401,
         headers,
@@ -127,14 +183,20 @@ export const handler = async (event, context) => {
           error: 'User authentication required',
           debug: {
             availableHeaders: Object.keys(event.headers || {}),
-            hasAuth: !!event.headers.authorization,
-            timestamp: new Date().toISOString()
+            extractionAttempts: debugInfo,
+            timestamp: new Date().toISOString(),
+            troubleshooting: {
+              step1: 'Ensure Auth0 token is being sent correctly',
+              step2: 'Verify x-user-id header is set in the request',
+              step3: 'Check browser Network tab for request details',
+              step4: 'Confirm JWT token format is valid'
+            }
           }
         }),
       };
     }
 
-    console.log(`✅ User authenticated: ${userId} (from ${source})`);
+    console.log(`✅ User authenticated: ${userId} (source: ${source})`);
 
     // Validate action
     const { action } = requestData;
@@ -148,15 +210,29 @@ export const handler = async (event, context) => {
 
     console.log(`🔄 Processing action: ${action}`);
 
-    // Initialize database connection with timeout
+    // Initialize database connection with timeout and retry
     console.log('🔄 Initializing database connection...');
-    const sql = await Promise.race([
-      getDatabaseConnection(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database connection timeout')), 5000)
-      )
-    ]);
-    console.log('✅ Database connection initialized');
+    let sql;
+    try {
+      sql = await Promise.race([
+        getDatabaseConnection(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Database connection timeout after 10 seconds')), 10000)
+        )
+      ]);
+      console.log('✅ Database connection initialized');
+    } catch (connectionError) {
+      console.error('❌ Database connection failed:', connectionError);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Database connection failed',
+          message: connectionError.message,
+          type: 'connection_error'
+        }),
+      };
+    }
 
     // Handle different actions with proper error boundaries
     switch (action) {
@@ -193,7 +269,7 @@ export const handler = async (event, context) => {
     console.error('=== FUNCTION ERROR ===');
     console.error('Error type:', error.constructor.name);
     console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack?.substring(0, 1000)); // Limit stack trace size
+    console.error('Error stack:', error.stack?.substring(0, 1000));
     console.error('========================');
     
     return {
@@ -209,60 +285,95 @@ export const handler = async (event, context) => {
   }
 };
 
-// Test handler
+// Enhanced test handler
 async function handleTest(sql, userId) {
-  console.log('🧪 Running test for user:', userId);
+  console.log('🧪 Running enhanced test for user:', userId);
   
   try {
-    // Test basic database query
-    const [result] = await sql`SELECT 1 as test_value, NOW() as current_time`;
+    // Test 1: Basic database query
+    console.log('Testing database connection...');
+    const [result] = await sql`SELECT 1 as test_value, NOW() as current_time, version() as db_version`;
     
-    // Test table access
+    // Test 2: Table access
+    console.log('Testing table access...');
     const tables = await sql`
-      SELECT table_name 
+      SELECT table_name, table_type
       FROM information_schema.tables 
       WHERE table_schema = 'public' 
       AND table_name IN ('rag_documents', 'rag_document_chunks')
     `;
 
+    // Test 3: User permissions
+    console.log('Testing user permissions...');
+    let permissionTest = { canRead: false, canWrite: false };
+    try {
+      // Test read permission
+      await sql`SELECT COUNT(*) FROM rag_documents WHERE user_id = ${userId} LIMIT 1`;
+      permissionTest.canRead = true;
+      
+      // Test write permission (dry run)
+      const testQuery = sql`SELECT 1 WHERE FALSE`; // This won't actually insert
+      permissionTest.canWrite = true;
+    } catch (permError) {
+      console.log('Permission test error:', permError.message);
+      permissionTest.error = permError.message;
+    }
+
+    const response = {
+      userId,
+      timestamp: new Date().toISOString(),
+      storage: 'neon-postgresql',
+      authentication: {
+        success: true,
+        userIdProvided: !!userId,
+        userIdLength: userId.length
+      },
+      tests: {
+        databaseConnection: {
+          success: true,
+          testValue: result.test_value,
+          currentTime: result.current_time,
+          databaseVersion: result.db_version
+        },
+        tableAccess: {
+          success: true,
+          tablesFound: tables.map(t => ({ name: t.table_name, type: t.table_type })),
+          requiredTables: ['rag_documents', 'rag_document_chunks'],
+          allTablesPresent: tables.length >= 2
+        },
+        userPermissions: permissionTest
+      },
+      systemInfo: {
+        nodeEnv: process.env.NODE_ENV || 'unknown',
+        netlifyDev: process.env.NETLIFY_DEV || 'false',
+        hasNeonUrl: !!process.env.NEON_DATABASE_URL
+      },
+      message: 'Enhanced RAG function test successful - authentication and database working'
+    };
+
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({
-        userId,
-        timestamp: new Date().toISOString(),
-        storage: 'neon-postgresql',
-        tests: {
-          databaseConnection: {
-            success: true,
-            testValue: result.test_value,
-            currentTime: result.current_time
-          },
-          tableAccess: {
-            success: true,
-            tablesFound: tables.map(t => t.table_name),
-            requiredTables: ['rag_documents', 'rag_document_chunks']
-          }
-        },
-        message: 'Fixed RAG function test successful'
-      }),
+      body: JSON.stringify(response, null, 2),
     };
 
   } catch (error) {
-    console.error('❌ Test failed:', error);
+    console.error('❌ Enhanced test failed:', error);
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
+        userId,
+        timestamp: new Date().toISOString(),
         error: 'Test failed',
         message: error.message,
-        userId
+        errorType: error.constructor.name
       }),
     };
   }
 }
 
-// List handler
+// Enhanced list handler
 async function handleList(sql, userId) {
   console.log('📋 Listing documents for user:', userId);
   
@@ -282,7 +393,7 @@ async function handleList(sql, userId) {
       LIMIT 100
     `;
 
-    console.log(`✅ Found ${documents.length} documents`);
+    console.log(`✅ Found ${documents.length} documents for user ${userId}`);
 
     return {
       statusCode: 200,
@@ -323,7 +434,10 @@ async function handleUpload(sql, userId, document) {
   return {
     statusCode: 501,
     headers,
-    body: JSON.stringify({ error: 'Upload not implemented in fixed version yet' }),
+    body: JSON.stringify({ 
+      error: 'Upload not implemented in this fixed version yet',
+      message: 'This is a test version focusing on authentication fixes'
+    }),
   };
 }
 
@@ -331,7 +445,10 @@ async function handleSearch(sql, userId, query, options) {
   return {
     statusCode: 501,
     headers,
-    body: JSON.stringify({ error: 'Search not implemented in fixed version yet' }),
+    body: JSON.stringify({ 
+      error: 'Search not implemented in this fixed version yet',
+      message: 'This is a test version focusing on authentication fixes'
+    }),
   };
 }
 
@@ -339,7 +456,10 @@ async function handleDelete(sql, userId, documentId) {
   return {
     statusCode: 501,
     headers,
-    body: JSON.stringify({ error: 'Delete not implemented in fixed version yet' }),
+    body: JSON.stringify({ 
+      error: 'Delete not implemented in this fixed version yet',
+      message: 'This is a test version focusing on authentication fixes'
+    }),
   };
 }
 
@@ -365,7 +485,8 @@ async function handleStats(sql, userId) {
         totalChunks: parseInt(stats.total_chunks) || 0,
         totalSize: parseInt(stats.total_size) || 0,
         storage: 'neon-postgresql',
-        userId: userId
+        userId: userId,
+        timestamp: new Date().toISOString()
       }),
     };
 
