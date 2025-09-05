@@ -54,7 +54,7 @@
 
 # Function settings - Updated for ES Modules and Neon
 [functions]
-  external_node_modules = ["@neondatabase/serverless", "mammoth"]
+  external_node_modules = ["@neondatabase/serverless", "mammoth", "jsonwebtoken", "jwks-rsa"]
   node_bundler = "esbuild"
   directory = "netlify/functions"
 
