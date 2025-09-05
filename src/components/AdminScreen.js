@@ -30,6 +30,34 @@ import ragService from '../services/ragService';
 import { getToken, getTokenInfo } from '../services/authService';
 import { hasAdminRole } from '../utils/auth';
 
+export const checkStorageHealth = async () => {
+  // Check browser storage capacity
+  try {
+    if (typeof navigator === 'undefined' || !navigator.storage) {
+      return {
+        status: 'unknown',
+        message: 'Storage info unavailable',
+        quota: null
+      };
+    }
+
+    const usage = await navigator.storage.estimate();
+    const usagePercent = (usage.usage / usage.quota * 100).toFixed(1);
+
+    return {
+      status: usage.usage / usage.quota < 0.8 ? 'healthy' : 'warning',
+      message: `Storage ${usagePercent}% used`,
+      quota: `${(usage.quota / 1024 / 1024).toFixed(0)}MB`
+    };
+  } catch (error) {
+    return {
+      status: 'unknown',
+      message: 'Storage info unavailable',
+      quota: null
+    };
+  }
+};
+
 const AdminScreen = ({ user, onBack }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(false);
@@ -220,26 +248,6 @@ const AdminScreen = ({ user, onBack }) => {
         status: 'error',
         message: error.message,
         expiresIn: null
-      };
-    }
-  };
-
-  const checkStorageHealth = async () => {
-    // Check browser storage capacity
-    try {
-      const usage = navigator.storage ? await navigator.storage.estimate() : null;
-      const usagePercent = usage ? (usage.usage / usage.quota * 100).toFixed(1) : 'Unknown';
-      
-      return {
-        status: usage && usage.usage / usage.quota < 0.8 ? 'healthy' : 'warning',
-        message: `Storage ${usagePercent}% used`,
-        quota: usage ? `${(usage.quota / 1024 / 1024).toFixed(0)}MB` : 'Unknown'
-      };
-    } catch (error) {
-      return {
-        status: 'unknown',
-        message: 'Storage info unavailable',
-        quota: null
       };
     }
   };
