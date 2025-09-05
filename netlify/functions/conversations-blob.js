@@ -187,19 +187,17 @@ async function resetUserConversationStats(userId) {
   try {
     const userStore = getUserStore();
     const statsKey = `${userId}/conversation_stats`;
-    
+
     const resetStats = {
       conversations: 0,
       messages: 0,
       ragConversations: 0,
       lastUpdated: new Date().toISOString()
     };
-    
+
     await userStore.set(statsKey, JSON.stringify(resetStats));
   } catch (error) {
     console.warn('Error resetting user conversation stats:', error);
-  }
-};
   }
 }
 
@@ -362,4 +360,6 @@ async function getConversationStats(userId) {
     };
   } catch (error) {
     console.error('Error getting conversation stats:', error);
-    throw error
+    throw error;
+  }
+}
