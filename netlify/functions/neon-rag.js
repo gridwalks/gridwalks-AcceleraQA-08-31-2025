@@ -1,50 +1,39 @@
-// Fixed authentication extraction for netlify/functions/neon-rag.js
-// Replace the extractUserId function with this improved version
-
+// Enhanced user ID extraction with better JWT handling
 const extractUserId = (event, context) => {
-  console.log('=== USER ID EXTRACTION DEBUG ===');
-  
-  // Log available headers (safely)
-  const headerKeys = Object.keys(event.headers || {});
-  console.log('Available headers:', headerKeys);
+  console.log('=== ENHANCED USER ID EXTRACTION ===');
+  console.log('Event headers available:', Object.keys(event.headers || {}));
   
   let userId = null;
   let source = 'unknown';
+  let debugInfo = {};
   
-  // 1. Direct header (most reliable for Netlify)
+  // Method 1: Direct x-user-id header (most reliable for Netlify)
   if (event.headers['x-user-id']) {
     userId = event.headers['x-user-id'];
     source = 'x-user-id header';
+    debugInfo.foundInHeader = true;
   }
   
-  // 2. Case variations
-  if (!userId && event.headers['X-User-ID']) {
-    userId = event.headers['X-User-ID'];
-    source = 'X-User-ID header';
-  }
-  
-  // 3. Context (less reliable but worth trying)
-  if (!userId && context.clientContext?.user?.sub) {
-    userId = context.clientContext.user.sub;
-    source = 'context.clientContext.user.sub';
-  }
-  
-  // 4. Try to parse from Authorization header (improved)
+  // Method 2: Extract from Authorization Bearer token
   if (!userId && event.headers.authorization) {
     try {
       const authHeader = event.headers.authorization;
-      console.log('Auth header present:', !!authHeader);
+      console.log('Processing Authorization header...');
+      debugInfo.hasAuthHeader = true;
       
       if (authHeader.startsWith('Bearer ')) {
         const token = authHeader.replace('Bearer ', '');
-        console.log('Token extracted, length:', token.length);
+        debugInfo.tokenLength = token.length;
         
-        // Improved JWT parsing with better error handling
         const parts = token.split('.');
+        console.log('JWT parts count:', parts.length);
+        
+        // Handle different JWT formats
         if (parts.length === 3) {
+          // Standard JWT (JWS): header.payload.signature
           try {
-            // Add padding if needed for base64 decoding
             let payload = parts[1];
+            // Add padding if needed
             while (payload.length % 4) {
               payload += '=';
             }
@@ -52,60 +41,63 @@ const extractUserId = (event, context) => {
             const decoded = Buffer.from(payload, 'base64').toString('utf8');
             const parsed = JSON.parse(decoded);
             
-            console.log('JWT payload parsed successfully');
-            console.log('Payload sub:', parsed.sub ? 'present' : 'missing');
+            console.log('JWT payload decoded successfully');
+            debugInfo.jwtDecoded = true;
+            debugInfo.jwtSubject = parsed.sub ? 'present' : 'missing';
             
             if (parsed.sub) {
               userId = parsed.sub;
-              source = 'JWT token payload';
+              source = 'JWT Bearer token (3-part)';
+              debugInfo.extractedFromJWT = true;
             }
           } catch (jwtError) {
-            console.log('JWT parsing error:', jwtError.message);
+            console.log('3-part JWT parsing error:', jwtError.message);
+            debugInfo.jwtError = jwtError.message;
           }
+        } else if (parts.length === 5) {
+          // Encrypted JWT (JWE): header.encrypted_key.iv.ciphertext.tag
+          console.log('Detected 5-part JWT (JWE - encrypted)');
+          debugInfo.jwtType = 'JWE (encrypted)';
+          
+          // For JWE, we can't decode the payload directly
+          // Instead, rely on Auth0's server-side decryption
+          // The user ID should be passed via x-user-id header instead
+          console.log('Cannot decode JWE payload client-side, need server-side handling');
+          debugInfo.requiresServerDecryption = true;
         } else {
-          console.log('Invalid JWT format - wrong number of parts:', parts.length);
+          console.log('Unexpected JWT format - parts:', parts.length);
+          debugInfo.jwtPartsCount = parts.length;
         }
+      } else {
+        console.log('Authorization header does not start with Bearer');
+        debugInfo.authHeaderFormat = 'not_bearer';
       }
     } catch (error) {
       console.log('Auth header processing error:', error.message);
+      debugInfo.authProcessingError = error.message;
     }
   }
   
-  // 5. Fallback to a test user ID for debugging (remove in production)
-  if (!userId && process.env.NODE_ENV === 'development') {
-    userId = 'debug-user-' + Date.now();
-    source = 'debug fallback';
-    console.log('Using debug fallback user ID');
+  // Method 3: Check Netlify context (backup)
+  if (!userId && context.clientContext?.user?.sub) {
+    userId = context.clientContext.user.sub;
+    source = 'context.clientContext.user.sub';
+    debugInfo.foundInContext = true;
   }
   
-  console.log('Final userId:', userId);
+  // Method 4: Development fallback
+  if (!userId && (process.env.NODE_ENV === 'development' || process.env.NETLIFY_DEV === 'true')) {
+    userId = 'dev-user-' + Date.now();
+    source = 'development fallback';
+    debugInfo.developmentFallback = true;
+    console.log('⚠️ Using development fallback user ID');
+  }
+  
+  console.log('=== EXTRACTION RESULTS ===');
+  console.log('Final userId:', userId || 'NOT_FOUND');
   console.log('Source:', source);
+  console.log('Debug info:', debugInfo);
   console.log('================================');
   
-  return { userId, source };
-};
-
-// Also add this helper function for better error responses
-const createAuthErrorResponse = (userId, source) => {
-  return {
-    statusCode: 401,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-user-id',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ 
-      error: 'User authentication required',
-      debug: {
-        userId: userId || 'none',
-        source: source || 'none',
-        timestamp: new Date().toISOString(),
-        troubleshooting: {
-          checkAuthToken: 'Ensure Auth0 token is being sent correctly',
-          checkHeaders: 'Verify x-user-id header is set',
-          checkNetlify: 'Check Netlify function logs for more details'
-        }
-      }
-    }),
-  };
+  return { userId, source, debugInfo };
 };
