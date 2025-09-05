@@ -78,8 +78,10 @@ class AuthService {
       if (!isAuth) {
         return null;
       }
-
-      return await this.auth0Client.getUser();
+      const user = await this.auth0Client.getUser();
+      const claims = await this.auth0Client.getIdTokenClaims();
+      const roles = claims?.['https://acceleraqa.com/roles'] || [];
+      return { ...user, roles };
     } catch (error) {
       console.error('Error getting user:', error);
       return null;

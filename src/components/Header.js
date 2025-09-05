@@ -1,6 +1,6 @@
 // src/components/Header.js - Updated with save status and refresh functionality
 import React, { memo } from 'react';
-import { Download, Clock, MessageSquare, LogOut, User, AlertTriangle, FileSearch, RefreshCw, Cloud, CloudOff } from 'lucide-react';
+import { Download, Clock, MessageSquare, LogOut, User, AlertTriangle, FileSearch, RefreshCw, Cloud, CloudOff, Shield } from 'lucide-react';
 import { handleLogout } from '../services/authService';
 
 const Header = memo(({ 
@@ -14,7 +14,9 @@ const Header = memo(({
   onShowRAGConfig,
   isSaving = false,
   lastSaveTime = null,
-  onRefresh
+  onRefresh,
+  isAdmin = false,
+  onShowAdmin
 }) => {
   const handleToggleView = () => {
     setShowNotebook(!showNotebook);
@@ -39,6 +41,12 @@ const Header = memo(({
   const handleRAGConfigClick = () => {
     if (onShowRAGConfig) {
       onShowRAGConfig();
+    }
+  };
+
+  const handleAdminClick = () => {
+    if (onShowAdmin) {
+      onShowAdmin();
     }
   };
 
@@ -72,7 +80,7 @@ const Header = memo(({
 
   const formatLastSaveTime = (saveTime) => {
     if (!saveTime) return null;
-    
+
     const now = new Date();
     const diffMs = now - saveTime;
     const diffMins = Math.floor(diffMs / 60000);
@@ -85,6 +93,9 @@ const Header = memo(({
     
     return saveTime.toLocaleDateString();
   };
+
+  const displayName = user?.email || user?.name || 'User';
+  const roleLabel = user?.roles?.length ? user.roles.join(', ') : null;
 
   return (
     <header className="bg-gradient-to-r from-gray-900 via-gray-800 to-black text-white border-b border-gray-800 shadow">
@@ -106,7 +117,8 @@ const Header = memo(({
             <div className="flex items-center space-x-2 text-sm text-gray-300">
               <User className="h-4 w-4" />
               <span className="max-w-40 truncate">
-                {user?.email || user?.name || 'User'}
+                {displayName}
+                {roleLabel ? ` (${roleLabel})` : ''}
               </span>
             </div>
 
@@ -159,7 +171,19 @@ const Header = memo(({
               <FileSearch className="h-4 w-4" />
               <span className="hidden sm:block">RAG Config</span>
             </button>
-            
+
+            {isAdmin && (
+              <button
+                onClick={handleAdminClick}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="Open admin panel"
+                title="Access administrative controls"
+              >
+                <Shield className="h-4 w-4" />
+                <span className="hidden sm:block">Admin</span>
+              </button>
+            )}
+
             {/* Clear Chat */}
             <button
               onClick={clearChat}
