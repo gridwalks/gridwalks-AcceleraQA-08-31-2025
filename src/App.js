@@ -1,4 +1,4 @@
-// src/App.js - Updated with Neon PostgreSQL storage
+// src/App.js - FIXED VERSION with proper admin function passing
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
 // Components
@@ -49,7 +49,7 @@ const AcceleraQA = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isServerAvailable, setIsServerAvailable] = useState(true);
   const [showRAGConfig, setShowRAGConfig] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false); // ADMIN STATE
   const [ragEnabled, setRAGEnabled] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState(null);
@@ -57,6 +57,18 @@ const AcceleraQA = () => {
   const messagesEndRef = useRef(null);
 
   const isAdmin = hasAdminRole(user);
+
+  // Debug admin state
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('=== ADMIN DEBUG ===');
+      console.log('User:', user);
+      console.log('User roles:', user?.roles);
+      console.log('isAdmin:', isAdmin);
+      console.log('showAdmin state:', showAdmin);
+      console.log('==================');
+    }
+  }, [user, isAdmin, showAdmin]);
 
   // Memoized values
   const allMessages = useMemo(() => 
@@ -68,6 +80,35 @@ const AcceleraQA = () => {
     getMessagesByDays(allMessages), 
     [allMessages]
   );
+
+  // FIXED: Admin handlers with better debugging
+  const handleShowAdmin = useCallback(() => {
+    console.log('=== HANDLE SHOW ADMIN CALLED ===');
+    console.log('User:', user);
+    console.log('isAdmin:', isAdmin);
+    console.log('hasAdminRole result:', hasAdminRole(user));
+    
+    if (!user) {
+      console.error('No user - admin access denied');
+      alert('Please sign in to access admin features');
+      return;
+    }
+
+    if (!hasAdminRole(user)) {
+      console.error('User does not have admin role - access denied');
+      console.error('User roles:', user.roles);
+      alert('Admin access denied. You need administrator privileges.');
+      return;
+    }
+
+    console.log('✅ Admin access granted - showing admin screen');
+    setShowAdmin(true);
+  }, [user, isAdmin]);
+
+  const handleCloseAdmin = useCallback(() => {
+    console.log('Closing admin screen');
+    setShowAdmin(false);
+  }, []);
 
   // Initialize authentication and Neon service
   useEffect(() => {
@@ -100,10 +141,8 @@ const AcceleraQA = () => {
       try {
         console.log('Initializing Neon service for user:', user.sub);
         
-        // Initialize the Neon service with user data
         await initializeNeonService(user);
         
-        // Check if Neon database is available
         const serviceAvailable = await neonService.isServiceAvailable();
         setIsServerAvailable(serviceAvailable);
         
@@ -114,7 +153,6 @@ const AcceleraQA = () => {
           return;
         }
         
-        // Load existing conversations from Neon database
         console.log('Loading conversations from Neon database...');
         const loadedMessages = await loadConversations();
         
@@ -122,7 +160,6 @@ const AcceleraQA = () => {
           console.log(`Successfully loaded ${loadedMessages.length} messages from Neon database`);
           setStoredMessages(loadedMessages);
           
-          // Set current resources from the last AI message
           const lastAiMessage = loadedMessages
             .filter(msg => msg.type === 'ai' && msg.resources && msg.resources.length > 0)
             .pop();
@@ -156,12 +193,10 @@ const AcceleraQA = () => {
     const performAutoSave = async () => {
       if (!user || !isInitialized || !isServerAvailable || messages.length === 0) return;
       
-      // Don't auto-save if we only have the welcome message
       if (messages.length === 1 && messages[0].content.includes('Welcome to AcceleraQA')) {
         return;
       }
       
-      // Only auto-save if we have at least a user-AI exchange
       const nonWelcomeMessages = messages.filter(msg => 
         !(msg.type === 'ai' && msg.content.includes('Welcome to AcceleraQA'))
       );
@@ -190,7 +225,6 @@ const AcceleraQA = () => {
       }
     };
 
-    // Debounce auto-save
     const timeoutId = setTimeout(performAutoSave, 2000);
     return () => clearTimeout(timeoutId);
   }, [messages, user, isInitialized, isServerAvailable, ragEnabled]);
@@ -253,7 +287,6 @@ const AcceleraQA = () => {
         response.resources
       );
 
-      // Add sources if RAG was used
       if (response.sources) {
         aiMessage.sources = response.sources;
       }
@@ -294,7 +327,6 @@ const AcceleraQA = () => {
     try {
       console.log('Clearing current chat...');
       
-      // Save current conversation before clearing if it has meaningful content
       if (messages.length > 1 && isServerAvailable) {
         const nonWelcomeMessages = messages.filter(msg => 
           !(msg.type === 'ai' && msg.content.includes('Welcome to AcceleraQA'))
@@ -316,13 +348,11 @@ const AcceleraQA = () => {
         }
       }
       
-      // Clear current state
       setMessages([]);
       setCurrentResources([]);
       setSelectedMessages(new Set());
       setError(null);
       
-      // Initialize welcome message
       setTimeout(() => {
         initializeWelcomeMessage();
       }, 100);
@@ -330,7 +360,6 @@ const AcceleraQA = () => {
       console.log('Chat cleared successfully');
     } catch (error) {
       console.error('Error clearing chat:', error);
-      // Still clear the UI even if save failed
       setMessages([]);
       setCurrentResources([]);
       setSelectedMessages(new Set());
@@ -347,13 +376,11 @@ const AcceleraQA = () => {
       setIsSaving(true);
       await clearConversations();
       
-      // Clear all state
       setMessages([]);
       setStoredMessages([]);
       setCurrentResources([]);
       setSelectedMessages(new Set());
       
-      // Initialize welcome message
       initializeWelcomeMessage();
       
       console.log('All conversations cleared from Neon database');
@@ -463,16 +490,6 @@ const AcceleraQA = () => {
     setShowRAGConfig(false);
   }, []);
 
-  const handleShowAdmin = useCallback(() => {
-    if (hasAdminRole(user)) {
-      setShowAdmin(true);
-    }
-  }, [user]);
-
-  const handleCloseAdmin = useCallback(() => {
-    setShowAdmin(false);
-  }, []);
-
   // Force refresh conversations from server
   const handleRefreshConversations = useCallback(async () => {
     if (!isServerAvailable || !user) return;
@@ -526,9 +543,9 @@ const AcceleraQA = () => {
     return <AuthScreen />;
   }
 
-  // Admin interface
+  // FIXED: Admin interface with proper state check
   if (showAdmin && isAdmin) {
-    return <AdminScreen onBack={handleCloseAdmin} />;
+    return <AdminScreen user={user} onBack={handleCloseAdmin} />;
   }
 
   // Main authenticated interface
@@ -545,7 +562,7 @@ const AcceleraQA = () => {
           isServerAvailable={isServerAvailable}
           onShowRAGConfig={handleShowRAGConfig}
           isAdmin={isAdmin}
-          onShowAdmin={handleShowAdmin}
+          onShowAdmin={handleShowAdmin} // FIXED: Properly passing the function
           isSaving={isSaving}
           lastSaveTime={lastSaveTime}
           onRefresh={handleRefreshConversations}
