@@ -28,6 +28,7 @@ import {
 import neonService from '../services/neonService';
 import ragService from '../services/ragService';
 import { getToken, getTokenInfo } from '../services/authService';
+import { hasAdminRole } from '../utils/auth';
 
 const AdminScreen = ({ user, onBack }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -39,7 +40,7 @@ const AdminScreen = ({ user, onBack }) => {
   const [error, setError] = useState(null);
 
   // Check if user has admin role
-  const isAdmin = user?.roles?.includes('admin') || user?.roles?.includes('administrator');
+  const isAdmin = hasAdminRole(user);
 
   // Load admin data on component mount
   useEffect(() => {
