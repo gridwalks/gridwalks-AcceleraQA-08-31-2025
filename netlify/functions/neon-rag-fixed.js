@@ -148,6 +148,157 @@ const extractUserId = async (event, context) => {
   console.log('Final userId:', userId || 'NOT_FOUND');
   console.log('Source:', source);
   console.log('=== END EXTRACTION ===');
-  
+
   return { userId, source, debugInfo };
 };
+
+// Standard headers for all responses
+const headers = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-user-id',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Content-Type': 'application/json',
+};
+
+// Main handler that dispatches RAG actions
+exports.handler = async (event, context) => {
+  console.log('Neon RAG Fixed function called:', {
+    method: event.httpMethod,
+    hasBody: !!event.body,
+  });
+
+  // Handle CORS preflight
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ message: 'CORS preflight' }),
+    };
+  }
+
+  try {
+    // Only allow POST requests
+    if (event.httpMethod !== 'POST') {
+      return {
+        statusCode: 405,
+        headers,
+        body: JSON.stringify({ error: 'Method not allowed' }),
+      };
+    }
+
+    // Parse request body
+    let requestData;
+    try {
+      requestData = JSON.parse(event.body || '{}');
+    } catch (parseError) {
+      console.error('Error parsing request body:', parseError);
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid JSON in request body' }),
+      };
+    }
+
+    // Extract authenticated user
+    const { userId } = await extractUserId(event, context);
+    if (!userId) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: 'User authentication required' }),
+      };
+    }
+
+    const { action } = requestData;
+    if (!action) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Action parameter is required' }),
+      };
+    }
+
+    console.log('Processing action:', action, 'for user:', userId);
+
+    // Dispatch actions
+    switch (action) {
+      case 'test':
+        return await handleTest(userId, requestData);
+      case 'list':
+        return await handleList(userId);
+      case 'upload':
+        return await handleUpload(userId, requestData.document);
+      case 'delete':
+        return await handleDelete(userId, requestData.documentId);
+      case 'search':
+        return await handleSearch(userId, requestData.query, requestData.options);
+      case 'stats':
+        return await handleStats(userId);
+      default:
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: `Invalid action: ${action}` }),
+        };
+    }
+  } catch (error) {
+    console.error('Neon RAG Fixed function error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        error: 'Internal server error',
+        message: error.message,
+      }),
+    };
+  }
+};
+
+// Placeholder action handlers
+async function handleTest(userId, data) {
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({ message: 'test action not implemented', userId }),
+  };
+}
+
+async function handleList(userId) {
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({ documents: [], userId }),
+  };
+}
+
+async function handleUpload(userId, document) {
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({ message: 'upload action not implemented', userId }),
+  };
+}
+
+async function handleDelete(userId, documentId) {
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({ message: 'delete action not implemented', userId, documentId }),
+  };
+}
+
+async function handleSearch(userId, query, options) {
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({ results: [], userId, query }),
+  };
+}
+
+async function handleStats(userId) {
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({ stats: {}, userId }),
+  };
+}
