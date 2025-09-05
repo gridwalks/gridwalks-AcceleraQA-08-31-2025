@@ -80,13 +80,7 @@ class AuthService {
       }
       const user = await this.auth0Client.getUser();
       const claims = await this.auth0Client.getIdTokenClaims();
-      if (process.env.NODE_ENV !== 'production') {
-        console.debug('ID token claims', claims);
-      }
-      const roles = claims?.['https://acceleraqa.com/roles'] || [];
-      if (process.env.NODE_ENV !== 'production') {
-        console.debug('Roles extracted', roles);
-      }
+
       return { ...user, roles };
     } catch (error) {
       console.error('Error getting user:', error);

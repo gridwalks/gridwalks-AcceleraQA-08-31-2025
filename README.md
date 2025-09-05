@@ -84,6 +84,7 @@ REACT_APP_AUTH0_CLIENT_ID=your_client_id
 
 # Auth0 (Optional)
 REACT_APP_AUTH0_AUDIENCE=your_api_audience
+REACT_APP_AUTH0_ROLES_CLAIM=https://your-domain.com/roles
 ```
 
 ### 4. Auth0 Configuration
@@ -103,6 +104,8 @@ http://localhost:3000, https://your-app.netlify.app
 Allowed Web Origins:
 http://localhost:3000, https://your-app.netlify.app
 ```
+
+**Note:** `REACT_APP_AUTH0_ROLES_CLAIM` must match the custom claim added by your Auth0 Action/Rule.
 
 ### 5. Development
 ```bash
