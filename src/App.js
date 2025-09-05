@@ -1,4 +1,4 @@
-// src/App.js - Updated with persistent Netlify Blob storage
+// src/App.js - Updated with Neon PostgreSQL storage
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
 // Components
@@ -12,12 +12,12 @@ import RAGConfigurationPage from './components/RAGConfigurationPage';
 
 // Services
 import openaiService from './services/openaiService';
-import conversationService, { 
-  initializeConversationService,
+import neonService, { 
+  initializeNeonService,
   autoSaveConversation,
   loadConversations,
   clearConversations
-} from './services/conversationService';
+} from './services/neonService';
 import ragService from './services/ragService';
 import { initializeAuth } from './services/authService';
 
@@ -64,7 +64,7 @@ const AcceleraQA = () => {
     [allMessages]
   );
 
-  // Initialize authentication and conversation service
+  // Initialize authentication and Neon service
   useEffect(() => {
     const initialize = async () => {
       try {
@@ -87,34 +87,34 @@ const AcceleraQA = () => {
     initialize();
   }, []);
 
-  // Initialize conversation service when user is authenticated
+  // Initialize Neon service when user is authenticated
   useEffect(() => {
     const initializeConversations = async () => {
       if (!user || isInitialized) return;
 
       try {
-        console.log('Initializing conversation service for user:', user.sub);
+        console.log('Initializing Neon service for user:', user.sub);
         
-        // Initialize the conversation service with user data
-        await initializeConversationService(user);
+        // Initialize the Neon service with user data
+        await initializeNeonService(user);
         
-        // Check if server-side storage is available
-        const serviceAvailable = await conversationService.isServiceAvailable();
+        // Check if Neon database is available
+        const serviceAvailable = await neonService.isServiceAvailable();
         setIsServerAvailable(serviceAvailable);
         
         if (!serviceAvailable) {
-          console.warn('Netlify Blob storage not available, using session-only mode');
+          console.warn('Neon database not available, using session-only mode');
           initializeWelcomeMessage();
           setIsInitialized(true);
           return;
         }
         
-        // Load existing conversations from Netlify Blob storage
-        console.log('Loading conversations from Netlify Blob storage...');
+        // Load existing conversations from Neon database
+        console.log('Loading conversations from Neon database...');
         const loadedMessages = await loadConversations();
         
         if (loadedMessages && loadedMessages.length > 0) {
-          console.log(`Successfully loaded ${loadedMessages.length} messages from Netlify Blob storage`);
+          console.log(`Successfully loaded ${loadedMessages.length} messages from Neon database`);
           setStoredMessages(loadedMessages);
           
           // Set current resources from the last AI message
@@ -128,7 +128,7 @@ const AcceleraQA = () => {
             setCurrentResources(DEFAULT_RESOURCES);
           }
         } else {
-          console.log('No stored conversations found in Netlify Blob, initializing welcome message');
+          console.log('No stored conversations found in Neon, initializing welcome message');
           initializeWelcomeMessage();
         }
         
@@ -165,7 +165,7 @@ const AcceleraQA = () => {
 
       try {
         setIsSaving(true);
-        console.log('Auto-saving conversation to Netlify Blob...', { messageCount: messages.length });
+        console.log('Auto-saving conversation to Neon...', { messageCount: messages.length });
         
         const metadata = {
           sessionId: Date.now().toString(),
@@ -177,9 +177,9 @@ const AcceleraQA = () => {
         
         await autoSaveConversation(messages, metadata);
         setLastSaveTime(new Date());
-        console.log('Conversation auto-saved successfully to Netlify Blob');
+        console.log('Conversation auto-saved successfully to Neon');
       } catch (error) {
-        console.error('Failed to auto-save conversation to Netlify Blob:', error);
+        console.error('Failed to auto-save conversation to Neon:', error);
       } finally {
         setIsSaving(false);
       }
@@ -199,7 +199,7 @@ const AcceleraQA = () => {
   const initializeWelcomeMessage = useCallback(() => {
     const welcomeMessage = createMessage(
       'ai',
-      'Welcome to AcceleraQA! I\'m your pharmaceutical quality and compliance AI assistant. I specialize in GMP, validation, CAPA, regulatory requirements, and quality risk management. \n\n💡 **New Feature**: RAG Search is now available! Upload your documents using the "RAG Config" button to search and get answers directly from your own documents.\n\nHow can I help you today?',
+      'Welcome to AcceleraQA! I\'m your pharmaceutical quality and compliance AI assistant. I specialize in GMP, validation, CAPA, regulatory requirements, and quality risk management. \n\n💡 **New Feature**: RAG Search is now available with Neon PostgreSQL! Upload your documents using the "RAG Config" button to search and get answers directly from your own documents with persistent, scalable storage.\n\nHow can I help you today?',
       DEFAULT_RESOURCES
     );
     
@@ -334,7 +334,7 @@ const AcceleraQA = () => {
     }
   }, [messages, isServerAvailable, initializeWelcomeMessage]);
 
-  // Clear all conversations from Netlify Blob storage
+  // Clear all conversations from Neon database
   const clearAllConversations = useCallback(async () => {
     if (!isServerAvailable) return;
     
@@ -351,7 +351,7 @@ const AcceleraQA = () => {
       // Initialize welcome message
       initializeWelcomeMessage();
       
-      console.log('All conversations cleared from Netlify Blob storage');
+      console.log('All conversations cleared from Neon database');
       
     } catch (error) {
       console.error('Error clearing all conversations:', error);
@@ -464,12 +464,12 @@ const AcceleraQA = () => {
     
     try {
       setIsLoading(true);
-      console.log('Refreshing conversations from Netlify Blob storage...');
+      console.log('Refreshing conversations from Neon database...');
       
-      const freshMessages = await conversationService.refreshConversations();
+      const freshMessages = await neonService.refreshConversations();
       setStoredMessages(freshMessages);
       
-      console.log(`Refreshed ${freshMessages.length} messages from server`);
+      console.log(`Refreshed ${freshMessages.length} messages from Neon`);
     } catch (error) {
       console.error('Failed to refresh conversations:', error);
       setError('Failed to refresh conversations. Please try again.');
@@ -571,7 +571,7 @@ const AcceleraQA = () => {
         {isSaving && (
           <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 z-50">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            <span className="text-sm">Saving to cloud...</span>
+            <span className="text-sm">Saving to Neon...</span>
           </div>
         )}
 
