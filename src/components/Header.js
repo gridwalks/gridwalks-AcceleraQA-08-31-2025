@@ -80,7 +80,7 @@ const Header = memo(({
 
   const formatLastSaveTime = (saveTime) => {
     if (!saveTime) return null;
-    
+
     const now = new Date();
     const diffMs = now - saveTime;
     const diffMins = Math.floor(diffMs / 60000);
@@ -93,6 +93,9 @@ const Header = memo(({
     
     return saveTime.toLocaleDateString();
   };
+
+  const displayName = user?.email || user?.name || 'User';
+  const roleLabel = user?.roles?.length ? user.roles.join(', ') : null;
 
   return (
     <header className="bg-gradient-to-r from-gray-900 via-gray-800 to-black text-white border-b border-gray-800 shadow">
@@ -114,7 +117,8 @@ const Header = memo(({
             <div className="flex items-center space-x-2 text-sm text-gray-300">
               <User className="h-4 w-4" />
               <span className="max-w-40 truncate">
-                {user?.email || user?.name || 'User'}
+                {displayName}
+                {roleLabel ? ` (${roleLabel})` : ''}
               </span>
             </div>
 
