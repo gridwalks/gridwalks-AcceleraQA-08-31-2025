@@ -1,4 +1,4 @@
-// netlify/functions/neon-db.js - Neon PostgreSQL database function
+// netlify/functions/neon-db.js - Fixed authentication handling
 import { neon } from '@neondatabase/serverless';
 
 const headers = {
@@ -17,6 +17,61 @@ const getDatabaseConnection = () => {
   return neon(connectionString);
 };
 
+// Enhanced user ID extraction with detailed logging
+const extractUserId = (event, context) => {
+  console.log('=== USER ID EXTRACTION DEBUG ===');
+  
+  // Log all available headers
+  console.log('Available headers:', Object.keys(event.headers || {}));
+  console.log('Authorization header:', event.headers.authorization ? 'Present' : 'Missing');
+  console.log('X-User-ID header:', event.headers['x-user-id'] || 'Missing');
+  
+  // Try multiple sources for user ID
+  let userId = null;
+  let source = 'unknown';
+  
+  // 1. Direct header
+  if (event.headers['x-user-id']) {
+    userId = event.headers['x-user-id'];
+    source = 'x-user-id header';
+  }
+  
+  // 2. Case variations
+  if (!userId && event.headers['X-User-ID']) {
+    userId = event.headers['X-User-ID'];
+    source = 'X-User-ID header';
+  }
+  
+  // 3. Context
+  if (!userId && context.clientContext?.user?.sub) {
+    userId = context.clientContext.user.sub;
+    source = 'context.clientContext.user.sub';
+  }
+  
+  // 4. Try to parse from Authorization header
+  if (!userId && event.headers.authorization) {
+    try {
+      const token = event.headers.authorization.replace('Bearer ', '');
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+        if (payload.sub) {
+          userId = payload.sub;
+          source = 'JWT token payload';
+        }
+      }
+    } catch (error) {
+      console.log('Failed to parse JWT token:', error.message);
+    }
+  }
+  
+  console.log('Final userId:', userId);
+  console.log('Source:', source);
+  console.log('================================');
+  
+  return { userId, source };
+};
+
 export const handler = async (event, context) => {
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -29,7 +84,9 @@ export const handler = async (event, context) => {
 
   console.log('Neon DB Function called:', {
     method: event.httpMethod,
-    hasBody: !!event.body
+    hasBody: !!event.body,
+    hasAuth: !!event.headers.authorization,
+    userAgent: event.headers['user-agent']
   });
 
   try {
@@ -53,18 +110,28 @@ export const handler = async (event, context) => {
       };
     }
 
-    // Extract user ID
-    const userId = event.headers['x-user-id'] || 
-                   event.headers['X-User-ID'] || 
-                   context.clientContext?.user?.sub;
+    // Enhanced user ID extraction
+    const { userId, source } = extractUserId(event, context);
 
     if (!userId) {
+      console.error('No user ID found from any source');
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'User authentication required' }),
+        body: JSON.stringify({ 
+          error: 'User authentication required',
+          debug: {
+            availableHeaders: Object.keys(event.headers || {}),
+            hasAuth: !!event.headers.authorization,
+            hasXUserId: !!event.headers['x-user-id'],
+            hasContext: !!context.clientContext?.user?.sub,
+            timestamp: new Date().toISOString()
+          }
+        }),
       };
     }
+
+    console.log(`Authenticated user: ${userId} (from ${source})`);
 
     const { action, data } = requestData;
 
@@ -112,7 +179,8 @@ export const handler = async (event, context) => {
       headers,
       body: JSON.stringify({ 
         error: 'Internal server error',
-        message: error.message 
+        message: error.message,
+        timestamp: new Date().toISOString()
       }),
     };
   }
@@ -178,7 +246,8 @@ async function handleSaveConversation(sql, userId, data) {
         message: 'Conversation saved successfully',
         messageCount: messages.length,
         ragUsed: ragMessages.length > 0,
-        ragDocuments: ragDocuments.length
+        ragDocuments: ragDocuments.length,
+        userId: userId // Include for debugging
       }),
     };
   } catch (error) {
@@ -226,7 +295,8 @@ async function handleGetConversations(sql, userId) {
           created_at: conv.created_at,
           updated_at: conv.updated_at
         })),
-        total: conversations.length
+        total: conversations.length,
+        userId: userId // Include for debugging
       }),
     };
   } catch (error) {
@@ -259,7 +329,8 @@ async function handleClearConversations(sql, userId) {
       headers,
       body: JSON.stringify({ 
         message: 'All conversations deleted successfully',
-        deletedCount: result.count || 0
+        deletedCount: result.count || 0,
+        userId: userId // Include for debugging
       }),
     };
   } catch (error) {
@@ -304,7 +375,8 @@ async function handleGetStats(sql, userId) {
           avgMessagesPerConversation,
           oldestConversation: stats.oldest_conversation,
           newestConversation: stats.newest_conversation
-        }
+        },
+        userId: userId // Include for debugging
       }),
     };
   } catch (error) {
