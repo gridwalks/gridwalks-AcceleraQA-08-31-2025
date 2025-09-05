@@ -1,4 +1,7 @@
 // Enhanced server-side authentication handling
+// NOTE: When clients use encrypted JWE tokens, they must include an `x-user-id`
+// header because the server cannot derive the user identity from the token alone.
+// Requests lacking this header will be rejected with a 401 response.
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 
@@ -97,13 +100,27 @@ const extractUserId = async (event, context) => {
             }
           }
         } else if (parts.length === 5) {
-          // JWE (encrypted JWT) - cannot decode client-side
+          // JWE (encrypted JWT) - requires x-user-id header or server-side decryption
           console.log('🔒 JWE token detected - requires server-side decryption');
           debugInfo.jwtType = 'JWE';
           debugInfo.requiresServerDecryption = true;
-          
-          // For JWE, we need the frontend to send x-user-id header
-          // or implement server-side JWE decryption
+
+          // Clients must send the user ID in the x-user-id header when using JWE.
+          const headerUserId = event.headers['x-user-id'];
+          if (headerUserId) {
+            userId = headerUserId;
+            source = 'x-user-id header (JWE)';
+            debugInfo.foundInHeader = true;
+            console.log('✅ Using x-user-id header for JWE token');
+          } else {
+            console.error('x-user-id header required for JWE token');
+            debugInfo.missingUserIdHeader = true;
+            const err = new Error('x-user-id header required when using JWE token');
+            err.statusCode = 401;
+            throw err;
+          }
+
+          // Optional: implement server-side JWE decryption here if a decryption key is available.
         }
       }
     } catch (error) {
