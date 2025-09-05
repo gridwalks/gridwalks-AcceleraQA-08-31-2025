@@ -1,6 +1,6 @@
 // src/services/ragService.js - Updated RAG service with FIXED authentication
 import openaiService from './openaiService';
-import { getToken } from './authService';
+import authService, { getToken } from './authService';
 
 const API_BASE_URL = '/.netlify/functions';
 
@@ -48,10 +48,10 @@ class RAGService {
             while (payload.length % 4) {
               payload += '=';
             }
-            
+
             const decoded = atob(payload);
             const parsed = JSON.parse(decoded);
-            
+
             if (parsed.sub) {
               headers['x-user-id'] = parsed.sub;
               console.log('Added x-user-id header:', parsed.sub.substring(0, 10) + '...');
@@ -60,9 +60,31 @@ class RAGService {
             }
           } else {
             console.warn('Invalid JWT format - parts:', tokenParts.length);
+            try {
+              const user = await authService.getUser();
+              if (user?.sub) {
+                headers['x-user-id'] = user.sub;
+                console.log('Added x-user-id header from profile:', user.sub.substring(0, 10) + '...');
+              } else {
+                console.warn('Could not retrieve user profile for x-user-id');
+              }
+            } catch (profileError) {
+              console.warn('Error fetching user profile for x-user-id:', profileError.message);
+            }
           }
         } catch (jwtError) {
           console.warn('Could not parse JWT for x-user-id:', jwtError.message);
+          try {
+            const user = await authService.getUser();
+            if (user?.sub) {
+              headers['x-user-id'] = user.sub;
+              console.log('Added x-user-id header from profile:', user.sub.substring(0, 10) + '...');
+            } else {
+              console.warn('Could not retrieve user profile for x-user-id');
+            }
+          } catch (profileError) {
+            console.warn('Error fetching user profile for x-user-id:', profileError.message);
+          }
           // Continue anyway - the function should handle JWT parsing server-side
         }
       } else {
