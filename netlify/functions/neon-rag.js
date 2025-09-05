@@ -224,4 +224,413 @@ async function handleUpload(sql, userId, document) {
  */
 async function handleSearch(sql, userId, query, options = {}) {
   try {
-    console.log('Searching documents in Neon for user:', userId, '
+    console.log('Searching documents in Neon for user:', userId, 'query:', query);
+
+    if (!query || typeof query !== 'string') {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Valid search query string is required' }),
+      };
+    }
+
+    const { limit = 10, threshold = 0.7, documentIds = null } = options;
+
+    // Use PostgreSQL full-text search
+    let searchCondition;
+    let queryParams = [userId];
+
+    if (documentIds && Array.isArray(documentIds)) {
+      searchCondition = `
+        AND d.user_id = $1 
+        AND d.id = ANY($2)
+        AND (
+          to_tsvector('english', c.chunk_text) @@ plainto_tsquery('english', $3)
+          OR c.chunk_text ILIKE $4
+        )
+      `;
+      queryParams = [userId, documentIds, query, `%${query}%`];
+    } else {
+      searchCondition = `
+        AND d.user_id = $1 
+        AND (
+          to_tsvector('english', c.chunk_text) @@ plainto_tsquery('english', $2)
+          OR c.chunk_text ILIKE $3
+        )
+      `;
+      queryParams = [userId, query, `%${query}%`];
+    }
+
+    const results = await sql`
+      SELECT 
+        d.id as document_id,
+        d.filename,
+        c.chunk_index,
+        c.chunk_text,
+        d.metadata,
+        ts_rank(to_tsvector('english', c.chunk_text), plainto_tsquery('english', ${query})) as similarity
+      FROM rag_document_chunks c
+      JOIN rag_documents d ON c.document_id = d.id
+      WHERE d.user_id = ${userId}
+        AND (
+          to_tsvector('english', c.chunk_text) @@ plainto_tsquery('english', ${query})
+          OR c.chunk_text ILIKE ${`%${query}%`}
+        )
+      ORDER BY similarity DESC
+      LIMIT ${limit}
+    `;
+
+    console.log(`Found ${results.length} matching chunks in Neon`);
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        results: results.map(result => ({
+          documentId: result.document_id,
+          filename: result.filename,
+          chunkIndex: result.chunk_index,
+          text: result.chunk_text,
+          similarity: Math.min(parseFloat(result.similarity) || 0, 1),
+          metadata: result.metadata || {}
+        })),
+        totalFound: results.length,
+        searchType: 'full-text',
+        storage: 'neon-postgresql',
+        query: {
+          text: query,
+          limit,
+          threshold
+        }
+      }),
+    };
+  } catch (error) {
+    console.error('Error searching documents in Neon:', error);
+    throw error;
+  }
+}
+
+/**
+ * Handle list documents
+ */
+async function handleList(sql, userId) {
+  try {
+    console.log('Listing documents from Neon for user:', userId);
+
+    const documents = await sql`
+      SELECT 
+        d.id,
+        d.filename,
+        d.file_type,
+        d.file_size,
+        d.category,
+        d.metadata,
+        d.created_at,
+        COUNT(c.id) as chunk_count
+      FROM rag_documents d
+      LEFT JOIN rag_document_chunks c ON d.id = c.document_id
+      WHERE d.user_id = ${userId}
+      GROUP BY d.id, d.filename, d.file_type, d.file_size, d.category, d.metadata, d.created_at
+      ORDER BY d.created_at DESC
+    `;
+
+    console.log(`Found ${documents.length} documents in Neon`);
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        documents: documents.map(doc => ({
+          id: doc.id,
+          filename: doc.filename,
+          type: `application/${doc.file_type}`,
+          size: doc.file_size,
+          chunks: parseInt(doc.chunk_count) || 0,
+          category: doc.category || 'general',
+          tags: doc.metadata?.tags || [],
+          createdAt: doc.created_at,
+          metadata: doc.metadata
+        })),
+        total: documents.length,
+        storage: 'neon-postgresql'
+      }),
+    };
+  } catch (error) {
+    console.error('Error listing documents from Neon:', error);
+    throw error;
+  }
+}
+
+/**
+ * Handle delete document
+ */
+async function handleDelete(sql, userId, documentId) {
+  try {
+    console.log('Deleting document from Neon:', documentId, 'for user:', userId);
+
+    if (!documentId) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Document ID is required' }),
+      };
+    }
+
+    // Get document info first
+    const [document] = await sql`
+      SELECT filename 
+      FROM rag_documents 
+      WHERE id = ${documentId} AND user_id = ${userId}
+    `;
+
+    if (!document) {
+      return {
+        statusCode: 404,
+        headers,
+        body: JSON.stringify({ error: 'Document not found' }),
+      };
+    }
+
+    // Delete chunks first (due to foreign key constraint)
+    await sql`
+      DELETE FROM rag_document_chunks 
+      WHERE document_id = ${documentId}
+    `;
+
+    // Delete document
+    await sql`
+      DELETE FROM rag_documents 
+      WHERE id = ${documentId} AND user_id = ${userId}
+    `;
+
+    console.log('Document deleted successfully from Neon');
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ 
+        message: 'Document deleted successfully',
+        documentId,
+        filename: document.filename,
+        storage: 'neon-postgresql'
+      }),
+    };
+  } catch (error) {
+    console.error('Error deleting document from Neon:', error);
+    throw error;
+  }
+}
+
+/**
+ * Handle get user statistics
+ */
+async function handleStats(sql, userId) {
+  try {
+    console.log('Getting RAG stats from Neon for user:', userId);
+
+    const [stats] = await sql`
+      SELECT 
+        COUNT(DISTINCT d.id) as total_documents,
+        COUNT(c.id) as total_chunks,
+        SUM(d.file_size) as total_size,
+        MIN(d.created_at) as oldest_document,
+        MAX(d.created_at) as newest_document
+      FROM rag_documents d
+      LEFT JOIN rag_document_chunks c ON d.id = c.document_id
+      WHERE d.user_id = ${userId}
+    `;
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        totalDocuments: parseInt(stats.total_documents) || 0,
+        totalChunks: parseInt(stats.total_chunks) || 0,
+        totalSize: parseInt(stats.total_size) || 0,
+        oldestDocument: stats.oldest_document,
+        newestDocument: stats.newest_document,
+        storage: 'neon-postgresql',
+        lastUpdated: new Date().toISOString()
+      }),
+    };
+  } catch (error) {
+    console.error('Error getting RAG stats from Neon:', error);
+    throw error;
+  }
+}
+
+/**
+ * Handle test functionality
+ */
+async function handleTest(sql, userId) {
+  try {
+    console.log('Testing Neon RAG for user:', userId);
+
+    const testResults = {
+      userId,
+      timestamp: new Date().toISOString(),
+      storage: 'neon-postgresql',
+      tests: {}
+    };
+
+    // Test database connection
+    try {
+      const [result] = await sql`SELECT NOW() as current_time`;
+      testResults.tests.databaseConnection = {
+        success: true,
+        currentTime: result.current_time
+      };
+    } catch (error) {
+      testResults.tests.databaseConnection = {
+        success: false,
+        error: error.message
+      };
+    }
+
+    // Test table access
+    try {
+      const documents = await sql`
+        SELECT COUNT(*) as count 
+        FROM rag_documents 
+        WHERE user_id = ${userId}
+      `;
+      testResults.tests.tableAccess = {
+        success: true,
+        userDocuments: parseInt(documents[0].count) || 0
+      };
+    } catch (error) {
+      testResults.tests.tableAccess = {
+        success: false,
+        error: error.message
+      };
+    }
+
+    // Test search functionality
+    try {
+      const searchResults = await sql`
+        SELECT COUNT(*) as count 
+        FROM rag_document_chunks c
+        JOIN rag_documents d ON c.document_id = d.id
+        WHERE d.user_id = ${userId}
+      `;
+      testResults.tests.searchCapability = {
+        success: true,
+        availableChunks: parseInt(searchResults[0].count) || 0
+      };
+    } catch (error) {
+      testResults.tests.searchCapability = {
+        success: false,
+        error: error.message
+      };
+    }
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify(testResults),
+    };
+  } catch (error) {
+    console.error('Error in Neon RAG test:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        error: 'Test failed',
+        message: error.message 
+      }),
+    };
+  }
+}
+
+/**
+ * Utility Functions
+ */
+
+function chunkText(text, maxChunkSize = 1000, overlap = 200) {
+  const chunks = [];
+  let start = 0;
+  
+  while (start < text.length) {
+    const end = Math.min(start + maxChunkSize, text.length);
+    const chunkText = text.substring(start, end);
+    
+    // Try to break at sentence boundaries
+    let actualEnd = end;
+    if (end < text.length) {
+      const lastPeriod = chunkText.lastIndexOf('.');
+      const lastQuestion = chunkText.lastIndexOf('?');
+      const lastExclamation = chunkText.lastIndexOf('!');
+      
+      const sentenceEnd = Math.max(lastPeriod, lastQuestion, lastExclamation);
+      if (sentenceEnd > start + (maxChunkSize * 0.5)) {
+        actualEnd = start + sentenceEnd + 1;
+      }
+    }
+    
+    const finalChunk = text.substring(start, actualEnd);
+    
+    chunks.push({
+      text: finalChunk.trim(),
+      wordCount: finalChunk.split(/\s+/).length,
+      characterCount: finalChunk.length,
+      startIndex: start,
+      endIndex: actualEnd
+    });
+    
+    start = actualEnd - overlap;
+    if (start < 0) start = actualEnd;
+  }
+  
+  return chunks;
+}
+
+function getDocumentType(mimeType) {
+  const typeMap = {
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'text/plain': 'txt'
+  };
+  
+  return typeMap[mimeType] || 'txt';
+}
+
+function generatePharmaceuticalContent(filename) {
+  const topics = [
+    {
+      title: 'Good Manufacturing Practice (GMP)',
+      content: `Good Manufacturing Practice (GMP) regulations ensure pharmaceutical products are consistently produced and controlled according to quality standards. GMP covers all aspects of production from raw materials to finished products. Key principles include quality management systems, controlled manufacturing processes, validated critical steps, proper facility design, qualified personnel, contamination control, quality control systems, and comprehensive documentation. Regular audits and inspections verify GMP compliance.`
+    },
+    {
+      title: 'Process Validation',
+      content: `Process validation demonstrates that a manufacturing process consistently produces products meeting predetermined specifications and quality attributes. The validation lifecycle includes process design, process qualification, and continued process verification. Stage 1 involves process design and development. Stage 2 includes installation qualification (IQ), operational qualification (OQ), and performance qualification (PQ). Stage 3 requires ongoing commercial manufacturing monitoring to ensure the process remains in a state of control.`
+    },
+    {
+      title: 'CAPA System Implementation',
+      content: `Corrective and Preventive Action (CAPA) systems identify, investigate, and correct quality problems while preventing recurrence. CAPA processes include problem identification, investigation and root cause analysis, corrective action implementation, preventive action development, and effectiveness verification. Documentation requirements include CAPA records, investigation reports, and trending analysis. Regular CAPA system effectiveness reviews ensure continuous improvement.`
+    }
+  ];
+  
+  const selectedTopic = topics[Math.floor(Math.random() * topics.length)];
+  
+  return `Pharmaceutical Document: ${filename}
+
+Subject: ${selectedTopic.title}
+
+${selectedTopic.content}
+
+Regulatory Framework:
+This document aligns with FDA regulations, ICH guidelines, and current good manufacturing practice requirements. Key regulatory references include 21 CFR Parts 210 and 211, ICH Q7 through Q12, and relevant FDA guidance documents.
+
+Implementation Considerations:
+- Establish clear procedures and responsibilities
+- Provide adequate training for personnel
+- Maintain comprehensive documentation
+- Conduct regular reviews and updates
+- Ensure effective change control processes
+
+Quality Assurance Requirements:
+All activities must be conducted in accordance with established quality systems, with proper documentation, review, and approval processes. Regular audits and assessments verify compliance with regulatory requirements and internal standards.
+
+This document supports pharmaceutical quality assurance and regulatory compliance objectives while ensuring product safety, quality, and efficacy.`;
+}
