@@ -13,7 +13,7 @@ class RAGService {
   }
 
   // ... rest of your RAGService code stays the same
-}
+};
 
   async makeAuthenticatedRequest(endpoint, data = {}) {
     try {
