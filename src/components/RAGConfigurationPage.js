@@ -1,4 +1,4 @@
-// src/components/RAGConfigurationPage.js - Complete RAG configuration component
+// src/components/RAGConfigurationPage.js - Fixed authentication for Neon
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Upload, 
@@ -14,9 +14,12 @@ import {
   X,
   Eye,
   BarChart3,
-  Bug
+  Bug,
+  User,
+  Key
 } from 'lucide-react';
 import ragService from '../services/ragService';
+import { getToken } from '../services/authService';
 
 const RAGConfigurationPage = ({ user, onClose }) => {
   const [documents, setDocuments] = useState([]);
@@ -29,6 +32,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
   const [activeTab, setActiveTab] = useState('documents');
   const [error, setError] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
+  const [authDebug, setAuthDebug] = useState(null);
   const [uploadMetadata, setUploadMetadata] = useState({
     title: '',
     description: '',
@@ -36,22 +40,124 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     category: 'general'
   });
 
+  // Enhanced authentication debugging
+  const checkAuthentication = useCallback(async () => {
+    try {
+      console.log('=== AUTHENTICATION DEBUG ===');
+      
+      const authInfo = {
+        user: {
+          present: !!user,
+          sub: user?.sub,
+          email: user?.email,
+          name: user?.name
+        },
+        token: {
+          present: false,
+          valid: false,
+          payload: null
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      // Try to get token
+      try {
+        const token = await getToken();
+        authInfo.token.present = !!token;
+        
+        if (token) {
+          try {
+            const tokenParts = token.split('.');
+            if (tokenParts.length === 3) {
+              const payload = JSON.parse(atob(tokenParts[1]));
+              authInfo.token.valid = true;
+              authInfo.token.payload = {
+                sub: payload.sub,
+                aud: payload.aud,
+                exp: payload.exp,
+                iat: payload.iat,
+                scope: payload.scope
+              };
+            }
+          } catch (parseError) {
+            console.error('Token parsing error:', parseError);
+            authInfo.token.parseError = parseError.message;
+          }
+        }
+      } catch (tokenError) {
+        console.error('Token retrieval error:', tokenError);
+        authInfo.token.error = tokenError.message;
+      }
+
+      console.log('Authentication info:', authInfo);
+      setAuthDebug(authInfo);
+      return authInfo;
+      
+    } catch (error) {
+      console.error('Authentication check failed:', error);
+      setAuthDebug({ error: error.message });
+      return null;
+    }
+  }, [user]);
+
   useEffect(() => {
     loadDocuments();
     testConnection();
-  }, []);
+    checkAuthentication();
+  }, [checkAuthentication]);
 
   const testConnection = async () => {
     try {
+      console.log('=== CONNECTION TEST DEBUG ===');
+      console.log('User object:', user);
+      
+      // Check authentication first
+      const authInfo = await checkAuthentication();
+      if (!authInfo?.user?.present || !authInfo?.user?.sub) {
+        setError('User authentication missing. Please sign in again.');
+        setDebugInfo({
+          success: false,
+          error: 'No authenticated user found',
+          authInfo
+        });
+        return;
+      }
+
+      if (!authInfo?.token?.present) {
+        setError('Authentication token missing. Please try refreshing the page.');
+        setDebugInfo({
+          success: false,
+          error: 'No authentication token available',
+          authInfo
+        });
+        return;
+      }
+
+      console.log('Testing RAG connection with auth info:', authInfo);
+      
       const result = await ragService.testConnection();
-      setDebugInfo(result);
+      console.log('RAG test result:', result);
+      
+      setDebugInfo({
+        ...result,
+        authInfo,
+        timestamp: new Date().toISOString()
+      });
       
       if (!result.success) {
         setError(`Connection test failed: ${result.error}`);
+      } else {
+        setError(null);
       }
     } catch (error) {
       console.error('Connection test error:', error);
-      setDebugInfo({ success: false, error: error.message });
+      const authInfo = await checkAuthentication();
+      setDebugInfo({ 
+        success: false, 
+        error: error.message,
+        authInfo,
+        timestamp: new Date().toISOString()
+      });
       setError(`Connection test failed: ${error.message}`);
     }
   };
@@ -61,15 +167,22 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     setError(null);
     
     try {
+      console.log('Loading documents...');
       const docs = await ragService.getDocuments();
+      console.log('Documents loaded:', docs);
       setDocuments(docs);
     } catch (error) {
       console.error('Error loading documents:', error);
       setError(`Failed to load documents: ${error.message}`);
+      
+      // If it's an auth error, check authentication
+      if (error.message.includes('authentication') || error.message.includes('401')) {
+        await checkAuthentication();
+      }
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [checkAuthentication]);
 
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
@@ -88,6 +201,13 @@ const RAGConfigurationPage = ({ user, onClose }) => {
       return;
     }
 
+    // Check authentication before upload
+    const authInfo = await checkAuthentication();
+    if (!authInfo?.user?.present || !authInfo?.token?.present) {
+      setError('Authentication required. Please sign in again.');
+      return;
+    }
+
     setIsLoading(true);
     setUploadStatus({ type: 'processing', message: 'Processing document...' });
     setError(null);
@@ -98,7 +218,9 @@ const RAGConfigurationPage = ({ user, onClose }) => {
         tags: uploadMetadata.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
       };
 
+      console.log('Uploading document with metadata:', metadata);
       const result = await ragService.uploadDocument(selectedFile, metadata);
+      console.log('Upload result:', result);
       
       setUploadStatus({ 
         type: 'success', 
@@ -125,6 +247,11 @@ const RAGConfigurationPage = ({ user, onClose }) => {
         message: `Upload failed: ${error.message}` 
       });
       setError(`Upload failed: ${error.message}`);
+      
+      // If it's an auth error, check authentication
+      if (error.message.includes('authentication') || error.message.includes('401')) {
+        await checkAuthentication();
+      }
     } finally {
       setIsLoading(false);
     }
@@ -143,6 +270,10 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     } catch (error) {
       console.error('Error deleting document:', error);
       setError(`Failed to delete "${filename}": ${error.message}`);
+      
+      if (error.message.includes('authentication') || error.message.includes('401')) {
+        await checkAuthentication();
+      }
     }
   };
 
@@ -152,15 +283,24 @@ const RAGConfigurationPage = ({ user, onClose }) => {
       return;
     }
 
+    // Check authentication before search
+    const authInfo = await checkAuthentication();
+    if (!authInfo?.user?.present || !authInfo?.token?.present) {
+      setError('Authentication required. Please sign in again.');
+      return;
+    }
+
     setIsSearching(true);
     setError(null);
 
     try {
+      console.log('Searching with query:', searchQuery);
       const results = await ragService.searchDocuments(searchQuery, {
         limit: 20,
         threshold: 0.3
       });
       
+      console.log('Search results:', results);
       setSearchResults(results.results || []);
       
       if (!results.results || results.results.length === 0) {
@@ -171,6 +311,10 @@ const RAGConfigurationPage = ({ user, onClose }) => {
       console.error('Error searching documents:', error);
       setError(`Search failed: ${error.message}`);
       setSearchResults([]);
+      
+      if (error.message.includes('authentication') || error.message.includes('401')) {
+        await checkAuthentication();
+      }
     } finally {
       setIsSearching(false);
     }
@@ -226,7 +370,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
             <h3>Source Documents:</h3>
             ${searchResults.results.map(result => `
               <div class="source-item">
-                <strong>${result.filename}</strong> (Similarity: ${(result.similarity * 100).toFixed(1)}%)
+                <strong>${result.filename}</strong> (Relevance: ${(result.similarity * 100).toFixed(1)}%)
                 <br><em>${result.text.substring(0, 200)}...</em>
               </div>
             `).join('')}
@@ -238,6 +382,10 @@ const RAGConfigurationPage = ({ user, onClose }) => {
     } catch (error) {
       console.error('Error testing RAG:', error);
       setError(`RAG test failed: ${error.message}`);
+      
+      if (error.message.includes('authentication') || error.message.includes('401')) {
+        await checkAuthentication();
+      }
     } finally {
       setIsSearching(false);
     }
@@ -267,7 +415,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
             <Database className="h-6 w-6 text-blue-600" />
             <div>
               <h2 className="text-xl font-semibold text-gray-900">RAG Configuration</h2>
-              <p className="text-sm text-gray-500">Upload documents and configure search capabilities</p>
+              <p className="text-sm text-gray-500">Upload documents and configure search with Neon PostgreSQL</p>
             </div>
           </div>
           <button
@@ -279,7 +427,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
           </button>
         </div>
 
-        {/* Debug Info */}
+        {/* Enhanced Debug Info */}
         {debugInfo && (
           <div className={`p-4 border-b ${debugInfo.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
             <div className="flex items-center space-x-2">
@@ -294,6 +442,22 @@ const RAGConfigurationPage = ({ user, onClose }) => {
             </div>
             {!debugInfo.success && (
               <p className="text-sm text-red-700 mt-1">Error: {debugInfo.error}</p>
+            )}
+            
+            {/* Authentication Status */}
+            {authDebug && (
+              <div className="mt-2 text-xs">
+                <div className={`inline-flex items-center space-x-1 ${authDebug.user?.present ? 'text-green-600' : 'text-red-600'}`}>
+                  <User className="h-3 w-3" />
+                  <span>User: {authDebug.user?.present ? '✓' : '✗'}</span>
+                  {authDebug.user?.sub && <span>({authDebug.user.sub.substring(0, 8)}...)</span>}
+                </div>
+                <div className={`inline-flex items-center space-x-1 ml-4 ${authDebug.token?.present ? 'text-green-600' : 'text-red-600'}`}>
+                  <Key className="h-3 w-3" />
+                  <span>Token: {authDebug.token?.present ? '✓' : '✗'}</span>
+                  {authDebug.token?.valid && <span>(Valid)</span>}
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -352,6 +516,14 @@ const RAGConfigurationPage = ({ user, onClose }) => {
               <div>
                 <p className="text-red-800 font-medium">Error</p>
                 <p className="text-red-700 text-sm">{error}</p>
+                {error.includes('authentication') && (
+                  <button
+                    onClick={checkAuthentication}
+                    className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                  >
+                    Check Authentication Status
+                  </button>
+                )}
               </div>
               <button
                 onClick={() => setError(null)}
@@ -410,7 +582,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
               <div className="bg-gray-50 p-6 rounded-lg">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center space-x-2">
                   <Upload className="h-5 w-5" />
-                  <span>Upload Document (Fast Processing)</span>
+                  <span>Upload Document (Neon PostgreSQL Storage)</span>
                 </h3>
                 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -426,7 +598,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                       className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Fast processing mode: instant upload with text-based search
+                      Persistent storage with Neon PostgreSQL database and full-text search
                     </p>
                   </div>
 
@@ -469,7 +641,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                 <div className="mt-6 flex justify-end">
                   <button
                     onClick={handleUpload}
-                    disabled={!selectedFile || isLoading}
+                    disabled={!selectedFile || isLoading || !debugInfo?.success}
                     className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
                   >
                     {isLoading ? (
@@ -504,13 +676,18 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                 {isLoading ? (
                   <div className="text-center py-12">
                     <Loader className="h-8 w-8 text-blue-600 mx-auto animate-spin mb-4" />
-                    <p className="text-gray-600">Loading documents...</p>
+                    <p className="text-gray-600">Loading documents from Neon database...</p>
                   </div>
                 ) : documents.length === 0 ? (
                   <div className="text-center py-12 bg-gray-50 rounded-lg">
                     <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <h4 className="text-lg font-medium text-gray-900 mb-2">No Documents Yet</h4>
                     <p className="text-gray-600">Upload your first document to get started with RAG search.</p>
+                    {!debugInfo?.success && (
+                      <p className="text-red-600 text-sm mt-2">
+                        Please fix authentication issues above before uploading.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -540,7 +717,8 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                         <div className="text-sm text-gray-600 space-y-1">
                           <p><span className="font-medium">Category:</span> {doc.metadata?.category || 'General'}</p>
                           <p><span className="font-medium">Uploaded:</span> {new Date(doc.createdAt).toLocaleDateString()}</p>
-                          <p><span className="font-medium">Search Type:</span> Text-based</p>
+                          <p><span className="font-medium">Storage:</span> Neon PostgreSQL</p>
+                          <p><span className="font-medium">Search:</span> Full-text indexed</p>
                           {doc.metadata?.tags && doc.metadata.tags.length > 0 && (
                             <div className="flex items-center space-x-1 mt-2">
                               <span className="font-medium">Tags:</span>
@@ -566,7 +744,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
               <div className="bg-gray-50 p-6 rounded-lg">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center space-x-2">
                   <Search className="h-5 w-5" />
-                  <span>Search Documents</span>
+                  <span>Search Documents (PostgreSQL Full-Text)</span>
                 </h3>
 
                 <div className="flex space-x-4 mb-4">
@@ -577,10 +755,11 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                     placeholder="Enter your search query..."
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    disabled={!debugInfo?.success}
                   />
                   <button
                     onClick={handleSearch}
-                    disabled={isSearching || !searchQuery.trim()}
+                    disabled={isSearching || !searchQuery.trim() || !debugInfo?.success}
                     className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
                   >
                     {isSearching ? (
@@ -592,7 +771,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                   </button>
                   <button
                     onClick={handleTestRAG}
-                    disabled={isSearching || !searchQuery.trim()}
+                    disabled={isSearching || !searchQuery.trim() || !debugInfo?.success}
                     className="px-6 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
                   >
                     {isSearching ? (
@@ -605,8 +784,16 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                 </div>
 
                 <p className="text-sm text-gray-600">
-                  Search your uploaded documents using fast text-based matching. "Test RAG" will generate an AI response using the search results as context.
+                  Search your uploaded documents using PostgreSQL full-text search with ranking. "Test RAG" will generate an AI response using the search results as context.
                 </p>
+                
+                {!debugInfo?.success && (
+                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-700">
+                      Search is disabled due to authentication issues. Please resolve the connection problems above.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Search Results */}
@@ -625,7 +812,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                             <span className="text-sm font-medium text-blue-600">#{index + 1}</span>
                             <h5 className="font-medium text-gray-900">{result.filename}</h5>
                             <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                              {(result.similarity * 100).toFixed(1)}% match
+                              {(result.similarity * 100).toFixed(1)}% relevance
                             </span>
                           </div>
                         </div>
@@ -633,7 +820,7 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                           {result.text}
                         </p>
                         <div className="mt-2 text-xs text-gray-500">
-                          Chunk {result.chunkIndex + 1} • Document ID: {result.documentId}
+                          Chunk {result.chunkIndex + 1} • Document ID: {result.documentId} • Storage: PostgreSQL
                         </div>
                       </div>
                     ))}
@@ -672,12 +859,57 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                   </div>
 
                   <div>
-                    <h4 className="font-medium text-gray-800 mb-2">User Information</h4>
-                    <div className="p-3 bg-white border rounded-md">
-                      <p className="text-sm"><strong>User ID:</strong> {user?.sub || 'Not available'}</p>
-                      <p className="text-sm"><strong>Email:</strong> {user?.email || 'Not available'}</p>
-                      <p className="text-sm"><strong>Name:</strong> {user?.name || 'Not available'}</p>
-                    </div>
+                    <h4 className="font-medium text-gray-800 mb-2">Authentication Status</h4>
+                    <button
+                      onClick={checkAuthentication}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                    >
+                      Check Authentication
+                    </button>
+                    
+                    {authDebug && (
+                      <div className="mt-3 p-3 bg-white border rounded-md">
+                        <div className="space-y-2 text-sm">
+                          <div>
+                            <strong>User Present:</strong> 
+                            <span className={authDebug.user?.present ? 'text-green-600' : 'text-red-600'}>
+                              {authDebug.user?.present ? ' ✓ Yes' : ' ✗ No'}
+                            </span>
+                            {authDebug.user?.sub && (
+                              <span className="ml-2 text-gray-600">
+                                (ID: {authDebug.user.sub.substring(0, 12)}...)
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <strong>Email:</strong> {authDebug.user?.email || 'Not available'}
+                          </div>
+                          <div>
+                            <strong>Token Present:</strong> 
+                            <span className={authDebug.token?.present ? 'text-green-600' : 'text-red-600'}>
+                              {authDebug.token?.present ? ' ✓ Yes' : ' ✗ No'}
+                            </span>
+                          </div>
+                          <div>
+                            <strong>Token Valid:</strong> 
+                            <span className={authDebug.token?.valid ? 'text-green-600' : 'text-red-600'}>
+                              {authDebug.token?.valid ? ' ✓ Yes' : ' ✗ No'}
+                            </span>
+                          </div>
+                          {authDebug.token?.payload && (
+                            <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+                              <strong>Token Details:</strong>
+                              <pre>{JSON.stringify(authDebug.token.payload, null, 2)}</pre>
+                            </div>
+                          )}
+                          {authDebug.token?.error && (
+                            <div className="text-red-600 text-xs">
+                              <strong>Token Error:</strong> {authDebug.token.error}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -705,9 +937,15 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                     <h4 className="font-medium text-gray-800 mb-2">Function Endpoints</h4>
                     <div className="p-3 bg-white border rounded-md space-y-2">
                       <p className="text-sm">
-                        <strong>RAG Function:</strong> 
+                        <strong>Neon RAG Function:</strong> 
                         <code className="ml-2 px-2 py-1 bg-gray-100 rounded text-xs">
-                          {window.location.origin}/.netlify/functions/rag-fast
+                          {window.location.origin}/.netlify/functions/neon-rag
+                        </code>
+                      </p>
+                      <p className="text-sm">
+                        <strong>Neon DB Function:</strong> 
+                        <code className="ml-2 px-2 py-1 bg-gray-100 rounded text-xs">
+                          {window.location.origin}/.netlify/functions/neon-db
                         </code>
                       </p>
                     </div>
@@ -717,12 +955,29 @@ const RAGConfigurationPage = ({ user, onClose }) => {
                     <h4 className="font-medium text-gray-800 mb-2">System Capabilities</h4>
                     <div className="p-3 bg-white border rounded-md">
                       <ul className="text-sm space-y-1 text-gray-600">
-                        <li>✅ Instant document upload</li>
-                        <li>✅ Text-based search</li>
+                        <li>✅ Neon PostgreSQL database storage</li>
+                        <li>✅ Full-text search with ranking</li>
+                        <li>✅ Document persistence across sessions</li>
                         <li>✅ RAG response generation</li>
-                        <li>✅ Fast processing (no timeouts)</li>
-                        <li>❌ Semantic embeddings (disabled for speed)</li>
-                        <li>❌ Persistent storage (memory-based)</li>
+                        <li>✅ Advanced conversation analytics</li>
+                        <li>✅ Scalable serverless architecture</li>
+                        <li>🔄 Vector embeddings (future support)</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-medium text-gray-800 mb-2">Troubleshooting</h4>
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                      <p className="text-sm text-yellow-800 mb-2">
+                        <strong>If you're seeing authentication errors:</strong>
+                      </p>
+                      <ul className="text-sm text-yellow-700 space-y-1">
+                        <li>1. Try refreshing the page to get a new token</li>
+                        <li>2. Sign out and sign back in</li>
+                        <li>3. Check that your Auth0 configuration is correct</li>
+                        <li>4. Verify that NEON_DATABASE_URL is set in Netlify</li>
+                        <li>5. Check the Network tab in browser dev tools</li>
                       </ul>
                     </div>
                   </div>
