@@ -1,12 +1,11 @@
 // src/App.js - FIXED VERSION with proper admin function passing
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import ReactDOM from 'react-dom/client';
 
 // Components
 import Header from './components/Header';
 import ChatArea from './components/ChatArea';
 import Sidebar from './components/Sidebar';
-import NotebookWindow from './components/NotebookWindow';
+import NotebookOverlay from './components/NotebookOverlay';
 import AuthScreen from './components/AuthScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -51,6 +50,7 @@ const AcceleraQA = () => {
   const [ragEnabled, setRAGEnabled] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState(null);
+  const [showNotebook, setShowNotebook] = useState(false);
   
   const messagesEndRef = useRef(null);
 
@@ -106,6 +106,14 @@ const AcceleraQA = () => {
   const handleCloseAdmin = useCallback(() => {
     console.log('Closing admin screen');
     setShowAdmin(false);
+  }, []);
+
+  const handleOpenNotebook = useCallback(() => {
+    setShowNotebook(true);
+  }, []);
+
+  const handleCloseNotebook = useCallback(() => {
+    setShowNotebook(false);
   }, []);
 
   // Initialize authentication and Neon service
@@ -474,33 +482,6 @@ const AcceleraQA = () => {
     }
     }, [isServerAvailable, user]);
 
-    const openNotebookWindow = () => {
-      const notebookWindow = window.open('', '_blank', 'width=800,height=600');
-      if (!notebookWindow) return;
-
-      notebookWindow.document.title = 'Notebook';
-
-      const container = notebookWindow.document.createElement('div');
-      notebookWindow.document.body.appendChild(container);
-
-      Array.from(document.head.querySelectorAll('link[rel="stylesheet"], style')).forEach(node => {
-        notebookWindow.document.head.appendChild(node.cloneNode(true));
-      });
-
-      ReactDOM.createRoot(container).render(
-        <NotebookWindow
-          messages={messages}
-          thirtyDayMessages={thirtyDayMessages}
-          selectedMessages={selectedMessages}
-          setSelectedMessages={setSelectedMessages}
-          generateStudyNotes={generateStudyNotes}
-          isGeneratingNotes={isGeneratingNotes}
-          storedMessageCount={storedMessages.length}
-          isServerAvailable={isServerAvailable}
-        />
-      );
-    };
-
   // Loading screen
   if (isLoadingAuth) {
     return <LoadingScreen />;
@@ -529,6 +510,22 @@ const AcceleraQA = () => {
     );
   }
 
+  if (showNotebook) {
+    return (
+      <NotebookOverlay
+        messages={messages}
+        thirtyDayMessages={thirtyDayMessages}
+        selectedMessages={selectedMessages}
+        setSelectedMessages={setSelectedMessages}
+        generateStudyNotes={generateStudyNotes}
+        isGeneratingNotes={isGeneratingNotes}
+        storedMessageCount={storedMessages.length}
+        isServerAvailable={isServerAvailable}
+        onClose={handleCloseNotebook}
+      />
+    );
+  }
+
   // Authentication required screen
   if (!user) {
     return <AuthScreen />;
@@ -552,7 +549,7 @@ const AcceleraQA = () => {
             isSaving={isSaving}
             lastSaveTime={lastSaveTime}
             onRefresh={handleRefreshConversations}
-            openNotebookWindow={openNotebookWindow}
+            onOpenNotebook={handleOpenNotebook}
           />
 
         <div className="max-w-7xl mx-auto px-6 py-8 h-[calc(100vh-64px)]">
