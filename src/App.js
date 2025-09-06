@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Header from './components/Header';
 import ChatArea from './components/ChatArea';
 import Sidebar from './components/Sidebar';
+import LearningPanel from './components/LearningPanel';
 import NotebookOverlay from './components/NotebookOverlay';
 import AuthScreen from './components/AuthScreen';
 import LoadingScreen from './components/LoadingScreen';
@@ -531,7 +532,8 @@ const AcceleraQA = () => {
           />
 
         <div className="max-w-7xl mx-auto px-6 py-8 h-[calc(100vh-64px)]">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full min-h-0">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full min-h-0">
+            <Sidebar currentResources={currentResources} />
             <ChatArea
               messages={messages}
               inputMessage={inputMessage}
@@ -545,10 +547,7 @@ const AcceleraQA = () => {
               clearChat={clearChat}
               isSaving={isSaving}
             />
-            
-              <Sidebar
-                currentResources={currentResources}
-              />
+            <LearningPanel />
           </div>
         </div>
 
