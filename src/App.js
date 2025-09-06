@@ -16,6 +16,8 @@ import NotebookOverlay from './components/NotebookOverlay';
 // Utility
 import { v4 as uuidv4 } from 'uuid';
 import authService, { initializeAuth } from './services/authService';
+import ragService from './services/ragService';
+import openaiService from './services/openaiService';
 
 function App() {
   // Authentication state
@@ -73,8 +75,9 @@ function App() {
     }
   }, [messages]);
 
-  const handleSendMessage = useCallback(() => {
+  const handleSendMessage = useCallback(async () => {
     if (!inputMessage.trim()) return;
+
     setIsLoading(true);
 
     const userMessage = {
@@ -84,17 +87,36 @@ function App() {
       timestamp: Date.now(),
     };
 
-    const assistantMessage = {
-      id: uuidv4(),
-      role: 'assistant',
-      content: 'This is a placeholder response.',
-      timestamp: Date.now(),
-      sources: ragEnabled ? [{ filename: 'demo.txt', text: 'Example source' }] : [],
-    };
-
-    setMessages((prev) => [...prev, userMessage, assistantMessage]);
+    // Add user's message immediately
+    setMessages((prev) => [...prev, userMessage]);
     setInputMessage('');
-    setIsLoading(false);
+
+    try {
+      const response = ragEnabled
+        ? await ragService.search(inputMessage)
+        : await openaiService.getChatResponse(inputMessage);
+
+      const assistantMessage = {
+        id: uuidv4(),
+        role: 'assistant',
+        content: response.answer,
+        timestamp: Date.now(),
+        sources: response.sources || [],
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      const errorMessage = {
+        id: uuidv4(),
+        role: 'assistant',
+        content: error.message || 'An error occurred while fetching the response.',
+        timestamp: Date.now(),
+        sources: [],
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   }, [inputMessage, ragEnabled]);
 
   const handleKeyPress = useCallback(
