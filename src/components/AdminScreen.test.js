@@ -77,4 +77,23 @@ describe('AdminScreen navigation', () => {
     const heading = container.querySelector('h2');
     expect(heading && heading.textContent).toMatch(/RAG Configuration/i);
   });
+
+  it('calls onBack when back button is clicked', async () => {
+    const user = { roles: ['admin'] };
+    const onBack = jest.fn();
+
+    await act(async () => {
+      ReactDOM.render(<AdminScreen user={user} onBack={onBack} />, container);
+    });
+
+    const backButton = Array.from(container.querySelectorAll('button')).find(btn =>
+      btn.textContent && btn.textContent.includes('Back to App')
+    );
+
+    await act(async () => {
+      backButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(onBack).toHaveBeenCalled();
+  });
 });
