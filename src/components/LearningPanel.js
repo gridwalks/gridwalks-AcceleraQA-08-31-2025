@@ -1,4 +1,3 @@
-
 import React, { memo, useState } from 'react';
 import { PlayCircle, ChevronRight } from 'lucide-react';
 
@@ -53,24 +52,12 @@ const ModuleCard = memo(({ module }) => {
             className={`h-4 w-4 text-gray-400 group-hover:text-black transition-all ml-2 flex-shrink-0 ${isHovered ? 'translate-x-1' : ''}`}
           />
         </div>
-
-import React, { memo } from 'react';
-
-const LearningPanel = memo(() => {
-  return (
-    <div className="lg:col-span-3">
-      <div className="rounded-lg border border-gray-200 p-6 h-full shadow-sm bg-white">
-        <h2 className="text-lg font-semibold mb-4 text-gray-900">Learning Panel</h2>
-        <p className="text-gray-600">Select a topic to start learning.</p>
-
       </div>
     </div>
   );
 });
 
-
 ModuleCard.displayName = 'ModuleCard';
-
 LearningPanel.displayName = 'LearningPanel';
 
 export default LearningPanel;
