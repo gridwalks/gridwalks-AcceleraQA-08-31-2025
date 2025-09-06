@@ -1,5 +1,5 @@
-// src/services/neonService.js - Neon PostgreSQL database service
-import { getToken } from './authService';
+// src/services/neonService.js - FIXED VERSION
+import { getToken, getUserId } from './authService';
 
 class NeonService {
   constructor() {
@@ -21,35 +21,67 @@ class NeonService {
   }
 
   /**
-   * Make authenticated request to Netlify function
+   * FIXED: Enhanced authenticated request with better error handling
    */
   async makeAuthenticatedRequest(endpoint, options = {}) {
     try {
-      const token = await getToken();
+      console.log('=== NEON SERVICE AUTHENTICATED REQUEST ===');
+      console.log('Endpoint:', endpoint);
+      console.log('Options action:', options.body ? JSON.parse(options.body).action : 'N/A');
       
       const defaultHeaders = {
         'Content-Type': 'application/json',
       };
 
-      if (token) {
-        defaultHeaders['Authorization'] = `Bearer ${token}`;
+      // CRITICAL FIX: Always try to get fresh token and user ID
+      let token = null;
+      let userId = null;
+
+      try {
+        // Get token first
+        token = await getToken();
+        console.log('Token retrieved:', !!token);
+        console.log('Token length:', token?.length || 0);
         
-        try {
-          const tokenParts = token.split('.');
-          if (tokenParts.length === 3) {
-            const payload = JSON.parse(atob(tokenParts[1]));
-            if (payload.sub) {
-              defaultHeaders['x-user-id'] = payload.sub;
-            }
-          }
-        } catch (parseError) {
-          console.warn('Could not parse token for user ID:', parseError);
+        if (token) {
+          defaultHeaders['Authorization'] = `Bearer ${token}`;
+          console.log('Added Authorization header');
         }
+      } catch (tokenError) {
+        console.error('Failed to get token:', tokenError);
+        throw new Error(`Authentication failed: ${tokenError.message}`);
       }
 
+      try {
+        // Get user ID using the new helper function
+        userId = await getUserId();
+        console.log('User ID retrieved:', userId ? userId.substring(0, 10) + '...' : 'null');
+        
+        if (userId) {
+          defaultHeaders['x-user-id'] = userId;
+          console.log('Added x-user-id header');
+        } else {
+          throw new Error('User ID not available');
+        }
+      } catch (userIdError) {
+        console.error('Failed to get user ID:', userIdError);
+        throw new Error(`User identification failed: ${userIdError.message}`);
+      }
+
+      // Fallback to stored user ID if available
       if (!defaultHeaders['x-user-id'] && this.userId) {
         defaultHeaders['x-user-id'] = this.userId;
+        console.log('Using stored user ID as fallback');
       }
+
+      // Add debugging headers
+      defaultHeaders['X-Requested-With'] = 'XMLHttpRequest';
+      defaultHeaders['X-Client-Version'] = '2.1.0';
+      defaultHeaders['X-Timestamp'] = new Date().toISOString();
+
+      console.log('Request headers prepared:', Object.keys(defaultHeaders));
+      console.log('Has Authorization:', !!defaultHeaders['Authorization']);
+      console.log('Has x-user-id:', !!defaultHeaders['x-user-id']);
 
       const response = await fetch(endpoint, {
         ...options,
@@ -59,14 +91,46 @@ class NeonService {
         },
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        console.error('Request failed with status:', response.status);
+        
+        let errorData;
+        try {
+          errorData = await response.json();
+          console.error('Error response data:', errorData);
+        } catch (parseError) {
+          console.error('Could not parse error response:', parseError);
+          errorData = { 
+            error: `HTTP ${response.status}: ${response.statusText}`,
+            details: 'Could not parse error response'
+          };
+        }
+
+        // Enhanced error messages
+        if (response.status === 401) {
+          throw new Error(`Authentication failed: ${errorData.error || 'Unauthorized'}. Please try signing out and signing in again.`);
+        } else if (response.status === 403) {
+          throw new Error(`Access forbidden: ${errorData.error || 'Insufficient permissions'}`);
+        } else if (response.status >= 500) {
+          throw new Error(`Server error: ${errorData.error || 'Internal server error'}. Please try again later.`);
+        } else {
+          throw new Error(errorData.error || `Request failed with status ${response.status}`);
+        }
       }
 
-      return await response.json();
+      const result = await response.json();
+      console.log('Request successful, response keys:', Object.keys(result));
+      console.log('=== NEON REQUEST COMPLETED ===');
+      return result;
+
     } catch (error) {
-      console.error('Neon API request failed:', error);
+      console.error('=== NEON REQUEST FAILED ===');
+      console.error('Error type:', error.constructor.name);
+      console.error('Error message:', error.message);
+      console.error('============================');
       throw error;
     }
   }
@@ -180,7 +244,7 @@ class NeonService {
     } catch (error) {
       console.error('Failed to load conversations from Neon:', error);
       
-      if (error.message.includes('401') || error.message.includes('authentication')) {
+      if (error.message.includes('Authentication failed') || error.message.includes('401')) {
         console.warn('Authentication required for loading conversations');
         return [];
       }
@@ -311,7 +375,7 @@ class NeonService {
     try {
       console.log('Checking Neon service availability...');
 
-      await this.makeAuthenticatedRequest(this.apiUrl, {
+      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         method: 'POST',
         body: JSON.stringify({
           action: 'health_check'
@@ -412,5 +476,6 @@ export const autoSaveConversation = (messages, metadata) =>
 
 export const getConversationStats = () =>
   neonService.getConversationStats();
+
 export const isServiceAvailable = () =>
   neonService.isServiceAvailable();
