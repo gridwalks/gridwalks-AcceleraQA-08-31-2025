@@ -14,6 +14,7 @@ import AdminScreen from './components/AdminScreen';
 
 // Utility
 import { v4 as uuidv4 } from 'uuid';
+import authService, { initializeAuth } from './services/authService';
 
 function App() {
   // Authentication state
@@ -44,15 +45,23 @@ function App() {
   const messagesEndRef = useRef(null);
   const isAdmin = useMemo(() => user?.roles?.includes('admin'), [user]);
 
-  // Fake authentication on mount
+  // Initialize authentication on mount
   useEffect(() => {
-    setLoading(true);
-    const timer = setTimeout(() => {
-      setIsAuthenticated(true);
-      setUser({ name: 'Demo User', roles: [] });
+    const initAuth = async () => {
+      setLoading(true);
+      await initializeAuth(
+        (authUser) => setUser(authUser),
+        () => {}
+      );
+      const authStatus = await authService.isAuthenticated();
+      setIsAuthenticated(authStatus);
+      if (!authStatus) {
+        setUser(null);
+      }
       setLoading(false);
-    }, 300);
-    return () => clearTimeout(timer);
+    };
+
+    initAuth();
   }, []);
 
   // Auto-scroll messages
@@ -124,6 +133,11 @@ function App() {
   const handleShowAdmin = useCallback(() => setShowAdmin(true), []);
   const handleCloseAdmin = useCallback(() => setShowAdmin(false), []);
 
+  const handleLogoutComplete = useCallback(() => {
+    setIsAuthenticated(false);
+    setUser(null);
+  }, []);
+
   return (
     <ErrorBoundary>
       {!isAuthenticated ? (
@@ -151,6 +165,7 @@ function App() {
             isSaving={isSaving}
             lastSaveTime={lastSaveTime}
             onRefresh={handleRefreshConversations}
+            onLogout={handleLogoutComplete}
           />
 
           {/* IMPROVED LAYOUT SECTION */}
