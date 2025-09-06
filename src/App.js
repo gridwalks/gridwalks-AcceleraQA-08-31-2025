@@ -1,10 +1,12 @@
 // src/App.js - FIXED VERSION with proper admin function passing
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import ReactDOM from 'react-dom/client';
 
 // Components
 import Header from './components/Header';
 import ChatArea from './components/ChatArea';
 import Sidebar from './components/Sidebar';
+import NotebookWindow from './components/NotebookWindow';
 import AuthScreen from './components/AuthScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -15,8 +17,7 @@ import openaiService from './services/openaiService';
 import neonService, { 
   initializeNeonService,
   autoSaveConversation,
-  loadConversations,
-  clearConversations
+  loadConversations
 } from './services/neonService';
 import ragService from './services/ragService';
 import { initializeAuth } from './services/authService';
@@ -39,7 +40,6 @@ const AcceleraQA = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentResources, setCurrentResources] = useState([]);
-  const [showNotebook, setShowNotebook] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState(new Set());
   const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
   const [user, setUser] = useState(null);
@@ -366,31 +366,6 @@ const AcceleraQA = () => {
     }
   }, [messages, isServerAvailable, initializeWelcomeMessage]);
 
-  // Clear all conversations from Neon database
-  const clearAllConversations = useCallback(async () => {
-    if (!isServerAvailable) return;
-    
-    try {
-      setIsSaving(true);
-      await clearConversations();
-      
-      setMessages([]);
-      setStoredMessages([]);
-      setCurrentResources([]);
-      setSelectedMessages(new Set());
-      
-      initializeWelcomeMessage();
-      
-      console.log('All conversations cleared from Neon database');
-      
-    } catch (error) {
-      console.error('Error clearing all conversations:', error);
-      throw error;
-    } finally {
-      setIsSaving(false);
-    }
-  }, [isServerAvailable, initializeWelcomeMessage]);
-
   // Generate study notes
   const generateStudyNotes = useCallback(async () => {
     if (selectedMessages.size === 0 || isGeneratingNotes) return;
@@ -480,8 +455,8 @@ const AcceleraQA = () => {
   }, [allMessages]);
 
   // Force refresh conversations from server
-  const handleRefreshConversations = useCallback(async () => {
-    if (!isServerAvailable || !user) return;
+    const handleRefreshConversations = useCallback(async () => {
+      if (!isServerAvailable || !user) return;
     
     try {
       setIsLoading(true);
@@ -497,7 +472,34 @@ const AcceleraQA = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isServerAvailable, user]);
+    }, [isServerAvailable, user]);
+
+    const openNotebookWindow = () => {
+      const notebookWindow = window.open('', '_blank', 'width=800,height=600');
+      if (!notebookWindow) return;
+
+      notebookWindow.document.title = 'Notebook';
+
+      const container = notebookWindow.document.createElement('div');
+      notebookWindow.document.body.appendChild(container);
+
+      Array.from(document.head.querySelectorAll('link[rel="stylesheet"], style')).forEach(node => {
+        notebookWindow.document.head.appendChild(node.cloneNode(true));
+      });
+
+      ReactDOM.createRoot(container).render(
+        <NotebookWindow
+          messages={messages}
+          thirtyDayMessages={thirtyDayMessages}
+          selectedMessages={selectedMessages}
+          setSelectedMessages={setSelectedMessages}
+          generateStudyNotes={generateStudyNotes}
+          isGeneratingNotes={isGeneratingNotes}
+          storedMessageCount={storedMessages.length}
+          isServerAvailable={isServerAvailable}
+        />
+      );
+    };
 
   // Loading screen
   if (isLoadingAuth) {
@@ -541,19 +543,17 @@ const AcceleraQA = () => {
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-gray-50">
-        <Header
-          user={user}
-          showNotebook={showNotebook}
-          setShowNotebook={setShowNotebook}
-          clearChat={clearChat}
-          exportNotebook={handleExport}
-          clearAllConversations={clearAllConversations}
-          isServerAvailable={isServerAvailable}
-          onShowAdmin={handleShowAdmin} // FIXED: Properly passing the function
-          isSaving={isSaving}
-          lastSaveTime={lastSaveTime}
-          onRefresh={handleRefreshConversations}
-        />
+          <Header
+            user={user}
+            clearChat={clearChat}
+            exportNotebook={handleExport}
+            isServerAvailable={isServerAvailable}
+            onShowAdmin={handleShowAdmin} // FIXED: Properly passing the function
+            isSaving={isSaving}
+            lastSaveTime={lastSaveTime}
+            onRefresh={handleRefreshConversations}
+            openNotebookWindow={openNotebookWindow}
+          />
 
         <div className="max-w-7xl mx-auto px-6 py-8 h-[calc(100vh-64px)]">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full min-h-0">
@@ -570,18 +570,9 @@ const AcceleraQA = () => {
               isSaving={isSaving}
             />
             
-            <Sidebar 
-              showNotebook={showNotebook}
-              messages={messages}
-              thirtyDayMessages={thirtyDayMessages}
-              selectedMessages={selectedMessages}
-              setSelectedMessages={setSelectedMessages}
-              generateStudyNotes={generateStudyNotes}
-              isGeneratingNotes={isGeneratingNotes}
-              currentResources={currentResources}
-              storedMessageCount={storedMessages.length}
-              isServerAvailable={isServerAvailable}
-            />
+              <Sidebar
+                currentResources={currentResources}
+              />
           </div>
         </div>
 
