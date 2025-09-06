@@ -1,7 +1,7 @@
-// src/components/ChatArea.js - Improved with better responsive sizing
+// src/components/ChatArea.js - Fixed with correct lucide-react icons
 
 import React from 'react';
-import { Send, Loader2, Database, DatabaseOff } from 'lucide-react';
+import { Send, Loader2, Database, X } from 'lucide-react';
 
 const ChatArea = ({
   messages,
@@ -32,7 +32,7 @@ const ChatArea = ({
             )}
           </div>
           
-          {/* RAG Toggle Button */}
+          {/* RAG Toggle Button - FIXED WITH CORRECT ICONS */}
           <button
             onClick={() => setRAGEnabled(!ragEnabled)}
             className={`flex items-center space-x-2 px-3 py-2 rounded-lg font-medium transition-all duration-200 ${
@@ -45,7 +45,11 @@ const ChatArea = ({
             {ragEnabled ? (
               <Database className="h-4 w-4" />
             ) : (
-              <DatabaseOff className="h-4 w-4" />
+              // Using X icon with Database as fallback since DatabaseOff doesn't exist
+              <div className="relative">
+                <Database className="h-4 w-4" />
+                <X className="h-3 w-3 absolute -top-1 -right-1 text-red-500" />
+              </div>
             )}
             <span className="hidden sm:inline text-sm">
               {ragEnabled ? 'RAG On' : 'RAG Off'}
