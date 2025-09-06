@@ -462,25 +462,6 @@ const AcceleraQA = () => {
     }
   }, [allMessages]);
 
-  // Force refresh conversations from server
-    const handleRefreshConversations = useCallback(async () => {
-      if (!isServerAvailable || !user) return;
-    
-    try {
-      setIsLoading(true);
-      console.log('Refreshing conversations from Neon database...');
-      
-      const freshMessages = await neonService.refreshConversations();
-      setStoredMessages(freshMessages);
-      
-      console.log(`Refreshed ${freshMessages.length} messages from Neon`);
-    } catch (error) {
-      console.error('Failed to refresh conversations:', error);
-      setError('Failed to refresh conversations. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-    }, [isServerAvailable, user]);
 
   // Loading screen
   if (isLoadingAuth) {
@@ -544,11 +525,9 @@ const AcceleraQA = () => {
             user={user}
             clearChat={clearChat}
             exportNotebook={handleExport}
-            isServerAvailable={isServerAvailable}
             onShowAdmin={handleShowAdmin} // FIXED: Properly passing the function
             isSaving={isSaving}
             lastSaveTime={lastSaveTime}
-            onRefresh={handleRefreshConversations}
             onOpenNotebook={handleOpenNotebook}
           />
 

@@ -405,15 +405,6 @@ class ConversationService {
   }
 
   /**
-   * Force refresh conversations from server
-   * @returns {Promise<Object[]>} - Fresh conversations
-   */
-  async refreshConversations() {
-    this.cachedConversations = null;
-    return await this.loadConversations(false);
-  }
-
-  /**
    * Get cache status
    * @returns {Object} - Cache information
    */
@@ -462,11 +453,7 @@ export const clearConversations = () =>
 export const autoSaveConversation = (messages, metadata) => 
   conversationService.autoSaveConversation(messages, metadata);
 
-export const getConversationStats = () => 
+export const getConversationStats = () =>
   conversationService.getConversationStats();
-
-export const refreshConversations = () => 
-  conversationService.refreshConversations();
-
-export const isServiceAvailable = () => 
+export const isServiceAvailable = () =>
   conversationService.isServiceAvailable();

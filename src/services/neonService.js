@@ -364,14 +364,6 @@ class NeonService {
   }
 
   /**
-   * Force refresh conversations from server
-   */
-  async refreshConversations() {
-    this.cachedConversations = null;
-    return await this.loadConversations(false);
-  }
-
-  /**
    * Get cache status
    */
   getCacheStatus() {
@@ -418,11 +410,7 @@ export const clearConversations = () =>
 export const autoSaveConversation = (messages, metadata) => 
   neonService.autoSaveConversation(messages, metadata);
 
-export const getConversationStats = () => 
+export const getConversationStats = () =>
   neonService.getConversationStats();
-
-export const refreshConversations = () => 
-  neonService.refreshConversations();
-
-export const isServiceAvailable = () => 
+export const isServiceAvailable = () =>
   neonService.isServiceAvailable();
