@@ -9,7 +9,8 @@ const Header = memo(({
   isSaving = false,
   lastSaveTime = null,
   onShowAdmin,
-  onOpenNotebook
+  onOpenNotebook,
+  onLogout
 }) => {
   // Enhanced admin detection with debugging
   const isAdmin = useMemo(() => hasAdminRole(user), [user]);
@@ -31,6 +32,9 @@ const Header = memo(({
   const handleLogoutClick = async () => {
     try {
       await handleLogout();
+      if (onLogout) {
+        onLogout();
+      }
     } catch (error) {
       console.error('Logout failed:', error);
     }
