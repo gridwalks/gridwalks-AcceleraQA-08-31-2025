@@ -1,7 +1,7 @@
-// src/components/ChatArea.js - Fixed with correct lucide-react icons
+// src/components/ChatArea.js - DEPLOYMENT READY (fixes DatabaseOff issue)
 
 import React from 'react';
-import { Send, Loader2, Database, X } from 'lucide-react';
+import { Send, Loader2, Database, Search, BookOpen } from 'lucide-react';
 
 const ChatArea = ({
   messages,
@@ -32,7 +32,7 @@ const ChatArea = ({
             )}
           </div>
           
-          {/* RAG Toggle Button - FIXED WITH CORRECT ICONS */}
+          {/* RAG Toggle Button - FIXED: No DatabaseOff dependency */}
           <button
             onClick={() => setRAGEnabled(!ragEnabled)}
             className={`flex items-center space-x-2 px-3 py-2 rounded-lg font-medium transition-all duration-200 ${
@@ -40,27 +40,24 @@ const ChatArea = ({
                 ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 ring-2 ring-purple-500 ring-opacity-50' 
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
-            title={ragEnabled ? 'RAG enabled - using uploaded documents' : 'RAG disabled - AI knowledge only'}
+            title={ragEnabled ? 'RAG enabled - searching uploaded documents' : 'RAG disabled - AI knowledge only'}
           >
             {ragEnabled ? (
-              <Database className="h-4 w-4" />
+              <Search className="h-4 w-4 text-purple-600" />
             ) : (
-              // Using X icon with Database as fallback since DatabaseOff doesn't exist
-              <div className="relative">
-                <Database className="h-4 w-4" />
-                <X className="h-3 w-3 absolute -top-1 -right-1 text-red-500" />
-              </div>
+              <BookOpen className="h-4 w-4 text-gray-500" />
             )}
             <span className="hidden sm:inline text-sm">
-              {ragEnabled ? 'RAG On' : 'RAG Off'}
+              {ragEnabled ? 'Document Search' : 'AI Knowledge'}
             </span>
           </button>
         </div>
         
         {/* RAG Status Description */}
         {ragEnabled && (
-          <div className="mt-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-md">
-            🔍 Searching uploaded documents for relevant context
+          <div className="mt-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-md flex items-center space-x-2">
+            <Database className="h-3 w-3" />
+            <span>Searching uploaded documents for relevant context</span>
           </div>
         )}
       </div>
@@ -80,12 +77,18 @@ const ChatArea = ({
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div className="bg-blue-50 p-3 rounded-lg">
-                  <div className="font-medium text-blue-900 mb-1">💡 Quick Start</div>
+                  <div className="font-medium text-blue-900 mb-1 flex items-center space-x-1">
+                    <BookOpen className="h-3 w-3" />
+                    <span>Quick Start</span>
+                  </div>
                   <div className="text-blue-700">Ask about GMP requirements, validation protocols, or regulatory guidelines</div>
                 </div>
                 <div className="bg-purple-50 p-3 rounded-lg">
-                  <div className="font-medium text-purple-900 mb-1">📚 Upload Documents</div>
-                  <div className="text-purple-700">Enable RAG mode and upload your company's SOPs or industry documents</div>
+                  <div className="font-medium text-purple-900 mb-1 flex items-center space-x-1">
+                    <Database className="h-3 w-3" />
+                    <span>Upload Documents</span>
+                  </div>
+                  <div className="text-purple-700">Enable document search and upload your company's SOPs or industry documents</div>
                 </div>
               </div>
             </div>
@@ -107,8 +110,9 @@ const ChatArea = ({
                   {/* RAG Sources Display */}
                   {message.sources && message.sources.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-300">
-                      <div className="text-xs font-medium text-gray-600 mb-2">
-                        📚 Sources from uploaded documents:
+                      <div className="text-xs font-medium text-gray-600 mb-2 flex items-center space-x-1">
+                        <Database className="h-3 w-3" />
+                        <span>Sources from uploaded documents:</span>
                       </div>
                       <div className="space-y-1">
                         {message.sources.slice(0, 3).map((source, idx) => (
