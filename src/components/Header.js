@@ -1,21 +1,19 @@
 // src/components/Header.js - UPDATED VERSION with cloud status and clear all button removed
 import React, { memo, useMemo } from 'react';
-import { Download, MessageSquare, LogOut, User, RefreshCw, Shield } from 'lucide-react';
+import { Download, LogOut, User, RefreshCw, Shield } from 'lucide-react';
 import { handleLogout } from '../services/authService';
 import { hasAdminRole } from '../utils/auth';
 
 const Header = memo(({ 
-  user, 
-  showNotebook, 
-  setShowNotebook, 
-  clearChat, 
+  user,
+  clearChat,
   exportNotebook,
-  clearAllConversations,
   isServerAvailable,
   isSaving = false,
   lastSaveTime = null,
   onRefresh,
-  onShowAdmin
+  onShowAdmin,
+  openNotebookWindow
 }) => {
   // Enhanced admin detection with debugging
   const isAdmin = useMemo(() => hasAdminRole(user), [user]);
@@ -33,10 +31,6 @@ const Header = memo(({
       console.log('=========================');
     }
   }, [user, isAdmin]);
-
-  const handleToggleView = () => {
-    setShowNotebook(!showNotebook);
-  };
 
   const handleExportClick = () => {
     try {
@@ -166,26 +160,17 @@ const Header = memo(({
             >
               Clear
             </button>
-            
-            {/* Toggle Notebook/Chat View */}
+
+            {/* Open Notebook */}
             <button
-              onClick={handleToggleView}
+              onClick={openNotebookWindow}
               className="flex items-center space-x-2 px-4 py-2 bg-gray-800 rounded hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-600"
-              aria-label={showNotebook ? 'Switch to chat view' : 'Switch to notebook view'}
+              aria-label="Open notebook in new window"
             >
-              {showNotebook ? (
-                <>
-                  <MessageSquare className="h-4 w-4" />
-                  <span>Chat</span>
-                </>
-              ) : (
-                <>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                  </svg>
-                  <span>Notebook</span>
-                </>
-              )}
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              <span>Open Notebook</span>
             </button>
             
             {/* Export */}
