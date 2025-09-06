@@ -524,7 +524,6 @@ const AcceleraQA = () => {
       <div className="min-h-screen bg-gray-50">
           <Header
             user={user}
-            clearChat={clearChat}
             onShowAdmin={handleShowAdmin} // FIXED: Properly passing the function
             isSaving={isSaving}
             lastSaveTime={lastSaveTime}
@@ -543,6 +542,7 @@ const AcceleraQA = () => {
               messagesEndRef={messagesEndRef}
               ragEnabled={ragEnabled}
               setRAGEnabled={setRAGEnabled}
+              clearChat={clearChat}
               isSaving={isSaving}
             />
             

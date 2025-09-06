@@ -6,7 +6,6 @@ import { hasAdminRole } from '../utils/auth';
 
 const Header = memo(({ 
   user,
-  clearChat,
   isSaving = false,
   lastSaveTime = null,
   onShowAdmin,
@@ -116,16 +115,6 @@ const Header = memo(({
                 No Admin Role
               </div>
             )}
-
-            {/* Clear Chat */}
-            <button
-              onClick={clearChat}
-              className="px-4 py-2 text-gray-300 hover:text-white transition-colors text-sm font-medium"
-              aria-label="Clear current chat"
-              title="Clear current conversation (saves to cloud first)"
-            >
-              Clear
-            </button>
 
             {/* Open Notebook */}
             <button

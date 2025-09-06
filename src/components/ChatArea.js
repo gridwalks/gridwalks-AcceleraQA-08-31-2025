@@ -4,15 +4,16 @@ import { exportToWord } from '../utils/exportUtils';
 import { sanitizeMessageContent } from '../utils/messageUtils';
 
 const ChatArea = memo(({ 
-  messages, 
-  inputMessage, 
-  setInputMessage, 
-  isLoading, 
-  handleSendMessage, 
-  handleKeyPress, 
+  messages,
+  inputMessage,
+  setInputMessage,
+  isLoading,
+  handleSendMessage,
+  handleKeyPress,
   messagesEndRef,
   ragEnabled,
   setRAGEnabled,
+  clearChat,
   isSaving = false
 }) => {
   const handleInputChange = (e) => {
@@ -160,14 +161,14 @@ const ChatArea = memo(({
 
       {/* Input Area */}
       <div className="border-t border-gray-700 bg-gray-900 p-8 flex-shrink-0">
-        {/* RAG Toggle and Save Status */}
+        {/* RAG Toggle, Clear Chat, and Save Status */}
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <button
               onClick={toggleRAG}
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                ragEnabled 
-                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                ragEnabled
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
               aria-label={ragEnabled ? 'Disable RAG search' : 'Enable RAG search'}
@@ -177,8 +178,18 @@ const ChatArea = memo(({
                 RAG Search {ragEnabled ? 'ON' : 'OFF'}
               </span>
             </button>
+
+            <button
+              onClick={clearChat}
+              className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors text-sm font-medium"
+              aria-label="Clear current chat"
+              title="Clear current conversation"
+            >
+              Clear Chat
+            </button>
+
             <div className="text-xs text-gray-400">
-              {ragEnabled 
+              {ragEnabled
                 ? 'AI will search your uploaded documents for context'
                 : 'AI will use general pharmaceutical knowledge only'
               }
