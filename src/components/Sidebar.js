@@ -13,11 +13,11 @@ const navItems = [
   { name: 'SOPs', href: '/sops', icon: ClipboardList }
 ];
 
-const Sidebar = memo(({ currentResources = [] }) => {
+const Sidebar = memo(({ currentResources = [], className = 'lg:col-span-3' }) => {
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
 
   return (
-    <div>
+    <div className={className}>
       {/* Sidebar content goes here */}
     </div>
   );
