@@ -1,6 +1,6 @@
 // Complete layout fix for App.js with optimal column widths
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 // Components
 import Header from './components/Header';
@@ -12,10 +12,117 @@ import ErrorBoundary from './components/ErrorBoundary';
 import RAGConfigurationPage from './components/RAGConfigurationPage';
 import AdminScreen from './components/AdminScreen';
 
-// ... other imports remain the same ...
+// Utility
+import { v4 as uuidv4 } from 'uuid';
 
 function App() {
-  // ... all your existing state and logic remains the same ...
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+
+  // UI state
+  const [showRAGConfig, setShowRAGConfig] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showNotebook, setShowNotebook] = useState(false);
+  const [isServerAvailable] = useState(true);
+
+  // Conversation state
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [ragEnabled, setRAGEnabled] = useState(false);
+
+  // Save status
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaveTime, setLastSaveTime] = useState(null);
+
+  // Sidebar state
+  const [selectedMessages, setSelectedMessages] = useState([]);
+  const [thirtyDayMessages, setThirtyDayMessages] = useState([]);
+
+  const messagesEndRef = useRef(null);
+  const isAdmin = useMemo(() => user?.roles?.includes('admin'), [user]);
+
+  // Fake authentication on mount
+  useEffect(() => {
+    setLoading(true);
+    const timer = setTimeout(() => {
+      setIsAuthenticated(true);
+      setUser({ name: 'Demo User', roles: [] });
+      setLoading(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Auto-scroll messages
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  const handleSendMessage = useCallback(() => {
+    if (!inputMessage.trim()) return;
+    setIsLoading(true);
+
+    const userMessage = {
+      id: uuidv4(),
+      role: 'user',
+      content: inputMessage,
+      timestamp: Date.now(),
+    };
+
+    const assistantMessage = {
+      id: uuidv4(),
+      role: 'assistant',
+      content: 'This is a placeholder response.',
+      timestamp: Date.now(),
+      sources: ragEnabled ? [{ filename: 'demo.txt', text: 'Example source' }] : [],
+    };
+
+    setMessages((prev) => [...prev, userMessage, assistantMessage]);
+    setInputMessage('');
+    setIsLoading(false);
+  }, [inputMessage, ragEnabled]);
+
+  const handleKeyPress = useCallback(
+    (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    },
+    [handleSendMessage]
+  );
+
+  const handleRefreshConversations = useCallback(() => {
+    console.log('Refreshing conversations');
+    setLastSaveTime(new Date().toISOString());
+  }, []);
+
+  const clearChat = useCallback(() => setMessages([]), []);
+
+  const clearAllConversations = useCallback(() => {
+    setMessages([]);
+    setSelectedMessages([]);
+    setThirtyDayMessages([]);
+  }, []);
+
+  const handleExport = useCallback(() => {
+    console.log('Exporting conversation', messages);
+  }, [messages]);
+
+  const handleExportSelected = useCallback(() => {
+    console.log('Exporting selected messages', selectedMessages);
+  }, [selectedMessages]);
+
+  const clearSelectedMessages = useCallback(() => setSelectedMessages([]), []);
+
+  const handleShowRAGConfig = useCallback(() => setShowRAGConfig(true), []);
+  const handleCloseRAGConfig = useCallback(() => setShowRAGConfig(false), []);
+  const handleShowAdmin = useCallback(() => setShowAdmin(true), []);
+  const handleCloseAdmin = useCallback(() => setShowAdmin(false), []);
 
   return (
     <ErrorBoundary>
@@ -24,15 +131,9 @@ function App() {
       ) : loading ? (
         <LoadingScreen />
       ) : showRAGConfig ? (
-        <RAGConfigurationPage 
-          onClose={handleCloseRAGConfig}
-          user={user}
-        />
+        <RAGConfigurationPage onClose={handleCloseRAGConfig} user={user} />
       ) : showAdmin ? (
-        <AdminScreen 
-          onClose={handleCloseAdmin}
-          user={user}
-        />
+        <AdminScreen onClose={handleCloseAdmin} user={user} />
       ) : (
         <div className="min-h-screen bg-gray-50">
           {/* Header remains the same */}
@@ -54,7 +155,6 @@ function App() {
 
           {/* IMPROVED LAYOUT SECTION */}
           <div className="h-[calc(100vh-64px)]">
-            
             {/* Mobile Layout (stacked vertically) */}
             <div className="lg:hidden h-full flex flex-col">
               {/* Chat takes most space on mobile */}
@@ -72,10 +172,10 @@ function App() {
                   isSaving={isSaving}
                 />
               </div>
-              
+
               {/* Sidebar is collapsible on mobile */}
               <div className="flex-shrink-0 border-t bg-white max-h-60 overflow-hidden">
-                <Sidebar 
+                <Sidebar
                   showNotebook={showNotebook}
                   messages={messages}
                   thirtyDayMessages={thirtyDayMessages}
@@ -107,10 +207,10 @@ function App() {
                   isSaving={isSaving}
                 />
               </div>
-              
+
               {/* Sidebar - Fixed optimal width */}
               <div className="w-80 xl:w-96 flex-shrink-0 border-l bg-white p-6">
-                <Sidebar 
+                <Sidebar
                   showNotebook={showNotebook}
                   messages={messages}
                   thirtyDayMessages={thirtyDayMessages}
@@ -133,7 +233,7 @@ function App() {
 
 export default App;
 
-/* 
+/*
 EXPLANATION OF THE LAYOUT IMPROVEMENTS:
 
 1. **Mobile-First Responsive Design**:
@@ -170,3 +270,4 @@ This gives you:
 - Large: Chat (flexible) + Sidebar (320px)
 - XL: Chat (flexible) + Sidebar (384px)
 */
+
