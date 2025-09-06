@@ -1,6 +1,6 @@
 // src/components/Header.js - UPDATED VERSION with cloud status and clear all button removed
 import React, { memo, useMemo } from 'react';
-import { Download, LogOut, User, RefreshCw, Shield } from 'lucide-react';
+import { Download, LogOut, User, Shield } from 'lucide-react';
 import { handleLogout } from '../services/authService';
 import { hasAdminRole } from '../utils/auth';
 
@@ -8,10 +8,8 @@ const Header = memo(({
   user,
   clearChat,
   exportNotebook,
-  isServerAvailable,
   isSaving = false,
   lastSaveTime = null,
-  onRefresh,
   onShowAdmin,
   onOpenNotebook
 }) => {
@@ -62,16 +60,6 @@ const Header = memo(({
     }
   };
 
-  const handleRefreshClick = async () => {
-    if (onRefresh) {
-      try {
-        await onRefresh();
-      } catch (error) {
-        console.error('Refresh failed:', error);
-      }
-    }
-  };
-
   const displayName = user?.email || user?.name || 'User';
   const roleLabel = user?.roles?.length ? user.roles.join(', ') : null;
 
@@ -105,19 +93,6 @@ const Header = memo(({
               <div className="text-xs text-yellow-400 bg-yellow-900 bg-opacity-50 px-2 py-1 rounded">
                 Admin: {isAdmin ? '✓' : '✗'} | Roles: {JSON.stringify(user?.roles)}
               </div>
-            )}
-
-            {/* Refresh Conversations */}
-            {isServerAvailable && (
-              <button
-                onClick={handleRefreshClick}
-                className="flex items-center space-x-2 px-3 py-2 text-gray-300 hover:text-white transition-colors text-sm font-medium rounded"
-                aria-label="Refresh conversations from cloud"
-                title="Refresh conversations from cloud storage"
-              >
-                <RefreshCw className="h-4 w-4" />
-                <span className="hidden sm:block">Refresh</span>
-              </button>
             )}
 
             {/* Enhanced Admin Button */}
