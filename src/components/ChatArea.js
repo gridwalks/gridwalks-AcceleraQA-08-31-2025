@@ -1,5 +1,15 @@
 import React, { memo } from 'react';
-import { Send, MessageSquare, FileText, Database, Cloud } from 'lucide-react';
+import {
+  Send,
+  MessageSquare,
+  FileText,
+  Database,
+  Cloud,
+  FilePlus,
+  HelpCircle,
+  ShieldCheck,
+  Trash2
+} from 'lucide-react';
 import { exportToWord } from '../utils/exportUtils';
 import { sanitizeMessageContent } from '../utils/messageUtils';
 
@@ -38,7 +48,7 @@ const ChatArea = memo(({
   };
 
   return (
-    <div className="lg:col-span-2 rounded-lg border border-gray-200 p-6 h-full shadow-sm bg-gray-900/60 backdrop-blur-sm flex flex-col text-gray-100">
+    <div className="lg:col-span-6 rounded-lg border border-gray-200 p-6 h-full shadow-sm bg-gray-900/60 backdrop-blur-sm flex flex-col text-gray-100">
       {/* Chat Messages */}
       <div className="flex-1 h-full overflow-y-auto p-8 space-y-6 min-h-0 bg-white text-gray-900" style={{ scrollBehavior: 'smooth' }}>
         {messages.length === 0 ? (
@@ -161,48 +171,77 @@ const ChatArea = memo(({
 
       {/* Input Area */}
       <div className="border-t border-gray-700 bg-gray-900 p-8 flex-shrink-0">
-        {/* RAG Toggle, Clear Chat, and Save Status */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+        {/* Action Buttons and Controls */}
+        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
             <button
-              onClick={toggleRAG}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                ragEnabled
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-              aria-label={ragEnabled ? 'Disable RAG search' : 'Enable RAG search'}
+              className="w-full sm:w-auto flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm font-medium"
+              aria-label="Insert SOP"
             >
-              <Database className="h-4 w-4" />
-              <span className="text-sm font-medium">
-                RAG Search {ragEnabled ? 'ON' : 'OFF'}
-              </span>
+              <FilePlus className="h-4 w-4 mr-2" />
+              <span>Insert SOP</span>
             </button>
-
             <button
-              onClick={clearChat}
-              className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors text-sm font-medium"
-              aria-label="Clear current chat"
-              title="Clear current conversation"
+              className="w-full sm:w-auto flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm font-medium"
+              aria-label="Generate SOP"
             >
-              Clear Chat
+              <FileText className="h-4 w-4 mr-2" />
+              <span>Generate SOP</span>
             </button>
+            <button
+              className="w-full sm:w-auto flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm font-medium"
+              aria-label="Generate quiz"
+            >
+              <HelpCircle className="h-4 w-4 mr-2" />
+              <span>Generate quiz</span>
+            </button>
+            <button
+              className="w-full sm:w-auto flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm font-medium"
+              aria-label="Create attestation"
+            >
+              <ShieldCheck className="h-4 w-4 mr-2" />
+              <span>Create attestation</span>
+            </button>
+          </div>
 
-            <div className="text-xs text-gray-400">
+          <div className="flex flex-col items-stretch sm:items-end gap-2">
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              <button
+                onClick={toggleRAG}
+                className={`w-full sm:w-auto flex items-center px-4 py-2 rounded-lg transition-colors ${
+                  ragEnabled
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+                aria-label={ragEnabled ? 'Disable RAG search' : 'Enable RAG search'}
+              >
+                <Database className="h-4 w-4 mr-2" />
+                <span className="text-sm font-medium">RAG {ragEnabled ? 'ON' : 'OFF'}</span>
+              </button>
+              <button
+                onClick={clearChat}
+                className="w-full sm:w-auto flex items-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors text-sm font-medium"
+                aria-label="Clear current chat"
+                title="Clear current conversation"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                <span>Clear Chat</span>
+              </button>
+            </div>
+            <div className="text-xs text-gray-400 sm:text-right">
               {ragEnabled
                 ? 'AI will search your uploaded documents for context'
                 : 'AI will use general pharmaceutical knowledge only'
               }
             </div>
+            {/* Save Status Indicator */}
+            {isSaving && (
+              <div className="flex items-center space-x-2 text-blue-400 text-sm">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400" />
+                <span>Auto-saving to cloud...</span>
+              </div>
+            )}
           </div>
-
-          {/* Save Status Indicator */}
-          {isSaving && (
-            <div className="flex items-center space-x-2 text-blue-400 text-sm">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400" />
-              <span>Auto-saving to cloud...</span>
-            </div>
-          )}
         </div>
 
         <form onSubmit={handleSubmit} className="flex space-x-4">

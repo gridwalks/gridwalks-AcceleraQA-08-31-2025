@@ -54,72 +54,53 @@ const Header = memo(({
   const roleLabel = user?.roles?.length ? user.roles.join(', ') : null;
 
   return (
-    <header className="bg-gradient-to-r from-gray-900 via-gray-800 to-black text-white border-b border-gray-800 shadow">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="flex justify-between items-center h-16">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center">
-              <img
-                src="/AceleraQA_logo.png"
-                alt="AcceleraQA logo"
-                width="180"
-                height="20"
-              />
-            </div>
+    <header className="bg-gray-50 border-b border-gray-200">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center h-16">
+          <div className="flex-shrink-0">
+            <img
+              src="/AceleraQA_logo.png"
+              alt="AcceleraQA logo"
+              width="180"
+              height="20"
+            />
           </div>
-          
+
+          <div className="flex-1 px-4">
+            <input
+              type="text"
+              placeholder="Search policies, SOPs, modules"
+              className="w-full max-w-md mx-auto block px-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
           <div className="flex items-center space-x-4">
             {/* User Info */}
-            <div className="flex items-center space-x-2 text-sm text-gray-300">
-              <User className="h-4 w-4" />
-              <span className="max-w-40 truncate">
+            <div className="flex items-center space-x-2 text-sm text-gray-700">
+              <User className="h-4 w-4 text-gray-500" />
+              <span className="hidden sm:block max-w-40 truncate">
                 {displayName}
                 {roleLabel ? ` (${roleLabel})` : ''}
               </span>
             </div>
 
-            {/* Debug info for development */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="text-xs text-yellow-400 bg-yellow-900 bg-opacity-50 px-2 py-1 rounded">
-                Admin: {isAdmin ? '✓' : '✗'} | Roles: {JSON.stringify(user?.roles)}
-              </div>
-            )}
-
-            {/* Enhanced Admin Button */}
+            {/* Admin Button */}
             {isAdmin && (
-              <div className="relative group">
-                <button
-                  onClick={handleAdminClick}
-                  className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 relative"
-                  aria-label="Access admin panel"
-                  title="Administrative controls and system monitoring"
-                >
-                  <Shield className="h-4 w-4" />
-                  <span className="hidden sm:block">Admin</span>
-                  {/* Admin indicator badge */}
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white animate-pulse"></div>
-                </button>
-                
-                {/* Debug tooltip in development */}
-                {process.env.NODE_ENV === 'development' && (
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                    Admin Button (Roles: {JSON.stringify(user.roles)})
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Debug info for non-admin users in development */}
-            {!isAdmin && user && process.env.NODE_ENV === 'development' && (
-              <div className="text-xs text-red-400 bg-red-900 bg-opacity-50 px-2 py-1 rounded">
-                No Admin Role
-              </div>
+              <button
+                onClick={handleAdminClick}
+                className="flex items-center space-x-2 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                aria-label="Access admin panel"
+                title="Administrative controls and system monitoring"
+              >
+                <Shield className="h-4 w-4" />
+                <span className="hidden sm:block">Admin</span>
+              </button>
             )}
 
             {/* Open Notebook */}
             <button
               onClick={onOpenNotebook}
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-800 rounded hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-600"
+              className="hidden sm:flex items-center space-x-2 px-3 py-2 bg-gray-200 rounded hover:bg-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300 text-gray-700"
               aria-label="Open notebook"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,15 +108,15 @@ const Header = memo(({
               </svg>
               <span>Open Notebook</span>
             </button>
-            
+
             {/* Logout */}
             <button
               onClick={handleLogoutClick}
-              className="flex items-center space-x-2 px-4 py-2 text-gray-300 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-gray-600 rounded"
+              className="flex items-center space-x-2 px-3 py-2 text-gray-700 hover:text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300 rounded"
               aria-label="Sign out of AcceleraQA"
             >
               <LogOut className="h-4 w-4" />
-              <span>Sign Out</span>
+              <span className="hidden sm:block">Sign Out</span>
             </button>
           </div>
         </div>
