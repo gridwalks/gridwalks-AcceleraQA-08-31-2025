@@ -1,8 +1,12 @@
 import React, { memo, useState } from 'react';
 import { Search, ChevronRight, ExternalLink, BookOpen } from 'lucide-react';
 
-const ResourcesView = memo(({ currentResources }) => {
+// Provide a default empty array for currentResources to prevent runtime errors
+// when the prop is omitted. This ensures array methods like `.filter` and `.length`
+// are always safe to use.
+const ResourcesView = memo(({ currentResources = [] }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  // Initialize filteredResources with a safe default value
   const [filteredResources, setFilteredResources] = useState(currentResources);
 
   React.useEffect(() => {
