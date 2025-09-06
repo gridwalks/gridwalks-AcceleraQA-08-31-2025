@@ -502,6 +502,7 @@ const AcceleraQA = () => {
         isGeneratingNotes={isGeneratingNotes}
         storedMessageCount={storedMessages.length}
         isServerAvailable={isServerAvailable}
+        exportNotebook={handleExport}
         onClose={handleCloseNotebook}
       />
     );
@@ -524,7 +525,6 @@ const AcceleraQA = () => {
           <Header
             user={user}
             clearChat={clearChat}
-            exportNotebook={handleExport}
             onShowAdmin={handleShowAdmin} // FIXED: Properly passing the function
             isSaving={isSaving}
             lastSaveTime={lastSaveTime}
