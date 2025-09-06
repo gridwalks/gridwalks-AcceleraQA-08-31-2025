@@ -18,6 +18,7 @@ import { v4 as uuidv4 } from 'uuid';
 import authService, { initializeAuth } from './services/authService';
 import ragService from './services/ragService';
 import openaiService from './services/openaiService';
+import { initializeNeonService } from './services/neonService';
 
 function App() {
   // Authentication state
@@ -67,6 +68,13 @@ function App() {
 
     initAuth();
   }, []);
+
+  // Initialize backend services when user is available
+  useEffect(() => {
+    if (user) {
+      initializeNeonService(user);
+    }
+  }, [user]);
 
   // Auto-scroll messages
   useEffect(() => {
