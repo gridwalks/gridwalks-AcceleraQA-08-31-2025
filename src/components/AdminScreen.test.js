@@ -20,7 +20,7 @@ jest.mock('../services/neonService', () => ({
   __esModule: true,
   default: {
     getConversationStats: jest.fn().mockResolvedValue({}),
-    isServiceAvailable: jest.fn().mockResolvedValue(true),
+    isServiceAvailable: jest.fn().mockResolvedValue({ ok: true }),
   }
 }));
 

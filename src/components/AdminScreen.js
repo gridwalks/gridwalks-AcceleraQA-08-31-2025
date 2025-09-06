@@ -203,11 +203,19 @@ const AdminScreen = ({ user, onBack }) => {
 
   const checkDatabaseHealth = async () => {
     try {
-      const isAvailable = await neonService.isServiceAvailable();
+      const result = await neonService.isServiceAvailable();
+      if (result.ok) {
+        return {
+          status: 'healthy',
+          message: 'Database connection active',
+          responseTime: '< 100ms' // Placeholder
+        };
+      }
+
       return {
-        status: isAvailable ? 'healthy' : 'unhealthy',
-        message: isAvailable ? 'Database connection active' : 'Database unavailable',
-        responseTime: '< 100ms' // Placeholder
+        status: 'unhealthy',
+        message: result.error || 'Database unavailable',
+        responseTime: null
       };
     } catch (error) {
       return {
