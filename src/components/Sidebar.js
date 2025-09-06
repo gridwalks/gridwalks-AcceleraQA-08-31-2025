@@ -3,7 +3,7 @@ import ResourcesView from './ResourcesView';
 
 const Sidebar = memo(({ currentResources }) => {
   return (
-    <div className="lg:col-span-1">
+    <div className="lg:col-span-3">
       <ResourcesView currentResources={currentResources} />
     </div>
   );
