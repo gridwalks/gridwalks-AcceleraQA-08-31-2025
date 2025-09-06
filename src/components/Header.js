@@ -1,6 +1,6 @@
-// src/components/Header.js - FIXED VERSION
+// src/components/Header.js - UPDATED VERSION with cloud status and clear all button removed
 import React, { memo, useMemo } from 'react';
-import { Download, Clock, MessageSquare, LogOut, User, AlertTriangle, FileSearch, RefreshCw, Cloud, CloudOff, Shield } from 'lucide-react';
+import { Download, MessageSquare, LogOut, User, FileSearch, RefreshCw, Shield } from 'lucide-react';
 import { handleLogout } from '../services/authService';
 import { hasAdminRole } from '../utils/auth';
 
@@ -16,7 +16,7 @@ const Header = memo(({
   isSaving = false,
   lastSaveTime = null,
   onRefresh,
-  onShowAdmin // Make sure this prop is being passed
+  onShowAdmin
 }) => {
   // Enhanced admin detection with debugging
   const isAdmin = useMemo(() => hasAdminRole(user), [user]);
@@ -75,24 +75,6 @@ const Header = memo(({
     }
   };
 
-  const handleClearAllConversations = async () => {
-    if (!clearAllConversations) return;
-    
-    const confirmed = window.confirm(
-      'Are you sure you want to delete all your conversation history from cloud storage? This action cannot be undone.'
-    );
-    
-    if (confirmed) {
-      try {
-        await clearAllConversations();
-        alert('All conversations cleared from cloud storage successfully!');
-      } catch (error) {
-        console.error('Error clearing all conversations:', error);
-        alert('Failed to clear conversations. Please try again.');
-      }
-    }
-  };
-
   const handleRefreshClick = async () => {
     if (onRefresh) {
       try {
@@ -101,22 +83,6 @@ const Header = memo(({
         console.error('Refresh failed:', error);
       }
     }
-  };
-
-  const formatLastSaveTime = (saveTime) => {
-    if (!saveTime) return null;
-
-    const now = new Date();
-    const diffMs = now - saveTime;
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    
-    return saveTime.toLocaleDateString();
   };
 
   const displayName = user?.email || user?.name || 'User';
@@ -153,32 +119,6 @@ const Header = memo(({
                 Admin: {isAdmin ? '✓' : '✗'} | Roles: {JSON.stringify(user?.roles)}
               </div>
             )}
-
-            {/* Cloud Storage Status */}
-            <div className="flex items-center space-x-2 text-sm">
-              {isServerAvailable ? (
-                <div className="flex items-center space-x-2 text-green-400" title="Connected to cloud storage">
-                  <Cloud className="h-4 w-4" />
-                  {isSaving ? (
-                    <span className="flex items-center space-x-1">
-                      <div className="animate-spin rounded-full h-3 w-3 border-b border-green-400"></div>
-                      <span className="text-xs">Saving...</span>
-                    </span>
-                  ) : lastSaveTime ? (
-                    <span className="text-xs">
-                      Saved {formatLastSaveTime(lastSaveTime)}
-                    </span>
-                  ) : (
-                    <span className="text-xs">Connected</span>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2 text-orange-400" title="Cloud storage unavailable - session only">
-                  <CloudOff className="h-4 w-4" />
-                  <span className="text-xs">Session only</span>
-                </div>
-              )}
-            </div>
 
             {/* Refresh Conversations */}
             {isServerAvailable && (
@@ -258,7 +198,9 @@ const Header = memo(({
                 </>
               ) : (
                 <>
-                  <Clock className="h-4 w-4" />
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
                   <span>Notebook</span>
                 </>
               )}
@@ -274,19 +216,6 @@ const Header = memo(({
               <Download className="h-4 w-4" />
               <span>Export</span>
             </button>
-
-            {/* Clear All Conversations */}
-            {isServerAvailable && (
-              <button
-                onClick={handleClearAllConversations}
-                className="flex items-center space-x-2 px-4 py-2 text-red-400 hover:text-red-300 transition-colors focus:outline-none focus:ring-2 focus:ring-red-600 rounded"
-                aria-label="Clear all conversations from cloud storage"
-                title="Delete all conversation history from cloud storage"
-              >
-                <AlertTriangle className="h-4 w-4" />
-                <span className="hidden sm:block">Clear All</span>
-              </button>
-            )}
             
             {/* Logout */}
             <button
