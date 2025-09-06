@@ -1,13 +1,12 @@
 // src/components/Header.js - UPDATED VERSION with cloud status and clear all button removed
 import React, { memo, useMemo } from 'react';
-import { Download, LogOut, User, Shield } from 'lucide-react';
+import { LogOut, User, Shield } from 'lucide-react';
 import { handleLogout } from '../services/authService';
 import { hasAdminRole } from '../utils/auth';
 
 const Header = memo(({ 
   user,
   clearChat,
-  exportNotebook,
   isSaving = false,
   lastSaveTime = null,
   onShowAdmin,
@@ -29,14 +28,6 @@ const Header = memo(({
       console.log('=========================');
     }
   }, [user, isAdmin]);
-
-  const handleExportClick = () => {
-    try {
-      exportNotebook();
-    } catch (error) {
-      console.error('Export failed:', error);
-    }
-  };
 
   const handleLogoutClick = async () => {
     try {
@@ -146,17 +137,6 @@ const Header = memo(({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
               <span>Open Notebook</span>
-            </button>
-            
-            {/* Export */}
-            <button
-              onClick={handleExportClick}
-              className="flex items-center space-x-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
-              aria-label="Export conversation history"
-              title="Export conversations to CSV file"
-            >
-              <Download className="h-4 w-4" />
-              <span>Export</span>
             </button>
             
             {/* Logout */}
