@@ -21,7 +21,8 @@ import {
   HardDrive,
   Zap,
   Bug,
-  Monitor
+  Monitor,
+  Search
 } from 'lucide-react';
 
 // Import services
@@ -29,6 +30,7 @@ import neonService from '../services/neonService';
 import ragService from '../services/ragService';
 import { getToken, getTokenInfo } from '../services/authService';
 import { hasAdminRole } from '../utils/auth';
+import RAGConfigurationPage from './RAGConfigurationPage';
 
 export const checkStorageHealth = async () => {
   // Check browser storage capacity
@@ -412,6 +414,7 @@ const AdminScreen = ({ user, onBack }) => {
               { id: 'users', label: 'Users & Auth', icon: Users },
               { id: 'database', label: 'Database', icon: Database },
               { id: 'rag', label: 'RAG System', icon: FileText },
+              { id: 'ragConfig', label: 'RAG Config', icon: Search },
               { id: 'system', label: 'System Health', icon: Activity },
               { id: 'tools', label: 'Admin Tools', icon: Settings }
             ].map(tab => {
@@ -682,6 +685,13 @@ const AdminScreen = ({ user, onBack }) => {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* RAG Configuration Tab */}
+          {activeTab === 'ragConfig' && (
+            <div className="space-y-6">
+              <RAGConfigurationPage user={user} onClose={() => setActiveTab('overview')} />
             </div>
           )}
 

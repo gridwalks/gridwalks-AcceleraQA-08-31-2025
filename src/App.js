@@ -8,7 +8,6 @@ import Sidebar from './components/Sidebar';
 import AuthScreen from './components/AuthScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
-import RAGConfigurationPage from './components/RAGConfigurationPage';
 import AdminScreen from './components/AdminScreen';
 
 // Services
@@ -48,7 +47,6 @@ const AcceleraQA = () => {
   const [error, setError] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isServerAvailable, setIsServerAvailable] = useState(true);
-  const [showRAGConfig, setShowRAGConfig] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false); // ADMIN STATE
   const [ragEnabled, setRAGEnabled] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -481,15 +479,6 @@ const AcceleraQA = () => {
     }
   }, [allMessages]);
 
-  // RAG config handlers
-  const handleShowRAGConfig = useCallback(() => {
-    setShowRAGConfig(true);
-  }, []);
-
-  const handleCloseRAGConfig = useCallback(() => {
-    setShowRAGConfig(false);
-  }, []);
-
   // Force refresh conversations from server
   const handleRefreshConversations = useCallback(async () => {
     if (!isServerAvailable || !user) return;
@@ -560,8 +549,6 @@ const AcceleraQA = () => {
           exportNotebook={handleExport}
           clearAllConversations={clearAllConversations}
           isServerAvailable={isServerAvailable}
-          onShowRAGConfig={handleShowRAGConfig}
-          isAdmin={isAdmin}
           onShowAdmin={handleShowAdmin} // FIXED: Properly passing the function
           isSaving={isSaving}
           lastSaveTime={lastSaveTime}
@@ -597,14 +584,6 @@ const AcceleraQA = () => {
             />
           </div>
         </div>
-
-        {/* RAG Configuration Modal */}
-        {showRAGConfig && (
-          <RAGConfigurationPage
-            user={user}
-            onClose={handleCloseRAGConfig}
-          />
-        )}
 
         {/* Save Status Indicator */}
         {isSaving && (
