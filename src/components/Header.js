@@ -1,6 +1,6 @@
 // src/components/Header.js - UPDATED VERSION with cloud status and clear all button removed
 import React, { memo, useMemo } from 'react';
-import { Download, MessageSquare, LogOut, User, FileSearch, RefreshCw, Shield } from 'lucide-react';
+import { Download, MessageSquare, LogOut, User, RefreshCw, Shield } from 'lucide-react';
 import { handleLogout } from '../services/authService';
 import { hasAdminRole } from '../utils/auth';
 
@@ -12,7 +12,6 @@ const Header = memo(({
   exportNotebook,
   clearAllConversations,
   isServerAvailable,
-  onShowRAGConfig,
   isSaving = false,
   lastSaveTime = null,
   onRefresh,
@@ -52,12 +51,6 @@ const Header = memo(({
       await handleLogout();
     } catch (error) {
       console.error('Logout failed:', error);
-    }
-  };
-
-  const handleRAGConfigClick = () => {
-    if (onShowRAGConfig) {
-      onShowRAGConfig();
     }
   };
 
@@ -132,17 +125,6 @@ const Header = memo(({
                 <span className="hidden sm:block">Refresh</span>
               </button>
             )}
-
-            {/* RAG Configuration Button */}
-            <button
-              onClick={handleRAGConfigClick}
-              className="flex items-center space-x-2 px-4 py-2 bg-purple-600 rounded hover:bg-purple-700 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500"
-              aria-label="Configure RAG search"
-              title="Configure document search and RAG capabilities"
-            >
-              <FileSearch className="h-4 w-4" />
-              <span className="hidden sm:block">RAG Config</span>
-            </button>
 
             {/* Enhanced Admin Button */}
             {isAdmin && (
