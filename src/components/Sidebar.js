@@ -1,10 +1,10 @@
 import React, { memo } from 'react';
 import ResourcesView from './ResourcesView';
+import LearningPanel from './LearningPanel';
 
 const Sidebar = memo(({ currentResources }) => {
   return (
-    <div className="lg:col-span-3">
-      <ResourcesView currentResources={currentResources} />
+
     </div>
   );
 });
