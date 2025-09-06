@@ -1,338 +1,118 @@
-// Complete layout fix for App.js with optimal column widths
+// App.js - FIXED AUTO-SAVE SECTION (add this to your existing App.js)
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-
-// Components
-import Header from './components/Header';
-import ChatArea from './components/ChatArea';
-import Sidebar from './components/Sidebar';
-import AuthScreen from './components/AuthScreen';
-import LoadingScreen from './components/LoadingScreen';
-import ErrorBoundary from './components/ErrorBoundary';
-import RAGConfigurationPage from './components/RAGConfigurationPage';
-import AdminScreen from './components/AdminScreen';
-import NotebookOverlay from './components/NotebookOverlay';
-
-// Utility
-import { v4 as uuidv4 } from 'uuid';
-import authService, { initializeAuth } from './services/authService';
-import ragService from './services/ragService';
-import openaiService from './services/openaiService';
-import { initializeNeonService } from './services/neonService';
-
-function App() {
-  // Authentication state
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
-
-  // UI state
-  const [showRAGConfig, setShowRAGConfig] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [showNotebook, setShowNotebook] = useState(false);
-  const [isServerAvailable] = useState(true);
-
-  // Conversation state
-  const [messages, setMessages] = useState([]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [ragEnabled, setRAGEnabled] = useState(false);
-
-  // Save status
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSaveTime, setLastSaveTime] = useState(null);
-
-  // Sidebar state
-  const [selectedMessages, setSelectedMessages] = useState(new Set());
-  const [thirtyDayMessages, setThirtyDayMessages] = useState([]);
-  const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
-
-  const messagesEndRef = useRef(null);
-  const isAdmin = useMemo(() => user?.roles?.includes('admin'), [user]);
-
-  // Initialize authentication on mount
-  useEffect(() => {
-    const initAuth = async () => {
-      setLoading(true);
-      await initializeAuth(
-        (authUser) => setUser(authUser),
-        () => {}
-      );
-      const authStatus = await authService.isAuthenticated();
-      setIsAuthenticated(authStatus);
-      if (!authStatus) {
-        setUser(null);
-      }
-      setLoading(false);
-    };
-
-    initAuth();
-  }, []);
-
-  // Initialize backend services when user is available
-  useEffect(() => {
-    if (user) {
-      initializeNeonService(user);
+// Add this useEffect to replace your existing auto-save logic
+useEffect(() => {
+  const performAutoSave = async () => {
+    // Don't save if conditions aren't met
+    if (!user || !isInitialized || !isServerAvailable || messages.length === 0) {
+      console.log('Auto-save skipped - conditions not met:', {
+        hasUser: !!user,
+        isInitialized,
+        isServerAvailable,
+        messageCount: messages.length
+      });
+      return;
     }
-  }, [user]);
-
-  // Auto-scroll messages
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    
+    // Skip welcome-only conversations
+    if (messages.length === 1 && messages[0].content.includes('Welcome to AcceleraQA')) {
+      console.log('Auto-save skipped - welcome message only');
+      return;
     }
-  }, [messages]);
-
-  const handleSendMessage = useCallback(async () => {
-    if (!inputMessage.trim()) return;
-
-    setIsLoading(true);
-
-    const userMessage = {
-      id: uuidv4(),
-      role: 'user',
-      content: inputMessage,
-      timestamp: Date.now(),
-    };
-
-    // Add user's message immediately
-    setMessages((prev) => [...prev, userMessage]);
-    setInputMessage('');
+    
+    // Only save if we have a meaningful conversation (at least user + AI exchange)
+    const nonWelcomeMessages = messages.filter(msg => 
+      !(msg.type === 'ai' && msg.content.includes('Welcome to AcceleraQA'))
+    );
+    
+    if (nonWelcomeMessages.length < 2) {
+      console.log('Auto-save skipped - not enough meaningful messages:', nonWelcomeMessages.length);
+      return;
+    }
 
     try {
-      const response = ragEnabled
-        ? await ragService.search(inputMessage)
-        : await openaiService.getChatResponse(inputMessage);
-
-      const assistantMessage = {
-        id: uuidv4(),
-        role: 'assistant',
-        content: response.answer,
-        timestamp: Date.now(),
-        sources: response.sources || [],
+      setIsSaving(true);
+      console.log('🔄 Starting auto-save to Neon...', { 
+        totalMessages: messages.length,
+        meaningfulMessages: nonWelcomeMessages.length,
+        userId: user.sub
+      });
+      
+      const metadata = {
+        sessionId: Date.now().toString(),
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+        ragEnabled: ragEnabled,
+        autoSave: true,
+        meaningfulMessageCount: nonWelcomeMessages.length
       };
-
-      setMessages((prev) => [...prev, assistantMessage]);
+      
+      // Use the fixed autoSaveConversation function
+      await autoSaveConversation(messages, metadata);
+      
+      setLastSaveTime(new Date());
+      console.log('✅ Conversation auto-saved successfully to Neon database');
+      
     } catch (error) {
-      const errorMessage = {
-        id: uuidv4(),
-        role: 'assistant',
-        content: error.message || 'An error occurred while fetching the response.',
-        timestamp: Date.now(),
-        sources: [],
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [inputMessage, ragEnabled]);
-
-  const handleKeyPress = useCallback(
-    (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSendMessage();
+      console.error('❌ Failed to auto-save conversation to Neon:', error);
+      
+      // If it's an authentication error, try to refresh the user
+      if (error.message.includes('Authentication failed') || error.message.includes('401')) {
+        console.log('🔄 Authentication error during save, attempting to refresh user...');
+        try {
+          const refreshedUser = await authService.getUser();
+          if (refreshedUser) {
+            setUser(refreshedUser);
+          }
+        } catch (refreshError) {
+          console.error('Failed to refresh user:', refreshError);
+        }
       }
-    },
-    [handleSendMessage]
-  );
-
-  const handleRefreshConversations = useCallback(() => {
-    console.log('Refreshing conversations');
-    setLastSaveTime(new Date().toISOString());
-  }, []);
-
-  const clearChat = useCallback(() => setMessages([]), []);
-
-  const clearAllConversations = useCallback(() => {
-    setMessages([]);
-    setSelectedMessages(new Set());
-    setThirtyDayMessages([]);
-  }, []);
-
-  const handleExport = useCallback(() => {
-    console.log('Exporting conversation', messages);
-  }, [messages]);
-
-  const handleExportSelected = useCallback(() => {
-    console.log('Exporting selected messages', Array.from(selectedMessages));
-  }, [selectedMessages]);
-
-  const clearSelectedMessages = useCallback(() => setSelectedMessages(new Set()), []);
-
-  const generateStudyNotes = useCallback(() => {
-    if (selectedMessages.size === 0) return;
-    setIsGeneratingNotes(true);
-    try {
-      console.log('Generating study notes', Array.from(selectedMessages));
     } finally {
-      setIsGeneratingNotes(false);
+      setIsSaving(false);
     }
-  }, [selectedMessages]);
+  };
 
-  const handleShowRAGConfig = useCallback(() => setShowRAGConfig(true), []);
-  const handleCloseRAGConfig = useCallback(() => setShowRAGConfig(false), []);
-  const handleShowAdmin = useCallback(() => setShowAdmin(true), []);
-  const handleCloseAdmin = useCallback(() => setShowAdmin(false), []);
+  // Debounce auto-save - only trigger after user stops typing for 3 seconds
+  const timeoutId = setTimeout(performAutoSave, 3000);
+  
+  // Cleanup timeout if component unmounts or dependencies change
+  return () => {
+    clearTimeout(timeoutId);
+  };
+}, [messages, user, isInitialized, isServerAvailable, ragEnabled]);
 
-  const handleLogoutComplete = useCallback(() => {
-    setIsAuthenticated(false);
-    setUser(null);
-  }, []);
+// ALSO ADD: Enhanced error handling for manual save
+const handleManualSave = async () => {
+  if (!user || !isInitialized || messages.length === 0) {
+    alert('Cannot save: Not properly initialized or no messages to save');
+    return;
+  }
 
-  return (
-    <ErrorBoundary>
-      {!isAuthenticated ? (
-        <AuthScreen />
-      ) : loading ? (
-        <LoadingScreen />
-      ) : showRAGConfig ? (
-        <RAGConfigurationPage onClose={handleCloseRAGConfig} user={user} />
-      ) : showAdmin ? (
-        <AdminScreen onBack={handleCloseAdmin} user={user} />
-      ) : (
-        <>
-        <div className="min-h-screen bg-gray-50">
-          {/* Header remains the same */}
-          <Header
-            user={user}
-            isSaving={isSaving}
-            lastSaveTime={lastSaveTime}
-            onShowAdmin={handleShowAdmin}
-            onOpenNotebook={() => setShowNotebook(true)}
-            onLogout={handleLogoutComplete}
-          />
-
-          {/* IMPROVED LAYOUT SECTION */}
-          <div className="h-[calc(100vh-64px)]">
-            {/* Mobile Layout (stacked vertically) */}
-            <div className="lg:hidden h-full flex flex-col">
-              {/* Chat takes most space on mobile */}
-              <div className="flex-1 min-h-0 p-4">
-                <ChatArea
-                  messages={messages}
-                  inputMessage={inputMessage}
-                  setInputMessage={setInputMessage}
-                  isLoading={isLoading}
-                  handleSendMessage={handleSendMessage}
-                  handleKeyPress={handleKeyPress}
-                  messagesEndRef={messagesEndRef}
-                  ragEnabled={ragEnabled}
-                  setRAGEnabled={setRAGEnabled}
-                  isSaving={isSaving}
-                />
-              </div>
-
-              {/* Sidebar is collapsible on mobile */}
-              <div className="flex-shrink-0 border-t bg-white max-h-60 overflow-hidden">
-                <Sidebar
-                  showNotebook={showNotebook}
-                  messages={messages}
-                  thirtyDayMessages={thirtyDayMessages}
-                  selectedMessages={selectedMessages}
-                  setSelectedMessages={setSelectedMessages}
-                  exportSelected={handleExportSelected}
-                  clearSelected={clearSelectedMessages}
-                  clearAllConversations={clearAllConversations}
-                  isServerAvailable={isServerAvailable}
-                  onRefresh={handleRefreshConversations}
-                />
-              </div>
-            </div>
-
-            {/* Desktop Layout (side by side) */}
-            <div className="hidden lg:flex h-full">
-              {/* Chat Area - Takes majority of space */}
-              <div className="flex-1 min-w-0 p-6">
-                <ChatArea
-                  messages={messages}
-                  inputMessage={inputMessage}
-                  setInputMessage={setInputMessage}
-                  isLoading={isLoading}
-                  handleSendMessage={handleSendMessage}
-                  handleKeyPress={handleKeyPress}
-                  messagesEndRef={messagesEndRef}
-                  ragEnabled={ragEnabled}
-                  setRAGEnabled={setRAGEnabled}
-                  isSaving={isSaving}
-                />
-              </div>
-
-              {/* Sidebar - Fixed optimal width */}
-              <div className="w-80 xl:w-96 flex-shrink-0 border-l bg-white p-6">
-                <Sidebar
-                  showNotebook={showNotebook}
-                  messages={messages}
-                  thirtyDayMessages={thirtyDayMessages}
-                  selectedMessages={selectedMessages}
-                  setSelectedMessages={setSelectedMessages}
-                  exportSelected={handleExportSelected}
-                  clearSelected={clearSelectedMessages}
-                  clearAllConversations={clearAllConversations}
-                  isServerAvailable={isServerAvailable}
-                  onRefresh={handleRefreshConversations}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-        {showNotebook && (
-          <NotebookOverlay
-            messages={messages}
-            thirtyDayMessages={thirtyDayMessages}
-            selectedMessages={selectedMessages}
-            setSelectedMessages={setSelectedMessages}
-            generateStudyNotes={generateStudyNotes}
-            isGeneratingNotes={isGeneratingNotes}
-            storedMessageCount={messages.length}
-            isServerAvailable={isServerAvailable}
-            exportNotebook={handleExport}
-            onClose={() => setShowNotebook(false)}
-          />
-        )}
-        </>
-      )}
-    </ErrorBoundary>
-  );
-}
-
-export default App;
-
-/*
-EXPLANATION OF THE LAYOUT IMPROVEMENTS:
-
-1. **Mobile-First Responsive Design**:
-   - Mobile: Stacked layout with chat taking most space
-   - Desktop: Side-by-side layout with optimal proportions
-
-2. **Better Column Proportions**:
-   - Chat Area: flex-1 (takes all available space)
-   - Sidebar: w-80 xl:w-96 (320px on lg, 384px on xl+)
-
-3. **Improved Space Usage**:
-   - Removed max-width constraint that was limiting the layout
-   - Chat area now uses full available width
-   - Sidebar has consistent, readable width
-
-4. **Better Mobile Experience**:
-   - Vertical stacking prevents cramped horizontal layout
-   - Sidebar becomes a collapsible bottom panel
-   - Chat gets priority on small screens
-
-5. **Flexbox vs Grid Benefits**:
-   - More precise control over sizing
-   - Better handling of content overflow
-   - Easier responsive adjustments
-
-ALTERNATIVE CSS GRID APPROACH:
-If you prefer CSS Grid, you can use:
-```
-<div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_384px] gap-6 h-full">
-```
-
-This gives you:
-- Mobile: Single column (full width)
-- Large: Chat (flexible) + Sidebar (320px)
-- XL: Chat (flexible) + Sidebar (384px)
-*/
-
+  try {
+    setIsSaving(true);
+    console.log('🔄 Manual save initiated...');
+    
+    const metadata = {
+      sessionId: Date.now().toString(),
+      userAgent: navigator.userAgent,
+      timestamp: new Date().toISOString(),
+      ragEnabled: ragEnabled,
+      manualSave: true
+    };
+    
+    const result = await saveConversation(messages, metadata);
+    
+    setLastSaveTime(new Date());
+    console.log('✅ Manual save successful:', result);
+    
+    // Show success feedback to user
+    alert('Conversation saved successfully!');
+    
+  } catch (error) {
+    console.error('❌ Manual save failed:', error);
+    alert(`Save failed: ${error.message}`);
+  } finally {
+    setIsSaving(false);
+  }
+};
