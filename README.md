@@ -85,6 +85,9 @@ REACT_APP_AUTH0_CLIENT_ID=your_client_id
 # Auth0 (Optional)
 REACT_APP_AUTH0_AUDIENCE=your_api_audience
 REACT_APP_AUTH0_ROLES_CLAIM=https://your-domain.com/roles
+
+# Neon PostgreSQL (Required for database features)
+NEON_DATABASE_URL=postgresql://username:password@hostname/database?sslmode=require
 ```
 
 ### 4. Auth0 Configuration

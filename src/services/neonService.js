@@ -310,19 +310,19 @@ class NeonService {
   async isServiceAvailable() {
     try {
       console.log('Checking Neon service availability...');
-      
-      const response = await this.makeAuthenticatedRequest(this.apiUrl, {
+
+      await this.makeAuthenticatedRequest(this.apiUrl, {
         method: 'POST',
         body: JSON.stringify({
           action: 'health_check'
         })
       });
-      
+
       console.log('Neon service is available');
-      return true;
+      return { ok: true };
     } catch (error) {
       console.warn('Neon service not available:', error.message);
-      return false;
+      return { ok: false, error: error.message };
     }
   }
 
