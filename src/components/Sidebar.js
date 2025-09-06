@@ -6,6 +6,7 @@ import {
   ClipboardList
 } from 'lucide-react';
 import ResourcesView from './ResourcesView';
+import LearningPanel from './LearningPanel';
 
 const navItems = [
   { name: 'AI Chat', href: '/', icon: MessageSquare },
@@ -18,6 +19,11 @@ const Sidebar = memo(({ currentResources = [] }) => {
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
 
   return (
+
+
+    </div>
+  );
+});
 
 
 Sidebar.displayName = 'Sidebar';
