@@ -11,6 +11,7 @@ import LoadingScreen from './components/LoadingScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 import RAGConfigurationPage from './components/RAGConfigurationPage';
 import AdminScreen from './components/AdminScreen';
+import NotebookOverlay from './components/NotebookOverlay';
 
 // Utility
 import { v4 as uuidv4 } from 'uuid';
@@ -39,8 +40,9 @@ function App() {
   const [lastSaveTime, setLastSaveTime] = useState(null);
 
   // Sidebar state
-  const [selectedMessages, setSelectedMessages] = useState([]);
+  const [selectedMessages, setSelectedMessages] = useState(new Set());
   const [thirtyDayMessages, setThirtyDayMessages] = useState([]);
+  const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
 
   const messagesEndRef = useRef(null);
   const isAdmin = useMemo(() => user?.roles?.includes('admin'), [user]);
@@ -114,7 +116,7 @@ function App() {
 
   const clearAllConversations = useCallback(() => {
     setMessages([]);
-    setSelectedMessages([]);
+    setSelectedMessages(new Set());
     setThirtyDayMessages([]);
   }, []);
 
@@ -123,10 +125,20 @@ function App() {
   }, [messages]);
 
   const handleExportSelected = useCallback(() => {
-    console.log('Exporting selected messages', selectedMessages);
+    console.log('Exporting selected messages', Array.from(selectedMessages));
   }, [selectedMessages]);
 
-  const clearSelectedMessages = useCallback(() => setSelectedMessages([]), []);
+  const clearSelectedMessages = useCallback(() => setSelectedMessages(new Set()), []);
+
+  const generateStudyNotes = useCallback(() => {
+    if (selectedMessages.size === 0) return;
+    setIsGeneratingNotes(true);
+    try {
+      console.log('Generating study notes', Array.from(selectedMessages));
+    } finally {
+      setIsGeneratingNotes(false);
+    }
+  }, [selectedMessages]);
 
   const handleShowRAGConfig = useCallback(() => setShowRAGConfig(true), []);
   const handleCloseRAGConfig = useCallback(() => setShowRAGConfig(false), []);
@@ -149,22 +161,15 @@ function App() {
       ) : showAdmin ? (
         <AdminScreen onClose={handleCloseAdmin} user={user} />
       ) : (
+        <>
         <div className="min-h-screen bg-gray-50">
           {/* Header remains the same */}
           <Header
             user={user}
-            showNotebook={showNotebook}
-            setShowNotebook={setShowNotebook}
-            clearChat={clearChat}
-            exportNotebook={handleExport}
-            clearAllConversations={clearAllConversations}
-            isServerAvailable={isServerAvailable}
-            onShowRAGConfig={handleShowRAGConfig}
-            isAdmin={isAdmin}
-            onShowAdmin={handleShowAdmin}
             isSaving={isSaving}
             lastSaveTime={lastSaveTime}
-            onRefresh={handleRefreshConversations}
+            onShowAdmin={handleShowAdmin}
+            onOpenNotebook={() => setShowNotebook(true)}
             onLogout={handleLogoutComplete}
           />
 
@@ -241,6 +246,21 @@ function App() {
             </div>
           </div>
         </div>
+        {showNotebook && (
+          <NotebookOverlay
+            messages={messages}
+            thirtyDayMessages={thirtyDayMessages}
+            selectedMessages={selectedMessages}
+            setSelectedMessages={setSelectedMessages}
+            generateStudyNotes={generateStudyNotes}
+            isGeneratingNotes={isGeneratingNotes}
+            storedMessageCount={messages.length}
+            isServerAvailable={isServerAvailable}
+            exportNotebook={handleExport}
+            onClose={() => setShowNotebook(false)}
+          />
+        )}
+        </>
       )}
     </ErrorBoundary>
   );
