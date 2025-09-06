@@ -1,4 +1,4 @@
-// netlify/functions/neon-db.js - Fixed authentication handling
+// netlify/functions/neon-db.js - FIXED VERSION
 import { neon } from '@neondatabase/serverless';
 
 const headers = {
@@ -17,59 +17,119 @@ const getDatabaseConnection = () => {
   return neon(connectionString);
 };
 
-// Enhanced user ID extraction with detailed logging
-const extractUserId = (event, context) => {
-  console.log('=== USER ID EXTRACTION DEBUG ===');
-  
-  // Log all available headers
+// FIXED: Enhanced user ID extraction with better handling of JWE tokens
+const extractUserId = async (event, context) => {
+  console.log('=== ENHANCED USER ID EXTRACTION ===');
   console.log('Available headers:', Object.keys(event.headers || {}));
-  console.log('Authorization header:', event.headers.authorization ? 'Present' : 'Missing');
-  console.log('X-User-ID header:', event.headers['x-user-id'] || 'Missing');
   
-  // Try multiple sources for user ID
   let userId = null;
   let source = 'unknown';
+  let debugInfo = {};
   
-  // 1. Direct header
+  // Method 1: Direct x-user-id header (most reliable)
   if (event.headers['x-user-id']) {
     userId = event.headers['x-user-id'];
     source = 'x-user-id header';
+    debugInfo.foundInHeader = true;
+    console.log('✅ Found user ID in x-user-id header');
   }
   
-  // 2. Case variations
+  // Method 2: Case variations of x-user-id header
   if (!userId && event.headers['X-User-ID']) {
     userId = event.headers['X-User-ID'];
-    source = 'X-User-ID header';
+    source = 'X-User-ID header (case variation)';
+    debugInfo.foundInHeaderCaseVar = true;
+    console.log('✅ Found user ID in X-User-ID header');
   }
   
-  // 3. Context
-  if (!userId && context.clientContext?.user?.sub) {
-    userId = context.clientContext.user.sub;
-    source = 'context.clientContext.user.sub';
-  }
-  
-  // 4. Try to parse from Authorization header
+  // Method 3: Extract from Authorization Bearer token
   if (!userId && event.headers.authorization) {
     try {
-      const token = event.headers.authorization.replace('Bearer ', '');
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-        if (payload.sub) {
-          userId = payload.sub;
-          source = 'JWT token payload';
+      const authHeader = event.headers.authorization;
+      console.log('Processing Authorization header...');
+      debugInfo.hasAuthHeader = true;
+      
+      if (authHeader.startsWith('Bearer ')) {
+        const token = authHeader.replace('Bearer ', '');
+        debugInfo.tokenLength = token.length;
+        
+        const parts = token.split('.');
+        console.log('JWT parts count:', parts.length);
+        debugInfo.jwtPartsCount = parts.length;
+        
+        // Handle different JWT formats
+        if (parts.length === 3) {
+          // Standard JWT (JWS): header.payload.signature
+          try {
+            let payload = parts[1];
+            // Add padding if needed
+            while (payload.length % 4) {
+              payload += '=';
+            }
+            
+            const decoded = Buffer.from(payload, 'base64').toString('utf8');
+            const parsed = JSON.parse(decoded);
+            
+            console.log('JWT payload decoded successfully');
+            debugInfo.jwtDecoded = true;
+            debugInfo.jwtSubject = parsed.sub ? 'present' : 'missing';
+            
+            if (parsed.sub) {
+              userId = parsed.sub;
+              source = 'JWT Bearer token (3-part)';
+              debugInfo.extractedFromJWT = true;
+              console.log('✅ Extracted user ID from JWT');
+            }
+          } catch (jwtError) {
+            console.log('3-part JWT parsing error:', jwtError.message);
+            debugInfo.jwtError = jwtError.message;
+          }
+        } else if (parts.length === 5) {
+          // Encrypted JWT (JWE): header.encrypted_key.iv.ciphertext.tag
+          console.log('🔒 Detected 5-part JWT (JWE - encrypted)');
+          debugInfo.jwtType = 'JWE (encrypted)';
+          debugInfo.requiresServerDecryption = true;
+          
+          // For JWE, we cannot decode the payload client-side
+          // The client MUST send the user ID via x-user-id header
+          console.log('❌ Cannot decode JWE payload - x-user-id header required');
+        } else {
+          console.log('⚠️ Unexpected JWT format - parts:', parts.length);
+          debugInfo.jwtUnexpectedFormat = true;
         }
+      } else {
+        console.log('Authorization header does not start with Bearer');
+        debugInfo.authHeaderFormat = 'not_bearer';
       }
     } catch (error) {
-      console.log('Failed to parse JWT token:', error.message);
+      console.log('Auth header processing error:', error.message);
+      debugInfo.authProcessingError = error.message;
     }
   }
   
-  console.log('Final userId:', userId);
+  // Method 4: Check Netlify context (backup)
+  if (!userId && context.clientContext?.user?.sub) {
+    userId = context.clientContext.user.sub;
+    source = 'netlify context';
+    debugInfo.foundInContext = true;
+    console.log('✅ Found user ID in Netlify context');
+  }
+  
+  // Method 5: Development fallback
+  if (!userId && (process.env.NODE_ENV === 'development' || process.env.NETLIFY_DEV === 'true')) {
+    userId = 'dev-user-' + Date.now();
+    source = 'development fallback';
+    debugInfo.developmentFallback = true;
+    console.log('⚠️ Using development fallback user ID');
+  }
+  
+  console.log('=== EXTRACTION RESULTS ===');
+  console.log('Final userId:', userId || 'NOT_FOUND');
   console.log('Source:', source);
+  console.log('Debug info:', debugInfo);
   console.log('================================');
   
-  return { userId, source };
+  return { userId, source, debugInfo };
 };
 
 export const handler = async (event, context) => {
@@ -82,12 +142,11 @@ export const handler = async (event, context) => {
     };
   }
 
-  console.log('Neon DB Function called:', {
-    method: event.httpMethod,
-    hasBody: !!event.body,
-    hasAuth: !!event.headers.authorization,
-    userAgent: event.headers['user-agent']
-  });
+  console.log('=== NEON DB FUNCTION CALLED ===');
+  console.log('Method:', event.httpMethod);
+  console.log('Has body:', !!event.body);
+  console.log('Headers received:', Object.keys(event.headers || {}));
+  console.log('User agent:', event.headers['user-agent']);
 
   try {
     if (event.httpMethod !== 'POST') {
@@ -110,28 +169,33 @@ export const handler = async (event, context) => {
       };
     }
 
-    // Enhanced user ID extraction
-    const { userId, source } = extractUserId(event, context);
+    console.log('Request action:', requestData.action);
+
+    // CRITICAL FIX: Enhanced user ID extraction
+    const { userId, source, debugInfo } = await extractUserId(event, context);
 
     if (!userId) {
-      console.error('No user ID found from any source');
+      console.error('❌ No user ID found from any source');
       return {
         statusCode: 401,
         headers,
         body: JSON.stringify({ 
           error: 'User authentication required',
+          message: 'No user ID could be extracted from the request. Please ensure you are properly authenticated.',
           debug: {
             availableHeaders: Object.keys(event.headers || {}),
             hasAuth: !!event.headers.authorization,
             hasXUserId: !!event.headers['x-user-id'],
             hasContext: !!context.clientContext?.user?.sub,
-            timestamp: new Date().toISOString()
+            debugInfo,
+            timestamp: new Date().toISOString(),
+            suggestion: 'Try signing out and signing in again, or check that x-user-id header is being sent.'
           }
         }),
       };
     }
 
-    console.log(`Authenticated user: ${userId} (from ${source})`);
+    console.log(`✅ Authenticated user: ${userId} (from ${source})`);
 
     const { action, data } = requestData;
 
@@ -163,7 +227,7 @@ export const handler = async (event, context) => {
         return await handleGetStats(sql, userId);
       
       case 'health_check':
-        return await handleHealthCheck(sql);
+        return await handleHealthCheck(sql, userId);
       
       default:
         return {
@@ -173,14 +237,20 @@ export const handler = async (event, context) => {
         };
     }
   } catch (error) {
-    console.error('Neon DB Function error:', error);
+    console.error('=== NEON DB FUNCTION ERROR ===');
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('==============================');
+    
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
         error: 'Internal server error',
         message: error.message,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        suggestion: 'Please try again. If the problem persists, check your authentication status.'
       }),
     };
   }
@@ -191,17 +261,27 @@ export const handler = async (event, context) => {
  */
 async function handleSaveConversation(sql, userId, data) {
   try {
-    console.log('Saving conversation to Neon for user:', userId);
+    console.log('💾 Saving conversation to Neon for user:', userId);
 
     if (!data || !data.messages || !Array.isArray(data.messages)) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'Invalid conversation data' }),
+        body: JSON.stringify({ error: 'Invalid conversation data - messages array required' }),
       };
     }
 
     const { messages, metadata = {} } = data;
+
+    if (messages.length === 0) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Empty conversation - no messages to save' }),
+      };
+    }
+
+    console.log(`Processing ${messages.length} messages...`);
 
     // Extract RAG information
     const ragMessages = messages.filter(msg => 
@@ -213,6 +293,8 @@ async function handleSaveConversation(sql, userId, data) {
         msg.sources?.map(source => source.documentId) || []
       )
     )];
+
+    console.log(`Found ${ragMessages.length} RAG messages with ${ragDocuments.length} unique documents`);
 
     // Insert conversation record
     const [conversation] = await sql`
@@ -235,7 +317,7 @@ async function handleSaveConversation(sql, userId, data) {
       RETURNING id, created_at
     `;
 
-    console.log('Conversation saved successfully to Neon:', conversation.id);
+    console.log('✅ Conversation saved successfully to Neon:', conversation.id);
 
     return {
       statusCode: 201,
@@ -243,15 +325,16 @@ async function handleSaveConversation(sql, userId, data) {
       body: JSON.stringify({
         id: conversation.id,
         created_at: conversation.created_at,
-        message: 'Conversation saved successfully',
+        message: 'Conversation saved successfully to Neon database',
         messageCount: messages.length,
         ragUsed: ragMessages.length > 0,
         ragDocuments: ragDocuments.length,
-        userId: userId // Include for debugging
+        userId: userId,
+        source: 'neon-postgresql'
       }),
     };
   } catch (error) {
-    console.error('Error saving conversation to Neon:', error);
+    console.error('❌ Error saving conversation to Neon:', error);
     throw error;
   }
 }
@@ -261,7 +344,7 @@ async function handleSaveConversation(sql, userId, data) {
  */
 async function handleGetConversations(sql, userId) {
   try {
-    console.log('Loading conversations from Neon for user:', userId);
+    console.log('📖 Loading conversations from Neon for user:', userId);
 
     const conversations = await sql`
       SELECT 
@@ -279,7 +362,7 @@ async function handleGetConversations(sql, userId) {
       LIMIT 100
     `;
 
-    console.log(`Loaded ${conversations.length} conversations from Neon`);
+    console.log(`✅ Loaded ${conversations.length} conversations from Neon`);
 
     return {
       statusCode: 200,
@@ -296,16 +379,22 @@ async function handleGetConversations(sql, userId) {
           updated_at: conv.updated_at
         })),
         total: conversations.length,
-        userId: userId // Include for debugging
+        userId: userId,
+        source: 'neon-postgresql'
       }),
     };
   } catch (error) {
-    console.error('Error loading conversations from Neon:', error);
+    console.error('❌ Error loading conversations from Neon:', error);
     
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ conversations: [], total: 0 }),
+      body: JSON.stringify({ 
+        conversations: [], 
+        total: 0,
+        message: 'No conversations found or error occurred',
+        error: error.message
+      }),
     };
   }
 }
@@ -315,26 +404,27 @@ async function handleGetConversations(sql, userId) {
  */
 async function handleClearConversations(sql, userId) {
   try {
-    console.log('Clearing conversations from Neon for user:', userId);
+    console.log('🗑️ Clearing conversations from Neon for user:', userId);
 
     const result = await sql`
       DELETE FROM conversations 
       WHERE user_id = ${userId}
     `;
 
-    console.log('Conversations cleared successfully from Neon');
+    console.log('✅ Conversations cleared successfully from Neon');
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({ 
-        message: 'All conversations deleted successfully',
+        message: 'All conversations deleted successfully from Neon database',
         deletedCount: result.count || 0,
-        userId: userId // Include for debugging
+        userId: userId,
+        source: 'neon-postgresql'
       }),
     };
   } catch (error) {
-    console.error('Error clearing conversations from Neon:', error);
+    console.error('❌ Error clearing conversations from Neon:', error);
     throw error;
   }
 }
@@ -344,7 +434,7 @@ async function handleClearConversations(sql, userId) {
  */
 async function handleGetStats(sql, userId) {
   try {
-    console.log('Getting stats from Neon for user:', userId);
+    console.log('📊 Getting stats from Neon for user:', userId);
 
     const [stats] = await sql`
       SELECT 
@@ -376,11 +466,12 @@ async function handleGetStats(sql, userId) {
           oldestConversation: stats.oldest_conversation,
           newestConversation: stats.newest_conversation
         },
-        userId: userId // Include for debugging
+        userId: userId,
+        source: 'neon-postgresql'
       }),
     };
   } catch (error) {
-    console.error('Error getting stats from Neon:', error);
+    console.error('❌ Error getting stats from Neon:', error);
     throw error;
   }
 }
@@ -388,9 +479,9 @@ async function handleGetStats(sql, userId) {
 /**
  * Health check
  */
-async function handleHealthCheck(sql) {
+async function handleHealthCheck(sql, userId) {
   try {
-    console.log('Performing Neon health check...');
+    console.log('🏥 Performing Neon health check...');
 
     // Test database connection
     const [result] = await sql`SELECT NOW() as current_time, version() as db_version`;
@@ -421,11 +512,13 @@ async function handleHealthCheck(sql) {
           rag_documents: hasRAGTables,
           total: tables.length
         },
-        timestamp: new Date().toISOString()
+        userId: userId,
+        timestamp: new Date().toISOString(),
+        source: 'neon-postgresql'
       }),
     };
   } catch (error) {
-    console.error('Neon health check failed:', error);
+    console.error('❌ Neon health check failed:', error);
     
     return {
       statusCode: 500,
@@ -433,7 +526,8 @@ async function handleHealthCheck(sql) {
       body: JSON.stringify({
         status: 'unhealthy',
         error: error.message,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        source: 'neon-postgresql'
       }),
     };
   }
