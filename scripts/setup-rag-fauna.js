@@ -187,7 +187,7 @@ Add this to your existing netlify.toml file:
     X-XSS-Protection = "1; mode=block"  
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' https://*.auth0.com https://cdn.auth0.com https://api.openai.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.openai.com https://*.auth0.com https://*.auth0.io https://*.netlify.app https://db.fauna.com; font-src 'self'; frame-src https://*.auth0.com; worker-src 'self' blob:; object-src 'none';"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://*.auth0.com https://cdn.auth0.com https://api.openai.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.openai.com https://*.auth0.com https://*.auth0.io https://*.netlify.app https://db.fauna.com; font-src 'self'; frame-src https://*.auth0.com; worker-src 'self' blob:; object-src 'none';"
 */
 
 // ===========================================
