@@ -89,6 +89,12 @@ class AuthService {
     }
   }
 
+  // NEW: Get the authenticated user's ID
+  async getUserId() {
+    const user = await this.getUser();
+    return user?.sub || null;
+  }
+
   async getToken() {
     console.log('=== GET TOKEN DEBUG ===');
     
@@ -334,6 +340,16 @@ export const getToken = async () => {
   } catch (error) {
     console.error('Token retrieval failed:', error);
     throw error;
+  }
+};
+
+// Export getUserId function
+export const getUserId = async () => {
+  try {
+    return await authService.getUserId();
+  } catch (error) {
+    console.error('User ID retrieval failed:', error);
+    return null;
   }
 };
 
