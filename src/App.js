@@ -159,7 +159,7 @@ function App() {
       ) : showRAGConfig ? (
         <RAGConfigurationPage onClose={handleCloseRAGConfig} user={user} />
       ) : showAdmin ? (
-        <AdminScreen onClose={handleCloseAdmin} user={user} />
+        <AdminScreen onBack={handleCloseAdmin} user={user} />
       ) : (
         <>
         <div className="min-h-screen bg-gray-50">
