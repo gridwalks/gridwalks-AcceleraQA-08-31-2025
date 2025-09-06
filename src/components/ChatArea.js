@@ -13,7 +13,7 @@ import {
 import { exportToWord } from '../utils/exportUtils';
 import { sanitizeMessageContent } from '../utils/messageUtils';
 
-const ChatArea = memo(({ 
+const ChatArea = memo(({
   messages,
   inputMessage,
   setInputMessage,
@@ -48,7 +48,7 @@ const ChatArea = memo(({
   };
 
   return (
-
+    <div className="lg:col-span-2 rounded-lg border border-gray-200 p-6 h-full shadow-sm bg-white flex flex-col text-gray-900">
       {/* Chat Messages */}
       <div className="flex-1 h-full overflow-y-auto p-8 space-y-6 min-h-0 bg-gray-50 text-gray-900" style={{ scrollBehavior: 'smooth' }}>
         <div className="px-4 py-2 text-sm text-purple-700 bg-purple-50 border border-purple-100 rounded">
@@ -81,7 +81,7 @@ const ChatArea = memo(({
                     ? 'bg-gradient-to-r from-purple-100 to-purple-200 border border-purple-200 text-purple-900'
                     : 'bg-gray-100 border border-gray-200 text-gray-900'
               }`}>
-                <div 
+                <div
                   className="whitespace-pre-wrap text-base leading-relaxed"
                   dangerouslySetInnerHTML={{
                     __html: sanitizeMessageContent(message.content)
@@ -89,7 +89,7 @@ const ChatArea = memo(({
                       .replace(/\*(.*?)\*/g, '<em>$1</em>')
                   }}
                 />
-                
+
                 {/* Show sources if RAG was used */}
                 {message.sources && message.sources.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-gray-200">
@@ -110,7 +110,7 @@ const ChatArea = memo(({
                     </div>
                   </div>
                 )}
-                
+
                 {message.type === 'ai' && (
                   <div className={`flex items-center justify-between mt-3 pt-3 border-t ${
                     message.isStudyNotes
@@ -173,7 +173,13 @@ const ChatArea = memo(({
       </div>
 
       {/* Input Area */}
-
+      <div className="border-t border-gray-200 bg-white p-8 flex-shrink-0">
+        {/* Action Buttons and Controls */}
+        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="w-full sm:w-auto flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm font-medium"
+              aria-label="Insert SOP"
             >
               <FilePlus className="h-4 w-4 mr-2" />
               <span>Insert SOP</span>
@@ -193,28 +199,51 @@ const ChatArea = memo(({
               <span>Generate quiz</span>
             </button>
             <button
-
+              className="w-full sm:w-auto flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm font-medium"
+              aria-label="Create attestation"
             >
               <ShieldCheck className="h-4 w-4 mr-2" />
               <span>Create attestation</span>
             </button>
           </div>
 
-
+          <div className="flex flex-col items-stretch sm:items-end gap-2">
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              <button
+                onClick={toggleRAG}
+                className={`w-full sm:w-auto flex items-center px-4 py-2 rounded-lg transition-colors ${
+                  ragEnabled
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                aria-label={ragEnabled ? 'Disable RAG search' : 'Enable RAG search'}
+              >
+                <Database className="h-4 w-4 mr-2" />
+                <span className="text-sm font-medium">RAG {ragEnabled ? 'ON' : 'OFF'}</span>
+              </button>
+              <button
+                onClick={clearChat}
+                className="w-full sm:w-auto flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
+                aria-label="Clear current chat"
+                title="Clear current conversation"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                <span>Clear Chat</span>
+              </button>
+            </div>
+            <div className="text-xs text-gray-500 sm:text-right">
               {ragEnabled
                 ? 'AI will search your uploaded documents for context'
-                : 'AI will use general pharmaceutical knowledge only'
-              }
+                : 'AI will use general pharmaceutical knowledge only'}
             </div>
             {/* Save Status Indicator */}
             {isSaving && (
-              <div className="flex items-center space-x-2 text-blue-400 text-sm">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400" />
+              <div className="flex items-center space-x-2 text-blue-600 text-sm">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
                 <span>Auto-saving to cloud...</span>
               </div>
             )}
           </div>
-
         </div>
 
         <form onSubmit={handleSubmit} className="flex space-x-4">
@@ -224,22 +253,22 @@ const ChatArea = memo(({
               onChange={handleInputChange}
               onKeyDown={handleKeyPress}
               placeholder={ragEnabled
-                ? "Ask about your documents or pharmaceutical topics..."
-                : "Ask about GMP, validation, CAPA, regulations..."
+                ? 'Ask about your documents or pharmaceutical topics...'
+                : 'Ask about GMP, validation, CAPA, regulations...'
               }
               className="w-full px-4 py-4 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-base text-gray-900 placeholder-gray-500 resize-none min-h-[60px] max-h-32"
               disabled={isLoading || isSaving}
               rows={1}
               aria-label="Enter your pharmaceutical quality question"
             />
-            
+
             {inputMessage.length > 500 && (
               <div className="absolute bottom-2 right-2 text-xs text-gray-500">
                 {inputMessage.length}/2000
               </div>
             )}
           </div>
-          
+
           <button
             type="submit"
             disabled={isLoading || isSaving || !inputMessage.trim()}
@@ -254,21 +283,21 @@ const ChatArea = memo(({
         {messages.length === 0 && !isLoading && (
           <div className="mt-4 flex flex-wrap gap-2">
             <button
-              onClick={() => setInputMessage("What are the key requirements for GMP compliance?")}
+              onClick={() => setInputMessage('What are the key requirements for GMP compliance?')}
               className="text-sm px-3 py-1 bg-gray-100 border border-gray-200 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
               disabled={isLoading || isSaving}
             >
               GMP compliance requirements
             </button>
             <button
-              onClick={() => setInputMessage("How do I develop a validation master plan?")}
+              onClick={() => setInputMessage('How do I develop a validation master plan?')}
               className="text-sm px-3 py-1 bg-gray-100 border border-gray-200 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
               disabled={isLoading || isSaving}
             >
               Validation master plan
             </button>
             <button
-              onClick={() => setInputMessage("What is the CAPA process?")}
+              onClick={() => setInputMessage('What is the CAPA process?')}
               className="text-sm px-3 py-1 bg-gray-100 border border-gray-200 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
               disabled={isLoading || isSaving}
             >
@@ -276,7 +305,7 @@ const ChatArea = memo(({
             </button>
             {ragEnabled && (
               <button
-                onClick={() => setInputMessage("Search my documents for quality procedures")}
+                onClick={() => setInputMessage('Search my documents for quality procedures')}
                 className="text-sm px-3 py-1 bg-blue-100 border border-blue-200 text-blue-700 rounded-full hover:bg-blue-200 transition-colors"
                 disabled={isLoading || isSaving}
               >
@@ -293,3 +322,4 @@ const ChatArea = memo(({
 ChatArea.displayName = 'ChatArea';
 
 export default ChatArea;
+
