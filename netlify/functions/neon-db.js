@@ -225,7 +225,13 @@ export const handler = async (event, context) => {
       
       case 'get_stats':
         return await handleGetStats(sql, userId);
-      
+
+      case 'get_recent_conversations':
+        return await handleGetRecentConversations(sql, userId, data);
+
+      case 'analyze_conversations_for_learning':
+        return await handleAnalyzeConversationsForLearning(sql, userId, data);
+
       case 'health_check':
         return await handleHealthCheck(sql, userId);
       
@@ -601,9 +607,6 @@ async function handleGetRecentConversations(sql, userId, data) {
   }
 }
 
-// Add this case to your existing switch statement in the main handler:
-case 'get_recent_conversations':
-  return await handleGetRecentConversations(sql, userId, data);
 
 // Also add this helper function for conversation analysis
 async function handleAnalyzeConversationsForLearning(sql, userId, data) {
@@ -697,6 +700,3 @@ async function handleAnalyzeConversationsForLearning(sql, userId, data) {
   }
 }
 
-// Add this case too:
-case 'analyze_conversations_for_learning':
-  return await handleAnalyzeConversationsForLearning(sql, userId, data);
