@@ -11,7 +11,8 @@ const NotebookView = memo(({
   isGeneratingNotes,
   storedMessageCount = 0,
   isServerAvailable = true,
-  searchTerm = ''
+  searchTerm = '',
+  sortOrder = 'desc'
 }) => {
   // Use ALL available messages - try thirtyDayMessages first, fallback to messages
   const availableMessages = thirtyDayMessages.length > 0 ? thirtyDayMessages : messages;
@@ -22,15 +23,26 @@ const NotebookView = memo(({
     [availableMessages]
   );
 
+  // Sort conversations
+  const sortedConversations = useMemo(() => {
+    const convs = [...baseConversations];
+    convs.sort((a, b) =>
+      sortOrder === 'asc'
+        ? new Date(a.timestamp) - new Date(b.timestamp)
+        : new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    return convs;
+  }, [baseConversations, sortOrder]);
+
   // Filter conversations by search term
   const conversations = useMemo(() => {
-    if (!searchTerm.trim()) return baseConversations;
+    if (!searchTerm.trim()) return sortedConversations;
     const lower = searchTerm.toLowerCase();
-    return baseConversations.filter(conv =>
+    return sortedConversations.filter(conv =>
       (conv.userContent && conv.userContent.toLowerCase().includes(lower)) ||
       (conv.aiContent && conv.aiContent.toLowerCase().includes(lower))
     );
-  }, [baseConversations, searchTerm]);
+  }, [sortedConversations, searchTerm]);
 
   const selectAllConversations = () => {
     const allIds = new Set(conversations.map(conv => conv.id));
