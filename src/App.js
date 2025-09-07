@@ -77,6 +77,24 @@ function App() {
     initAuth();
   }, []);
 
+  // Load learning suggestions when user logs in
+  const loadInitialLearningSuggestions = useCallback(async () => {
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS || !user?.sub) return;
+
+    setIsLoadingSuggestions(true);
+    try {
+      console.log('Loading initial learning suggestions for user:', user.sub);
+      const { default: learningSuggestionsService } = await import('./services/learningSuggestionsService');
+      const suggestions = await learningSuggestionsService.getLearningSuggestions(user.sub);
+      setLearningSuggestions(suggestions);
+      console.log('Loaded learning suggestions:', suggestions.length);
+    } catch (error) {
+      console.error('Error loading initial learning suggestions:', error);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, [user]);
+
   // Initialize backend services when user is available
   useEffect(() => {
     if (user) {
@@ -101,24 +119,6 @@ function App() {
 
     fetchConversations();
   }, [user, lastSaveTime, setThirtyDayMessages, loadNeonConversations]);
-
-  // Load learning suggestions when user logs in
-  const loadInitialLearningSuggestions = useCallback(async () => {
-    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS || !user?.sub) return;
-
-    setIsLoadingSuggestions(true);
-    try {
-      console.log('Loading initial learning suggestions for user:', user.sub);
-      const { default: learningSuggestionsService } = await import('./services/learningSuggestionsService');
-      const suggestions = await learningSuggestionsService.getLearningSuggestions(user.sub);
-      setLearningSuggestions(suggestions);
-      console.log('Loaded learning suggestions:', suggestions.length);
-    } catch (error) {
-      console.error('Error loading initial learning suggestions:', error);
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
-  }, [user]);
 
   // Refresh learning suggestions after new conversations
   const refreshLearningSuggestions = useCallback(async () => {
