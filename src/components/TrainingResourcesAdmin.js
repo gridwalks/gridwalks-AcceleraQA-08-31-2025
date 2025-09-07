@@ -4,7 +4,7 @@ import neonService from '../services/neonService';
 
 const TrainingResourcesAdmin = () => {
   const [resources, setResources] = useState([]);
-  const [form, setForm] = useState({ name: '', description: '', url: '' });
+  const [form, setForm] = useState({ name: '', description: '', url: '', tag: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -38,7 +38,7 @@ const TrainingResourcesAdmin = () => {
     try {
       const newResource = await neonService.addTrainingResource(form);
       setResources(prev => [newResource, ...prev]);
-      setForm({ name: '', description: '', url: '' });
+      setForm({ name: '', description: '', url: '', tag: '' });
     } catch (err) {
       console.error('Failed to add training resource:', err);
       setError(err.message || 'Failed to add resource');
@@ -83,6 +83,17 @@ const TrainingResourcesAdmin = () => {
             placeholder="https://example.com/training"
           />
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Tag</label>
+          <input
+            type="text"
+            name="tag"
+            value={form.tag}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            placeholder="e.g., safety"
+          />
+        </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div>
           <button
@@ -105,6 +116,9 @@ const TrainingResourcesAdmin = () => {
             {resources.map(res => (
               <li key={res.id} className="p-4 border rounded-md">
                 <div className="font-medium">{res.name}</div>
+                {res.tag && (
+                  <span className="inline-block text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded mt-1">{res.tag}</span>
+                )}
                 {res.description && <p className="text-sm text-gray-500">{res.description}</p>}
                 {res.url && (
                   <a
