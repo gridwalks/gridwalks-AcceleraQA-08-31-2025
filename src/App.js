@@ -17,7 +17,11 @@ import { v4 as uuidv4 } from 'uuid';
 import authService, { initializeAuth } from './services/authService';
 import ragService from './services/ragService';
 import openaiService from './services/openaiService';
+
+
+import { initializeNeonService, loadConversations as loadNeonConversations, saveConversation as saveNeonConversation } from './services/neonService';
 import { initializeNeonService, loadConversations as loadNeonConversations } from './services/neonService';
+
 import learningSuggestionsService from './services/learningSuggestionsService';
 
 function App() {
@@ -132,6 +136,33 @@ function App() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  // Save conversation to Neon after assistant responses
+  useEffect(() => {
+    if (!user || messages.length < 2) return;
+
+    const last = messages[messages.length - 1];
+    if (last.role !== 'assistant') return;
+
+    const messagesWithType = messages.map(msg => ({
+      ...msg,
+      type: msg.type || msg.role,
+    }));
+
+    const save = async () => {
+      setIsSaving(true);
+      try {
+        await saveNeonConversation(messagesWithType);
+        setLastSaveTime(new Date().toISOString());
+      } catch (error) {
+        console.error('Error saving conversation to Neon:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    };
+
+    save();
+  }, [messages, user]);
 
   const handleSendMessage = useCallback(async () => {
     if (!inputMessage.trim()) return;

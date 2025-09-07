@@ -149,17 +149,26 @@ class NeonService {
     });
     
     try {
-      const validMessages = messages.filter(msg => 
-        msg && msg.id && msg.type && msg.content && msg.timestamp
-      );
+      const validMessages = messages
+        .filter(msg =>
+          msg &&
+          msg.id &&
+          (msg.type || msg.role) &&
+          msg.content &&
+          msg.timestamp
+        )
+        .map(msg => ({
+          ...msg,
+          type: msg.type || msg.role,
+        }));
 
       if (validMessages.length === 0) {
         console.warn('No valid messages to save');
         return { success: false, error: 'No valid messages' };
       }
 
-      const ragMessages = validMessages.filter(msg => 
-        msg.sources && msg.sources.length > 0
+      const ragMessages = validMessages.filter(
+        msg => msg.sources && msg.sources.length > 0
       );
       
       const ragDocuments = [...new Set(
@@ -297,9 +306,10 @@ class NeonService {
 
     this.autoSaveTimeout = setTimeout(async () => {
       try {
-        const nonWelcomeMessages = messages.filter(msg => 
-          !(msg.type === 'ai' && msg.content.includes('Welcome to AcceleraQA'))
-        );
+        const nonWelcomeMessages = messages.filter(msg => {
+          const msgType = msg.type || msg.role;
+          return !(msgType === 'ai' && msg.content.includes('Welcome to AcceleraQA'));
+        });
 
         if (nonWelcomeMessages.length >= 2) {
           console.log('Auto-saving conversation to Neon...');
@@ -348,7 +358,8 @@ class NeonService {
     const topics = new Set();
     
     messages.forEach(msg => {
-      if (msg.type === 'user' && msg.content) {
+      const msgType = msg.type || msg.role;
+      if (msgType === 'user' && msg.content) {
         const content = msg.content.toLowerCase();
         
         const pharmaTopics = [
