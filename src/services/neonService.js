@@ -159,7 +159,7 @@ class NeonService {
         )
         .map(msg => ({
           ...msg,
-          type: msg.type || msg.role,
+          type: msg.type || (msg.role === 'assistant' ? 'ai' : msg.role),
         }));
 
       if (validMessages.length === 0) {
@@ -333,9 +333,10 @@ class NeonService {
       return [];
     }
 
-    const allMessages = conversations.flatMap(conversation => 
+    const allMessages = conversations.flatMap(conversation =>
       (conversation.messages || []).map(msg => ({
         ...msg,
+        type: msg.type === 'assistant' ? 'ai' : msg.type,
         isStored: true,
         isCurrent: false,
         conversationId: conversation.id,

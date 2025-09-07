@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from 'react';
-import { combineMessagesIntoConversations } from '../utils/messageUtils';
+import { combineMessagesIntoConversations, mergeCurrentAndStoredMessages } from '../utils/messageUtils';
 import { Cloud, Smartphone } from 'lucide-react';
 
 const NotebookView = memo(({
@@ -14,8 +14,11 @@ const NotebookView = memo(({
   searchTerm = '',
   sortOrder = 'desc'
 }) => {
-  // Use ALL available messages - try thirtyDayMessages first, fallback to messages
-  const availableMessages = thirtyDayMessages.length > 0 ? thirtyDayMessages : messages;
+  // Merge current session and stored messages
+  const availableMessages = useMemo(
+    () => mergeCurrentAndStoredMessages(messages, thirtyDayMessages),
+    [messages, thirtyDayMessages]
+  );
 
   // Convert to conversations
   const baseConversations = useMemo(
