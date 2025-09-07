@@ -1,6 +1,6 @@
 // Enhanced with Learning Suggestions
 import React, { memo, useState, useEffect } from 'react';
-import { Search, ChevronRight, ExternalLink, BookOpen, Brain, RefreshCw, Sparkles, Target, Award } from 'lucide-react';
+import { Search, ChevronRight, ExternalLink, BookOpen, Brain, Sparkles, Target, Award } from 'lucide-react';
 import learningSuggestionsService from '../services/learningSuggestionsService';
 
 const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }) => {
@@ -47,25 +47,6 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }
     } catch (error) {
       console.error('Error loading learning suggestions:', error);
       setLearningSuggestions([]);
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
-  };
-
-  const refreshSuggestions = async () => {
-    if (!user?.sub) return;
-
-    setIsLoadingSuggestions(true);
-    try {
-      console.log('Refreshing learning suggestions...');
-      const suggestions = await learningSuggestionsService.refreshSuggestions(user.sub);
-      setLearningSuggestions(suggestions);
-      
-      if (onSuggestionsUpdate) {
-        onSuggestionsUpdate(suggestions);
-      }
-    } catch (error) {
-      console.error('Error refreshing suggestions:', error);
     } finally {
       setIsLoadingSuggestions(false);
     }
@@ -130,20 +111,6 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }
     <div className="bg-white rounded-lg border border-gray-200 p-6 h-full shadow-sm flex flex-col">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-end mb-4">
-          {activeTab === 'suggestions' && (
-            <button
-              onClick={refreshSuggestions}
-              disabled={isLoadingSuggestions}
-              className="flex items-center space-x-1 px-3 py-1 text-sm text-purple-600 hover:text-purple-800 border border-purple-200 rounded-md hover:bg-purple-50 transition-colors disabled:opacity-50"
-              title="Refresh learning suggestions"
-            >
-              <RefreshCw className={`h-3 w-3 ${isLoadingSuggestions ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
-          )}
-        </div>
-
         {/* Tab Navigation */}
         <div className="flex space-x-1 mb-4">
           <button
