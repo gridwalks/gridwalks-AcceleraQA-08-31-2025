@@ -215,12 +215,9 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }
                   <div className="flex items-center space-x-2 mb-2">
                     <Brain className="h-4 w-4 text-purple-600" />
                     <span className="text-sm font-medium text-purple-800">
-                      Based on Your Recent Conversations
+                      Suggestions Based on Your Recent Conversations
                     </span>
                   </div>
-                  <p className="text-xs text-purple-600">
-                    These suggestions are tailored to help you advance your pharmaceutical quality expertise
-                  </p>
                 </div>
 
                 {/* Suggestions List */}
