@@ -88,6 +88,9 @@ REACT_APP_AUTH0_ROLES_CLAIM=https://your-domain.com/roles
 
 # Neon PostgreSQL (Required for database features)
 NEON_DATABASE_URL=postgresql://username:password@hostname/database?sslmode=require
+
+# Feature Flags (Optional)
+REACT_APP_ENABLE_AI_SUGGESTIONS=true # set to 'false' to disable AI suggestions
 ```
 
 ### 4. Auth0 Configuration
@@ -173,8 +176,9 @@ npm run build
 ### Environment Variables in Netlify:
 ```bash
 REACT_APP_AUTH0_DOMAIN=your-domain.auth0.com
-REACT_APP_AUTH0_CLIENT_ID=your_client_id  
+REACT_APP_AUTH0_CLIENT_ID=your_client_id
 REACT_APP_OPENAI_API_KEY=your_openai_key
+REACT_APP_ENABLE_AI_SUGGESTIONS=true # optional: set to 'false' to disable AI suggestions
 ```
 
 ## 🔍 Troubleshooting
