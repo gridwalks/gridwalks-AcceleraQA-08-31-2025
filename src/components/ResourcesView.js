@@ -266,9 +266,6 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, 
         {/* Resources Tab */}
         {activeTab === 'resources' && (
           <div className="space-y-4">
-            <div className="flex justify-center mb-4">
-              <Brain className="h-5 w-5 text-purple-600" />
-            </div>
             {currentResources.length > 0 ? (
               filteredResources.length > 0 ? (
                 filteredResources.map((resource, index) => (
