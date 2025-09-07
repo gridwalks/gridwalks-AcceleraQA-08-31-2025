@@ -124,6 +124,7 @@ async function setupNeonDatabase() {
         name VARCHAR(255) NOT NULL,
         description TEXT,
         url TEXT NOT NULL,
+        tag VARCHAR(100),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
