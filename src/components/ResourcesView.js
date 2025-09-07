@@ -1,6 +1,6 @@
 // Enhanced with Learning Suggestions
-import React, { memo, useState, useEffect } from 'react';
-import { Search, ChevronRight, ExternalLink, BookOpen, Brain, Sparkles, Target, Award, BookmarkPlus } from 'lucide-react';
+import React, { memo, useState, useEffect, useRef } from 'react';
+import { Search, ChevronRight, ExternalLink, BookOpen, Brain, Sparkles, Target, Award, BookmarkPlus, Check } from 'lucide-react';
 import learningSuggestionsService from '../services/learningSuggestionsService';
 
 const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, onAddResource }) => {
@@ -10,6 +10,9 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, 
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [activeTab, setActiveTab] = useState('suggestions'); // 'suggestions' or 'resources'
   const [showAllSuggestions, setShowAllSuggestions] = useState(false);
+  const [addedResources, setAddedResources] = useState(new Set());
+  const [showToast, setShowToast] = useState(false);
+  const toastTimeoutRef = useRef(null);
 
   // Load learning suggestions on component mount and user change
   useEffect(() => {
@@ -73,6 +76,32 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, 
       window.open(suggestion.url, '_blank', 'noopener,noreferrer');
     }
   };
+
+  const handleAdd = (item) => {
+    if (!item) return;
+    if (onAddResource) {
+      onAddResource(item);
+    }
+    const id = item.url || item.id || item.title;
+    setAddedResources(prev => {
+      const newSet = new Set(prev);
+      newSet.add(id);
+      return newSet;
+    });
+    setShowToast(true);
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = setTimeout(() => setShowToast(false), 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const getDifficultyColor = (difficulty) => {
     switch (difficulty?.toLowerCase()) {
@@ -193,7 +222,8 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, 
                     getDifficultyColor={getDifficultyColor}
                     getTypeIcon={getTypeIcon}
                     index={index}
-                    onAdd={() => onAddResource && onAddResource(suggestion)}
+                    onAdd={() => handleAdd(suggestion)}
+                    isAdded={addedResources.has(suggestion.id || suggestion.url || suggestion.title)}
                   />
                 ))}
 
@@ -244,7 +274,8 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, 
                     resource={resource}
                     onClick={() => handleResourceClick(resource)}
                     colorClass={resourceTypeColors[resource.type] || resourceTypeColors['Reference']}
-                    onAdd={() => onAddResource && onAddResource(resource)}
+                    onAdd={() => handleAdd(resource)}
+                    isAdded={addedResources.has(resource.url || resource.id || resource.title)}
                   />
                 ))
               ) : (
@@ -275,17 +306,22 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, 
           </div>
         )}
       </div>
+      {showToast && (
+        <div className="fixed bottom-4 right-4 bg-green-600 text-white text-sm px-3 py-2 rounded shadow-lg z-50">
+          Added to Notebook
+        </div>
+      )}
     </div>
   );
 });
 
 // Individual suggestion card component
-const SuggestionCard = memo(({ suggestion, onClick, getDifficultyColor, getTypeIcon, index, onAdd }) => {
+const SuggestionCard = memo(({ suggestion, onClick, getDifficultyColor, getTypeIcon, index, onAdd, isAdded }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
-    <div 
-      className="group border border-gray-200 rounded-lg hover:border-purple-300 hover:shadow-md transition-all duration-300 cursor-pointer bg-white"
+    <div
+      className={`group border rounded-lg transition-all duration-300 cursor-pointer ${isAdded ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-purple-300 hover:shadow-md bg-white'}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
@@ -321,11 +357,12 @@ const SuggestionCard = memo(({ suggestion, onClick, getDifficultyColor, getTypeI
 
           <div className="flex items-center space-x-1">
             <button
-              onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
-              className="p-1 text-gray-400 hover:text-purple-600"
+              onClick={(e) => { e.stopPropagation(); if (!isAdded) onAdd?.(); }}
+              className={`p-1 ${isAdded ? 'text-green-600' : 'text-gray-400 hover:text-purple-600'}`}
               aria-label="Add to notebook"
+              disabled={isAdded}
             >
-              <BookmarkPlus className="h-4 w-4" />
+              {isAdded ? <Check className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
             </button>
             <ChevronRight
               className={`h-4 w-4 text-gray-400 group-hover:text-purple-600 transition-all flex-shrink-0 ${
@@ -388,12 +425,12 @@ const SuggestionCard = memo(({ suggestion, onClick, getDifficultyColor, getTypeI
 });
 
 // Individual resource card component (existing)
-const ResourceCard = memo(({ resource, onClick, colorClass, onAdd }) => {
+const ResourceCard = memo(({ resource, onClick, colorClass, onAdd, isAdded }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
-    <div 
-      className="group border border-gray-200 rounded-lg hover:border-gray-400 hover:shadow-sm transition-all duration-300 cursor-pointer"
+    <div
+      className={`group border rounded-lg transition-all duration-300 cursor-pointer ${isAdded ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-gray-400 hover:shadow-sm'}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
@@ -431,11 +468,12 @@ const ResourceCard = memo(({ resource, onClick, colorClass, onAdd }) => {
           
           <div className="flex items-center space-x-1">
             <button
-              onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
-              className="p-1 text-gray-400 hover:text-blue-600"
+              onClick={(e) => { e.stopPropagation(); if (!isAdded) onAdd?.(); }}
+              className={`p-1 ${isAdded ? 'text-green-600' : 'text-gray-400 hover:text-blue-600'}`}
               aria-label="Add to notebook"
+              disabled={isAdded}
             >
-              <BookmarkPlus className="h-4 w-4" />
+              {isAdded ? <Check className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
             </button>
             <ChevronRight
               className={`h-4 w-4 text-gray-400 group-hover:text-black transition-all flex-shrink-0 ${
