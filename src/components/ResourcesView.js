@@ -130,10 +130,7 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }
     <div className="bg-white rounded-lg border border-gray-200 p-6 h-full shadow-sm flex flex-col">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Learning Center</h3>
-          </div>
+        <div className="flex items-center justify-end mb-4">
           {activeTab === 'suggestions' && (
             <button
               onClick={refreshSuggestions}
@@ -215,12 +212,9 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }
                   <div className="flex items-center space-x-2 mb-2">
                     <Brain className="h-4 w-4 text-purple-600" />
                     <span className="text-sm font-medium text-purple-800">
-                      Based on Your Recent Conversations
+                      Suggestions Based on Your Recent Conversations
                     </span>
                   </div>
-                  <p className="text-xs text-purple-600">
-                    These suggestions are tailored to help you advance your pharmaceutical quality expertise
-                  </p>
                 </div>
 
                 {/* Suggestions List */}
