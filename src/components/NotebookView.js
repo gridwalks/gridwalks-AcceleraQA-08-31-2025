@@ -81,12 +81,24 @@ const NotebookView = memo(({
   
   const storedConversations = conversations.filter(conv => {
     // Consider stored if it's not current and has stored messages
-    return !conv.isCurrent && 
+    return !conv.isCurrent &&
            (conv.originalUserMessage?.isStored || conv.originalAiMessage?.isStored);
   });
 
+  const allResources = useMemo(() => {
+    const map = new Map();
+    conversations.forEach(conv => {
+      (conv.resources || []).forEach(res => {
+        if (res.url && res.title) {
+          map.set(res.url, res);
+        }
+      });
+    });
+    return Array.from(map.values());
+  }, [conversations]);
+
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 h-full shadow-sm">
+    <div className="bg-white rounded-lg border border-gray-200 p-6 h-full shadow-sm flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -155,96 +167,121 @@ const NotebookView = memo(({
           </div>
         </div>
       </div>
-      
-      {/* Conversations List */}
-      <div className="space-y-3 overflow-y-auto h-[calc(100%-140px)]">
-        {conversations.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-gray-400 mb-4">
-              <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.991 8.991 0 01-4.7-1.299L3 21l2.3-5.7A7.991 7.991 0 1121 12z" />
-              </svg>
-            </div>
-            {searchTerm.trim() ? (
-              <>
-                <h4 className="text-lg font-medium text-gray-900 mb-2">No matches found</h4>
-                <p className="text-gray-600">Try a different search term.</p>
-              </>
+
+      <div className="flex-1 overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+          {/* Conversations List */}
+          <div className="space-y-3 overflow-y-auto">
+            {conversations.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-gray-400 mb-4">
+                  <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.991 8.991 0 01-4.7-1.299L3 21l2.3-5.7A7.991 7.991 0 1121 12z" />
+                  </svg>
+                </div>
+                {searchTerm.trim() ? (
+                  <>
+                    <h4 className="text-lg font-medium text-gray-900 mb-2">No matches found</h4>
+                    <p className="text-gray-600">Try a different search term.</p>
+                  </>
+                ) : (
+                  <>
+                    <h4 className="text-lg font-medium text-gray-900 mb-2">No conversations yet</h4>
+                    <p className="text-gray-600">Start chatting to see your conversation history here</p>
+                    {!isServerAvailable && (
+                      <div className="mt-4 text-xs text-orange-600 bg-orange-50 p-3 rounded-lg">
+                        <strong>Note:</strong> Cloud storage is unavailable. Conversations will be lost on page refresh.
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             ) : (
-              <>
-                <h4 className="text-lg font-medium text-gray-900 mb-2">No conversations yet</h4>
-                <p className="text-gray-600">
-                  Start chatting to see your conversation history here
-                </p>
-                {!isServerAvailable && (
-                  <div className="mt-4 text-xs text-orange-600 bg-orange-50 p-3 rounded-lg">
-                    <strong>Note:</strong> Cloud storage is unavailable. Conversations will be lost on page refresh.
+              <div className="space-y-6">
+                {/* Current Session Conversations */}
+                {currentConversations.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-semibold text-blue-700 flex items-center space-x-2">
+                        <Smartphone className="h-4 w-4" />
+                        <span>Current Session ({currentConversations.length})</span>
+                      </h4>
+                      {!isServerAvailable && (
+                        <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
+                          Not saved
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      {currentConversations.map((conversation, index) => (
+                        <ConversationCard
+                          key={conversation.id}
+                          conversation={conversation}
+                          isSelected={selectedMessages.has(conversation.id)}
+                          onToggleSelection={toggleMessageSelection}
+                          isCurrentSession={true}
+                          debugIndex={index}
+                          storageStatus="current"
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Current Session Conversations */}
-            {currentConversations.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-semibold text-blue-700 flex items-center space-x-2">
-                    <Smartphone className="h-4 w-4" />
-                    <span>Current Session ({currentConversations.length})</span>
-                  </h4>
-                  {!isServerAvailable && (
-                    <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
-                      Not saved
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  {currentConversations.map((conversation, index) => (
-                    <ConversationCard
-                      key={conversation.id}
-                      conversation={conversation}
-                      isSelected={selectedMessages.has(conversation.id)}
-                      onToggleSelection={toggleMessageSelection}
-                      isCurrentSession={true}
-                      debugIndex={index}
-                      storageStatus="current"
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {/* Stored Conversations */}
-            {storedConversations.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-semibold text-green-700 flex items-center space-x-2">
-                    <Cloud className="h-4 w-4" />
-                    <span>Saved to Cloud ({storedConversations.length})</span>
-                  </h4>
-                  <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
-                    Persistent
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {storedConversations.map((conversation, index) => (
-                    <ConversationCard
-                      key={conversation.id}
-                      conversation={conversation}
-                      isSelected={selectedMessages.has(conversation.id)}
-                      onToggleSelection={toggleMessageSelection}
-                      isCurrentSession={false}
-                      debugIndex={index + currentConversations.length}
-                      storageStatus="stored"
-                    />
-                  ))}
-                </div>
+                {/* Stored Conversations */}
+                {storedConversations.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-semibold text-green-700 flex items-center space-x-2">
+                        <Cloud className="h-4 w-4" />
+                        <span>Saved to Cloud ({storedConversations.length})</span>
+                      </h4>
+                      <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                        Persistent
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {storedConversations.map((conversation, index) => (
+                        <ConversationCard
+                          key={conversation.id}
+                          conversation={conversation}
+                          isSelected={selectedMessages.has(conversation.id)}
+                          onToggleSelection={toggleMessageSelection}
+                          isCurrentSession={false}
+                          debugIndex={index + currentConversations.length}
+                          storageStatus="stored"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
+
+          {/* Learning Resources */}
+          <div className="space-y-3 overflow-y-auto">
+            <h4 className="text-md font-semibold text-gray-900">Learning Resources</h4>
+            {allResources.length === 0 ? (
+              <p className="text-sm text-gray-500">No resources available.</p>
+            ) : (
+              allResources.map((resource, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+                  <a
+                    href={resource.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-blue-600 hover:text-blue-800 block truncate">
+                    {resource.title}
+                  </a>
+                  <span className="text-xs text-gray-500">{resource.type}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -331,34 +368,6 @@ const ConversationCard = memo(({
               <p className="text-sm text-gray-700 leading-relaxed line-clamp-4 bg-green-50 p-2 rounded">
                 {conversation.aiContent}
               </p>
-            </div>
-          )}
-          
-          {conversation.resources && conversation.resources.length > 0 && (
-            <div className="mt-3 pt-2 border-t border-gray-200">
-              <div className="text-xs font-medium text-gray-600 mb-2">
-                LEARNING RESOURCES ({conversation.resources.length}):
-              </div>
-              <div className="space-y-1 max-h-20 overflow-y-auto">
-                {conversation.resources.slice(0, 3).map((resource, idx) => (
-                  <div key={idx} className="text-xs">
-                    <a 
-                      href={resource.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 hover:underline block truncate"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      • {resource.title} ({resource.type})
-                    </a>
-                  </div>
-                ))}
-                {conversation.resources.length > 3 && (
-                  <div className="text-xs text-gray-500">
-                    +{conversation.resources.length - 3} more resources
-                  </div>
-                )}
-              </div>
             </div>
           )}
           
