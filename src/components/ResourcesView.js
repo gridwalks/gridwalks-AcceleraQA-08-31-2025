@@ -132,13 +132,7 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center space-x-2">
-              <Brain className="h-5 w-5 text-purple-600" />
-              <span>Learning Center</span>
-            </h3>
-            <p className="text-sm text-gray-500">
-              Personalized recommendations and curated resources
-            </p>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Learning Center</h3>
           </div>
           {activeTab === 'suggestions' && (
             <button
@@ -277,6 +271,9 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }
         {/* Resources Tab */}
         {activeTab === 'resources' && (
           <div className="space-y-4">
+            <div className="flex justify-center mb-4">
+              <Brain className="h-5 w-5 text-purple-600" />
+            </div>
             {currentResources.length > 0 ? (
               filteredResources.length > 0 ? (
                 filteredResources.map((resource, index) => (

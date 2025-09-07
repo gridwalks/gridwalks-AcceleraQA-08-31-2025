@@ -24,17 +24,16 @@ const Sidebar = ({
   return (
     <div className="h-full flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 lg:min-h-0">
       {/* Sidebar Header */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg">
-        <h3 className="text-base sm:text-lg font-semibold text-gray-900">
-          {showNotebook ? 'Conversation History' : 'Learning Center'}
-        </h3>
-        <p className="text-xs sm:text-sm text-gray-600 mt-1">
-          {showNotebook 
-            ? 'Review and export your conversations' 
-            : 'AI-powered suggestions and quality resources'
-          }
-        </p>
-      </div>
+        <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900">
+            {showNotebook ? 'Conversation History' : 'Learning Center'}
+          </h3>
+          {showNotebook && (
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">
+              Review and export your conversations
+            </p>
+          )}
+        </div>
 
       {/* Sidebar Content */}
       <div className="flex-1 min-h-0 overflow-hidden">
