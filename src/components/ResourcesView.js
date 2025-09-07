@@ -1,4 +1,4 @@
-// src/components/ResourcesView.js - Enhanced with Learning Suggestions
+// Enhanced with Learning Suggestions
 import React, { memo, useState, useEffect } from 'react';
 import { Search, ChevronRight, ExternalLink, BookOpen, Brain, RefreshCw, Sparkles, Target, Award } from 'lucide-react';
 import learningSuggestionsService from '../services/learningSuggestionsService';
