@@ -17,7 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 import authService, { initializeAuth } from './services/authService';
 import ragService from './services/ragService';
 import openaiService from './services/openaiService';
-import { initializeNeonService } from './services/neonService';
+import { initializeNeonService, loadConversations as loadNeonConversations, saveConversation as saveNeonConversation } from './services/neonService';
 import learningSuggestionsService from './services/learningSuggestionsService';
 
 function App() {
@@ -81,6 +81,21 @@ function App() {
     }
   }, [user]);
 
+  // Load conversations from Neon when user is available or refresh requested
+  useEffect(() => {
+    const fetchConversations = async () => {
+      if (!user) return;
+      try {
+        const loaded = await loadNeonConversations();
+        setThirtyDayMessages(loaded);
+      } catch (error) {
+        console.error('Error loading conversations from Neon:', error);
+      }
+    };
+
+    fetchConversations();
+  }, [user, lastSaveTime, setThirtyDayMessages, loadNeonConversations]);
+
   // Load learning suggestions when user logs in
   const loadInitialLearningSuggestions = useCallback(async () => {
     if (!user?.sub) return;
@@ -117,6 +132,33 @@ function App() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  // Save conversation to Neon after assistant responses
+  useEffect(() => {
+    if (!user || messages.length < 2) return;
+
+    const last = messages[messages.length - 1];
+    if (last.role !== 'assistant') return;
+
+    const messagesWithType = messages.map(msg => ({
+      ...msg,
+      type: msg.type || msg.role,
+    }));
+
+    const save = async () => {
+      setIsSaving(true);
+      try {
+        await saveNeonConversation(messagesWithType);
+        setLastSaveTime(new Date().toISOString());
+      } catch (error) {
+        console.error('Error saving conversation to Neon:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    };
+
+    save();
+  }, [messages, user]);
 
   const handleSendMessage = useCallback(async () => {
     if (!inputMessage.trim()) return;
@@ -181,12 +223,18 @@ function App() {
     [handleSendMessage]
   );
 
-  const handleRefreshConversations = useCallback(() => {
+  const handleRefreshConversations = useCallback(async () => {
     console.log('Refreshing conversations');
+    try {
+      const loaded = await loadNeonConversations(false);
+      setThirtyDayMessages(loaded);
+    } catch (error) {
+      console.error('Error refreshing conversations from Neon:', error);
+    }
     setLastSaveTime(new Date().toISOString());
     // Also refresh learning suggestions when conversations are refreshed
     refreshLearningSuggestions();
-  }, [refreshLearningSuggestions]);
+  }, [refreshLearningSuggestions, setThirtyDayMessages, loadNeonConversations]);
 
   const clearChat = useCallback(() => {
     setMessages([]);
