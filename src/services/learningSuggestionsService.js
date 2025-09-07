@@ -2,6 +2,7 @@
 import neonService from './neonService';
 import openaiService from './openaiService';
 import { getToken } from './authService';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 class LearningSuggestionsService {
   constructor() {
@@ -16,6 +17,9 @@ class LearningSuggestionsService {
    * @returns {Promise<Object[]>} - Array of learning suggestions
    */
   async getLearningSuggestions(userId) {
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
+      return [];
+    }
     try {
       console.log('Getting learning suggestions for user:', userId);
 
@@ -29,7 +33,7 @@ class LearningSuggestionsService {
 
       // Get user's recent conversations from Neon database
       const recentConversations = await this.getRecentConversations(userId);
-      
+
       if (!recentConversations || recentConversations.length === 0) {
         console.log('No recent conversations found, returning default suggestions');
         return this.getDefaultSuggestions();
@@ -60,6 +64,9 @@ class LearningSuggestionsService {
    * @returns {Promise<Object[]>} - Recent conversations
    */
   async getRecentConversations(userId) {
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
+      return [];
+    }
     try {
       const token = await getToken();
       const response = await fetch(this.apiUrl, {
@@ -94,6 +101,9 @@ class LearningSuggestionsService {
    * @returns {Promise<Object[]>} - Generated suggestions
    */
   async generateSuggestionsFromConversations(conversations) {
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
+      return [];
+    }
     try {
       // Extract and analyze conversation topics
       const conversationSummary = this.analyzeConversationTopics(conversations);
@@ -276,6 +286,9 @@ Focus on actionable learning that will help them advance their pharmaceutical qu
    * @returns {Object[]} - Parsed suggestions
    */
   parseSuggestions(response) {
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
+      return [];
+    }
     try {
       // Try to extract JSON from the response
       const jsonMatch = response.match(/\[[\s\S]*\]/);
@@ -308,6 +321,9 @@ Focus on actionable learning that will help them advance their pharmaceutical qu
    * @returns {Object[]} - Parsed suggestions
    */
   parseTextSuggestions(response) {
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
+      return [];
+    }
     const suggestions = [];
     const lines = response.split('\n').filter(line => line.trim());
     
@@ -350,6 +366,9 @@ Focus on actionable learning that will help them advance their pharmaceutical qu
    * @returns {Object[]} - Default suggestions
    */
   getDefaultSuggestions() {
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
+      return [];
+    }
     return [
       {
         id: 'default_gmp_fundamentals',
@@ -403,6 +422,9 @@ Focus on actionable learning that will help them advance their pharmaceutical qu
    * @param {string} userId - User identifier
    */
   clearCache(userId) {
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
+      return;
+    }
     const cacheKey = `suggestions_${userId}`;
     this.cache.delete(cacheKey);
   }
@@ -413,6 +435,9 @@ Focus on actionable learning that will help them advance their pharmaceutical qu
    * @returns {Promise<Object[]>} - Fresh suggestions
    */
   async refreshSuggestions(userId) {
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
+      return [];
+    }
     this.clearCache(userId);
     return await this.getLearningSuggestions(userId);
   }
@@ -424,11 +449,17 @@ const learningSuggestionsService = new LearningSuggestionsService();
 export default learningSuggestionsService;
 
 // Export convenience functions
-export const getLearningSuggestions = (userId) => 
-  learningSuggestionsService.getLearningSuggestions(userId);
+export const getLearningSuggestions = (userId) =>
+  FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS
+    ? learningSuggestionsService.getLearningSuggestions(userId)
+    : [];
 
-export const refreshSuggestions = (userId) => 
-  learningSuggestionsService.refreshSuggestions(userId);
+export const refreshSuggestions = (userId) =>
+  FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS
+    ? learningSuggestionsService.refreshSuggestions(userId)
+    : [];
 
-export const clearSuggestionCache = (userId) => 
-  learningSuggestionsService.clearCache(userId);
+export const clearSuggestionCache = (userId) =>
+  FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS
+    ? learningSuggestionsService.clearCache(userId)
+    : undefined;
