@@ -2,13 +2,14 @@
 import React, { memo, useState, useEffect, useRef } from 'react';
 import { Search, ChevronRight, ExternalLink, BookOpen, Brain, Sparkles, Target, Award, BookmarkPlus, Check } from 'lucide-react';
 import learningSuggestionsService from '../services/learningSuggestionsService';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, onAddResource }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredResources, setFilteredResources] = useState(currentResources);
   const [learningSuggestions, setLearningSuggestions] = useState([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [activeTab, setActiveTab] = useState('suggestions'); // 'suggestions' or 'resources'
+  const [activeTab, setActiveTab] = useState('resources'); // 'suggestions' or 'resources'
   const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   const [addedResources, setAddedResources] = useState(new Set());
   const [showToast, setShowToast] = useState(false);
@@ -16,7 +17,7 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, 
 
   // Load learning suggestions on component mount and user change
   useEffect(() => {
-    if (user?.sub) {
+    if (FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS && user?.sub) {
       loadLearningSuggestions();
     }
   }, [user]);
@@ -35,7 +36,7 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, 
   }, [currentResources, searchTerm]);
 
   const loadLearningSuggestions = async () => {
-    if (!user?.sub) return;
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS || !user?.sub) return;
 
     setIsLoadingSuggestions(true);
     try {
@@ -142,22 +143,24 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, 
       <div className="mb-6">
         {/* Tab Navigation */}
         <div className="flex space-x-1 mb-4">
-          <button
-            onClick={() => setActiveTab('suggestions')}
-            className={`flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-              activeTab === 'suggestions'
-                ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
-            }`}
-          >
-            <Sparkles className="h-4 w-4" />
-            <span>AI Suggestions</span>
-            {learningSuggestions.length > 0 && (
-              <span className="bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded-full">
-                {learningSuggestions.length}
-              </span>
-            )}
-          </button>
+          {FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS && (
+            <button
+              onClick={() => setActiveTab('suggestions')}
+              className={`flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'suggestions'
+                  ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+              }`}
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>AI Suggestions</span>
+              {learningSuggestions.length > 0 && (
+                <span className="bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded-full">
+                  {learningSuggestions.length}
+                </span>
+              )}
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('resources')}
             className={`flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -194,7 +197,7 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto">
         {/* AI Suggestions Tab */}
-        {activeTab === 'suggestions' && (
+        {FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS && activeTab === 'suggestions' && (
           <div className="space-y-4">
             {isLoadingSuggestions ? (
               <div className="text-center py-8">

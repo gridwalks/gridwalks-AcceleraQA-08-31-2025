@@ -22,7 +22,7 @@ import { initializeNeonService, loadConversations as loadNeonConversations, save
 //import { initializeNeonService, loadConversations as loadNeonConversations, saveConversation as saveNeonConversation } from './services/neonService';
 //import { initializeNeonService, loadConversations as loadNeonConversations } from './services/neonService';
 
-import learningSuggestionsService from './services/learningSuggestionsService';
+import { FEATURE_FLAGS } from './config/featureFlags';
 
 function App() {
   // Authentication state
@@ -81,9 +81,11 @@ function App() {
   useEffect(() => {
     if (user) {
       initializeNeonService(user);
-      loadInitialLearningSuggestions();
+      if (FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
+        loadInitialLearningSuggestions();
+      }
     }
-  }, [user]);
+  }, [user, loadInitialLearningSuggestions]);
 
   // Load conversations from Neon when user is available or refresh requested
   useEffect(() => {
@@ -102,11 +104,12 @@ function App() {
 
   // Load learning suggestions when user logs in
   const loadInitialLearningSuggestions = useCallback(async () => {
-    if (!user?.sub) return;
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS || !user?.sub) return;
 
     setIsLoadingSuggestions(true);
     try {
       console.log('Loading initial learning suggestions for user:', user.sub);
+      const { default: learningSuggestionsService } = await import('./services/learningSuggestionsService');
       const suggestions = await learningSuggestionsService.getLearningSuggestions(user.sub);
       setLearningSuggestions(suggestions);
       console.log('Loaded learning suggestions:', suggestions.length);
@@ -119,10 +122,11 @@ function App() {
 
   // Refresh learning suggestions after new conversations
   const refreshLearningSuggestions = useCallback(async () => {
-    if (!user?.sub) return;
+    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS || !user?.sub) return;
 
     try {
       console.log('Refreshing learning suggestions...');
+      const { default: learningSuggestionsService } = await import('./services/learningSuggestionsService');
       const suggestions = await learningSuggestionsService.refreshSuggestions(user.sub);
       setLearningSuggestions(suggestions);
     } catch (error) {
@@ -201,7 +205,7 @@ function App() {
 
       // Refresh learning suggestions after every few messages
       const totalMessages = messages.length + 2; // +2 for the new messages we just added
-      if (totalMessages % 4 === 0) { // Every 4 messages (2 conversation pairs)
+      if (FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS && totalMessages % 4 === 0) { // Every 4 messages (2 conversation pairs)
         setTimeout(() => {
           refreshLearningSuggestions();
         }, 1000); // Small delay to let the conversation save first
@@ -243,15 +247,19 @@ function App() {
     }
     setLastSaveTime(new Date().toISOString());
     // Also refresh learning suggestions when conversations are refreshed
-    refreshLearningSuggestions();
+    if (FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
+      refreshLearningSuggestions();
+    }
   }, [refreshLearningSuggestions, setThirtyDayMessages, loadNeonConversations]);
 
   const clearChat = useCallback(() => {
     setMessages([]);
     // Refresh suggestions when chat is cleared (might reveal different patterns)
-    setTimeout(() => {
-      refreshLearningSuggestions();
-    }, 500);
+    if (FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
+      setTimeout(() => {
+        refreshLearningSuggestions();
+      }, 500);
+    }
   }, [refreshLearningSuggestions]);
 
   const clearAllConversations = useCallback(() => {
@@ -259,8 +267,10 @@ function App() {
     setSelectedMessages(new Set());
     setThirtyDayMessages([]);
     // Clear learning suggestions cache when all conversations are cleared
-    if (user?.sub) {
-      learningSuggestionsService.clearCache(user.sub);
+    if (FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS && user?.sub) {
+      import('./services/learningSuggestionsService').then(({ default: learningSuggestionsService }) => {
+        learningSuggestionsService.clearCache(user.sub);
+      });
       setLearningSuggestions([]);
     }
   }, [user]);

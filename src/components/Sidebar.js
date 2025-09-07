@@ -3,6 +3,7 @@
 import React from 'react';
 import NotebookView from './NotebookView';
 import ResourcesView from './ResourcesView';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 
 const Sidebar = ({
   showNotebook,
@@ -65,47 +66,49 @@ const Sidebar = ({
       </div>
 
       {/* Enhanced Footer with Learning Status */}
-      <div className="flex-shrink-0 px-4 py-3 border-t border-gray-200 bg-gray-50 rounded-b-lg">
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>
-            {showNotebook 
-              ? `${thirtyDayMessages?.length || 0} conversations`
-              : `${learningSuggestions.length} AI suggestions`
-            }
-          </span>
-          
-          <div className="flex items-center space-x-2">
-            {/* Learning Status Indicator */}
-            {!showNotebook && (
-              <>
-                {isLoadingSuggestions ? (
-                  <div className="flex items-center space-x-1 text-purple-600">
-                    <div className="animate-spin rounded-full h-3 w-3 border border-purple-600 border-t-transparent"></div>
-                    <span>Learning...</span>
-                  </div>
-                ) : learningSuggestions.length > 0 ? (
-                  <div className="flex items-center space-x-1 text-green-600">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span>Personalized</span>
-                  </div>
-                ) : (
-                  <span className="text-gray-400">Start chatting</span>
-                )}
-              </>
-            )}
-            
-            {isServerAvailable && showNotebook && (
-              <button
-                onClick={onRefresh}
-                className="text-blue-600 hover:text-blue-800 font-medium"
-                title="Refresh from cloud"
-              >
-                Refresh
-              </button>
-            )}
+      {(showNotebook || FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) && (
+        <div className="flex-shrink-0 px-4 py-3 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+          <div className="flex items-center justify-between text-xs text-gray-500">
+            <span>
+              {showNotebook
+                ? `${thirtyDayMessages?.length || 0} conversations`
+                : `${learningSuggestions.length} AI suggestions`
+              }
+            </span>
+
+            <div className="flex items-center space-x-2">
+              {/* Learning Status Indicator */}
+              {!showNotebook && FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS && (
+                <>
+                  {isLoadingSuggestions ? (
+                    <div className="flex items-center space-x-1 text-purple-600">
+                      <div className="animate-spin rounded-full h-3 w-3 border border-purple-600 border-t-transparent"></div>
+                      <span>Learning...</span>
+                    </div>
+                  ) : learningSuggestions.length > 0 ? (
+                    <div className="flex items-center space-x-1 text-green-600">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span>Personalized</span>
+                    </div>
+                  ) : (
+                    <span className="text-gray-400">Start chatting</span>
+                  )}
+                </>
+              )}
+
+              {isServerAvailable && showNotebook && (
+                <button
+                  onClick={onRefresh}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                  title="Refresh from cloud"
+                >
+                  Refresh
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
