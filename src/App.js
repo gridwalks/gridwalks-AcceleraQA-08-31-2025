@@ -300,7 +300,7 @@ function App() {
       type: 'ai',
       content: `${title}${url ? ' - ' + url : ''}`,
       timestamp: Date.now(),
-      resources: [{ title, url, type }],
+      resources: [{ title, url, type, addedAt: Date.now() }],
       // Mark message so it can be hidden from the chat area
       isResource: true,
     };
