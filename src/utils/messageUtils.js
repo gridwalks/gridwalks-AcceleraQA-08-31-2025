@@ -122,14 +122,21 @@ export function combineMessagesIntoConversations(messages) {
     return [];
   }
 
+  const getType = (msg) => {
+    const t = msg.type || msg.role;
+    return t === 'assistant' ? 'ai' : t;
+  };
+
   return messages.reduce((acc, message, index, array) => {
+    const messageType = getType(message);
+
     // Skip user messages that have a following AI message (they'll be combined)
-    if (message.type === 'user' && index < array.length - 1 && array[index + 1].type === 'ai') {
+    if (messageType === 'user' && index < array.length - 1 && getType(array[index + 1]) === 'ai') {
       return acc;
     }
-    
+
     // Combine AI message with preceding user message
-    if (message.type === 'ai' && index > 0 && array[index - 1].type === 'user') {
+    if (messageType === 'ai' && index > 0 && getType(array[index - 1]) === 'user') {
       const userMessage = array[index - 1];
       const combinedMessage = {
         id: `${userMessage.id}-${message.id}`,
@@ -145,9 +152,9 @@ export function combineMessagesIntoConversations(messages) {
         isStored: message.isStored && userMessage.isStored
       };
       acc.push(combinedMessage);
-    } 
+    }
     // Handle standalone AI messages (like welcome messages)
-    else if (message.type === 'ai') {
+    else if (messageType === 'ai') {
       const combinedMessage = {
         id: message.id,
         userContent: null,
@@ -160,9 +167,9 @@ export function combineMessagesIntoConversations(messages) {
         isStored: message.isStored || false
       };
       acc.push(combinedMessage);
-    } 
+    }
     // Handle standalone user messages (unlikely but possible)
-    else if (message.type === 'user') {
+    else if (messageType === 'user') {
       const combinedMessage = {
         id: message.id,
         userContent: message.content,
@@ -176,7 +183,7 @@ export function combineMessagesIntoConversations(messages) {
       };
       acc.push(combinedMessage);
     }
-    
+
     return acc;
   }, []);
 }

@@ -172,6 +172,7 @@ function App() {
     const userMessage = {
       id: uuidv4(),
       role: 'user',
+      type: 'user',
       content: inputMessage,
       timestamp: Date.now(),
     };
@@ -188,6 +189,7 @@ function App() {
       const assistantMessage = {
         id: uuidv4(),
         role: 'assistant',
+        type: 'ai',
         content: response.answer,
         timestamp: Date.now(),
         sources: response.sources || [],
@@ -207,6 +209,7 @@ function App() {
       const errorMessage = {
         id: uuidv4(),
         role: 'assistant',
+        type: 'ai',
         content: error.message || 'An error occurred while fetching the response.',
         timestamp: Date.now(),
         sources: [],
