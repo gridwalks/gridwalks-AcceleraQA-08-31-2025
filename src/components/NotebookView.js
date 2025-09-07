@@ -90,7 +90,7 @@ const NotebookView = memo(({
     conversations.forEach(conv => {
       (conv.resources || []).forEach(res => {
         if (res.url && res.title) {
-          map.set(res.url, res);
+          map.set(res.url, { ...res, addedAt: res.addedAt || conv.timestamp });
         }
       });
     });
@@ -276,7 +276,12 @@ const NotebookView = memo(({
                     className="text-sm font-medium text-blue-600 hover:text-blue-800 block truncate">
                     {resource.title}
                   </a>
-                  <span className="text-xs text-gray-500">{resource.type}</span>
+                  <span className="text-xs text-gray-500">
+                    {resource.type}
+                    {resource.addedAt && (
+                      <> • {new Date(resource.addedAt).toLocaleString()}</>
+                    )}
+                  </span>
                 </div>
               ))
             )}
