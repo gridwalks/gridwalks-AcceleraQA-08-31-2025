@@ -360,6 +360,7 @@ const SuggestionCard = memo(({ suggestion, onClick, getDifficultyColor, getTypeI
               onClick={(e) => { e.stopPropagation(); if (!isAdded) onAdd?.(); }}
               className={`p-1 ${isAdded ? 'text-green-600' : 'text-gray-400 hover:text-purple-600'}`}
               aria-label="Add to notebook"
+              title="Add this resource to your notebook"
               disabled={isAdded}
             >
               {isAdded ? <Check className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
@@ -471,6 +472,7 @@ const ResourceCard = memo(({ resource, onClick, colorClass, onAdd, isAdded }) =>
               onClick={(e) => { e.stopPropagation(); if (!isAdded) onAdd?.(); }}
               className={`p-1 ${isAdded ? 'text-green-600' : 'text-gray-400 hover:text-blue-600'}`}
               aria-label="Add to notebook"
+              title="Add this resource to your notebook"
               disabled={isAdded}
             >
               {isAdded ? <Check className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
