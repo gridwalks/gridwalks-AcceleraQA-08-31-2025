@@ -17,7 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 import authService, { initializeAuth } from './services/authService';
 import ragService from './services/ragService';
 import openaiService from './services/openaiService';
-import { initializeNeonService } from './services/neonService';
+import { initializeNeonService, loadConversations as loadNeonConversations } from './services/neonService';
 import learningSuggestionsService from './services/learningSuggestionsService';
 
 function App() {
@@ -80,6 +80,21 @@ function App() {
       loadInitialLearningSuggestions();
     }
   }, [user]);
+
+  // Load conversations from Neon when user is available or refresh requested
+  useEffect(() => {
+    const fetchConversations = async () => {
+      if (!user) return;
+      try {
+        const loaded = await loadNeonConversations();
+        setThirtyDayMessages(loaded);
+      } catch (error) {
+        console.error('Error loading conversations from Neon:', error);
+      }
+    };
+
+    fetchConversations();
+  }, [user, lastSaveTime, setThirtyDayMessages, loadNeonConversations]);
 
   // Load learning suggestions when user logs in
   const loadInitialLearningSuggestions = useCallback(async () => {
@@ -181,12 +196,18 @@ function App() {
     [handleSendMessage]
   );
 
-  const handleRefreshConversations = useCallback(() => {
+  const handleRefreshConversations = useCallback(async () => {
     console.log('Refreshing conversations');
+    try {
+      const loaded = await loadNeonConversations(false);
+      setThirtyDayMessages(loaded);
+    } catch (error) {
+      console.error('Error refreshing conversations from Neon:', error);
+    }
     setLastSaveTime(new Date().toISOString());
     // Also refresh learning suggestions when conversations are refreshed
     refreshLearningSuggestions();
-  }, [refreshLearningSuggestions]);
+  }, [refreshLearningSuggestions, setThirtyDayMessages, loadNeonConversations]);
 
   const clearChat = useCallback(() => {
     setMessages([]);
