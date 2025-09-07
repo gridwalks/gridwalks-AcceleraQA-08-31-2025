@@ -95,7 +95,7 @@ const ChatArea = ({
           </div>
         ) : (
           <>
-            {messages.map((message, index) => (
+            {messages.filter(message => !message.isResource).map((message, index) => (
               <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[85%] lg:max-w-[75%] p-3 sm:p-4 rounded-lg ${
                   message.role === 'user'

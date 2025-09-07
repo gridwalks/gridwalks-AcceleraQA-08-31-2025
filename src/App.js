@@ -301,6 +301,8 @@ function App() {
       content: `${title}${url ? ' - ' + url : ''}`,
       timestamp: Date.now(),
       resources: [{ title, url, type }],
+      // Mark message so it can be hidden from the chat area
+      isResource: true,
     };
     setMessages(prev => [...prev, newMessage]);
   }, [setMessages]);
