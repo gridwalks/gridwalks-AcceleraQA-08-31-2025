@@ -708,7 +708,7 @@ async function handleAnalyzeConversationsForLearning(sql, userId, data) {
 
 
 // Training resources handlers
-async function handleAddTrainingResource(sql, userId, data) {
+export async function handleAddTrainingResource(sql, userId, data) {
   try {
     if (!data || !data.name || !data.url) {
       return {
@@ -732,15 +732,38 @@ async function handleAddTrainingResource(sql, userId, data) {
     };
   } catch (error) {
     console.error('❌ Error adding training resource:', error);
+    if (error.code === '42P01') {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: 'training_resources table is missing',
+          message: error.message,
+        }),
+      };
+    }
+    if (error.code === '42703') {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: 'A required column is missing',
+          message: error.message,
+        }),
+      };
+    }
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Failed to add training resource', message: error.message }),
+      body: JSON.stringify({
+        error: 'Failed to add training resource',
+        message: error.message,
+      }),
     };
   }
 }
 
-async function handleGetTrainingResources(sql, userId) {
+export async function handleGetTrainingResources(sql, userId) {
   try {
     const resources = await sql`
       SELECT id, user_id, name, description, url, tag, created_at, updated_at
@@ -756,10 +779,33 @@ async function handleGetTrainingResources(sql, userId) {
     };
   } catch (error) {
     console.error('❌ Error loading training resources:', error);
+    if (error.code === '42P01') {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: 'training_resources table is missing',
+          message: error.message,
+        }),
+      };
+    }
+    if (error.code === '42703') {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: 'A required column is missing',
+          message: error.message,
+        }),
+      };
+    }
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Failed to load training resources', message: error.message }),
+      body: JSON.stringify({
+        error: 'Failed to load training resources',
+        message: error.message,
+      }),
     };
   }
 }
