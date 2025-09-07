@@ -130,7 +130,11 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }
     <div className="bg-white rounded-lg border border-gray-200 p-6 h-full shadow-sm flex flex-col">
       {/* Header */}
       <div className="mb-6">
+//<<<<<<< codex/remove-suggestion-text-and-update-header-wsi0aw
+//        <div className="flex justify-end mb-4">
+//=======
         <div className="flex items-center justify-end mb-4">
+//>>>>>>> main
           {activeTab === 'suggestions' && (
             <button
               onClick={refreshSuggestions}
