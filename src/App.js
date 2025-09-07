@@ -1,5 +1,4 @@
-// Complete layout fix for App.js with optimal column widths
-
+// src/App.js - Updated to integrate learning suggestions
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 // Components
@@ -19,6 +18,7 @@ import authService, { initializeAuth } from './services/authService';
 import ragService from './services/ragService';
 import openaiService from './services/openaiService';
 import { initializeNeonService } from './services/neonService';
+import learningSuggestionsService from './services/learningSuggestionsService';
 
 function App() {
   // Authentication state
@@ -37,6 +37,10 @@ function App() {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [ragEnabled, setRAGEnabled] = useState(false);
+
+  // Learning suggestions state
+  const [learningSuggestions, setLearningSuggestions] = useState([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
 
   // Save status
   const [isSaving, setIsSaving] = useState(false);
@@ -73,6 +77,37 @@ function App() {
   useEffect(() => {
     if (user) {
       initializeNeonService(user);
+      loadInitialLearningSuggestions();
+    }
+  }, [user]);
+
+  // Load learning suggestions when user logs in
+  const loadInitialLearningSuggestions = useCallback(async () => {
+    if (!user?.sub) return;
+
+    setIsLoadingSuggestions(true);
+    try {
+      console.log('Loading initial learning suggestions for user:', user.sub);
+      const suggestions = await learningSuggestionsService.getLearningSuggestions(user.sub);
+      setLearningSuggestions(suggestions);
+      console.log('Loaded learning suggestions:', suggestions.length);
+    } catch (error) {
+      console.error('Error loading initial learning suggestions:', error);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, [user]);
+
+  // Refresh learning suggestions after new conversations
+  const refreshLearningSuggestions = useCallback(async () => {
+    if (!user?.sub) return;
+
+    try {
+      console.log('Refreshing learning suggestions...');
+      const suggestions = await learningSuggestionsService.refreshSuggestions(user.sub);
+      setLearningSuggestions(suggestions);
+    } catch (error) {
+      console.error('Error refreshing learning suggestions:', error);
     }
   }, [user]);
 
@@ -113,6 +148,15 @@ function App() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Refresh learning suggestions after every few messages
+      const totalMessages = messages.length + 2; // +2 for the new messages we just added
+      if (totalMessages % 4 === 0) { // Every 4 messages (2 conversation pairs)
+        setTimeout(() => {
+          refreshLearningSuggestions();
+        }, 1000); // Small delay to let the conversation save first
+      }
+
     } catch (error) {
       const errorMessage = {
         id: uuidv4(),
@@ -125,7 +169,7 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [inputMessage, ragEnabled]);
+  }, [inputMessage, ragEnabled, messages.length, refreshLearningSuggestions]);
 
   const handleKeyPress = useCallback(
     (e) => {
@@ -140,15 +184,28 @@ function App() {
   const handleRefreshConversations = useCallback(() => {
     console.log('Refreshing conversations');
     setLastSaveTime(new Date().toISOString());
-  }, []);
+    // Also refresh learning suggestions when conversations are refreshed
+    refreshLearningSuggestions();
+  }, [refreshLearningSuggestions]);
 
-  const clearChat = useCallback(() => setMessages([]), []);
+  const clearChat = useCallback(() => {
+    setMessages([]);
+    // Refresh suggestions when chat is cleared (might reveal different patterns)
+    setTimeout(() => {
+      refreshLearningSuggestions();
+    }, 500);
+  }, [refreshLearningSuggestions]);
 
   const clearAllConversations = useCallback(() => {
     setMessages([]);
     setSelectedMessages(new Set());
     setThirtyDayMessages([]);
-  }, []);
+    // Clear learning suggestions cache when all conversations are cleared
+    if (user?.sub) {
+      learningSuggestionsService.clearCache(user.sub);
+      setLearningSuggestions([]);
+    }
+  }, [user]);
 
   const handleExport = useCallback(() => {
     console.log('Exporting conversation', messages);
@@ -170,6 +227,12 @@ function App() {
     }
   }, [selectedMessages]);
 
+  // Handle learning suggestions updates
+  const handleSuggestionsUpdate = useCallback((suggestions) => {
+    console.log('Learning suggestions updated:', suggestions.length);
+    // Could trigger additional UI updates or analytics here
+  }, []);
+
   const handleShowRAGConfig = useCallback(() => setShowRAGConfig(true), []);
   const handleCloseRAGConfig = useCallback(() => setShowRAGConfig(false), []);
   const handleShowAdmin = useCallback(() => setShowAdmin(true), []);
@@ -178,6 +241,7 @@ function App() {
   const handleLogoutComplete = useCallback(() => {
     setIsAuthenticated(false);
     setUser(null);
+    setLearningSuggestions([]); // Clear suggestions on logout
   }, []);
 
   return (
@@ -192,104 +256,116 @@ function App() {
         <AdminScreen onBack={handleCloseAdmin} user={user} />
       ) : (
         <>
-        <div className="min-h-screen bg-gray-50">
-          {/* Header remains the same */}
-          <Header
-            user={user}
-            isSaving={isSaving}
-            lastSaveTime={lastSaveTime}
-            onShowAdmin={handleShowAdmin}
-            onOpenNotebook={() => setShowNotebook(true)}
-            onLogout={handleLogoutComplete}
-          />
+          <div className="min-h-screen bg-gray-50">
+            {/* Header remains the same */}
+            <Header
+              user={user}
+              isSaving={isSaving}
+              lastSaveTime={lastSaveTime}
+              onShowAdmin={handleShowAdmin}
+              onOpenNotebook={() => setShowNotebook(true)}
+              onLogout={handleLogoutComplete}
+            />
 
-          {/* IMPROVED LAYOUT SECTION */}
-          <div className="h-[calc(100vh-64px)]">
-            {/* Mobile Layout (stacked vertically) */}
-            <div className="lg:hidden h-full flex flex-col">
-              {/* Chat takes most space on mobile */}
-              <div className="flex-1 min-h-0 p-4">
-                <ChatArea
-                  messages={messages}
-                  inputMessage={inputMessage}
-                  setInputMessage={setInputMessage}
-                  isLoading={isLoading}
-                  handleSendMessage={handleSendMessage}
-                  handleKeyPress={handleKeyPress}
-                  messagesEndRef={messagesEndRef}
-                  ragEnabled={ragEnabled}
-                  setRAGEnabled={setRAGEnabled}
-                  isSaving={isSaving}
-                />
+            {/* Main Layout */}
+            <div className="h-[calc(100vh-64px)]">
+              {/* Mobile Layout (stacked vertically) */}
+              <div className="lg:hidden h-full flex flex-col">
+                {/* Chat takes most space on mobile */}
+                <div className="flex-1 min-h-0 p-4">
+                  <ChatArea
+                    messages={messages}
+                    inputMessage={inputMessage}
+                    setInputMessage={setInputMessage}
+                    isLoading={isLoading}
+                    handleSendMessage={handleSendMessage}
+                    handleKeyPress={handleKeyPress}
+                    messagesEndRef={messagesEndRef}
+                    ragEnabled={ragEnabled}
+                    setRAGEnabled={setRAGEnabled}
+                    isSaving={isSaving}
+                  />
+                </div>
+
+                {/* Sidebar is collapsible on mobile */}
+                <div className="flex-shrink-0 border-t bg-white max-h-60 overflow-hidden">
+                  <Sidebar
+                    showNotebook={showNotebook}
+                    messages={messages}
+                    thirtyDayMessages={thirtyDayMessages}
+                    selectedMessages={selectedMessages}
+                    setSelectedMessages={setSelectedMessages}
+                    exportSelected={handleExportSelected}
+                    clearSelected={clearSelectedMessages}
+                    clearAllConversations={clearAllConversations}
+                    isServerAvailable={isServerAvailable}
+                    onRefresh={handleRefreshConversations}
+                    // Enhanced props for learning suggestions
+                    user={user}
+                    learningSuggestions={learningSuggestions}
+                    isLoadingSuggestions={isLoadingSuggestions}
+                    onSuggestionsUpdate={handleSuggestionsUpdate}
+                  />
+                </div>
               </div>
 
-              {/* Sidebar is collapsible on mobile */}
-              <div className="flex-shrink-0 border-t bg-white max-h-60 overflow-hidden">
-                <Sidebar
-                  showNotebook={showNotebook}
-                  messages={messages}
-                  thirtyDayMessages={thirtyDayMessages}
-                  selectedMessages={selectedMessages}
-                  setSelectedMessages={setSelectedMessages}
-                  exportSelected={handleExportSelected}
-                  clearSelected={clearSelectedMessages}
-                  clearAllConversations={clearAllConversations}
-                  isServerAvailable={isServerAvailable}
-                  onRefresh={handleRefreshConversations}
-                />
-              </div>
-            </div>
+              {/* Desktop Layout (side by side) */}
+              <div className="hidden lg:flex h-full">
+                {/* Chat Area - Takes majority of space */}
+                <div className="flex-1 min-w-0 p-6">
+                  <ChatArea
+                    messages={messages}
+                    inputMessage={inputMessage}
+                    setInputMessage={setInputMessage}
+                    isLoading={isLoading}
+                    handleSendMessage={handleSendMessage}
+                    handleKeyPress={handleKeyPress}
+                    messagesEndRef={messagesEndRef}
+                    ragEnabled={ragEnabled}
+                    setRAGEnabled={setRAGEnabled}
+                    isSaving={isSaving}
+                  />
+                </div>
 
-            {/* Desktop Layout (side by side) */}
-            <div className="hidden lg:flex h-full">
-              {/* Chat Area - Takes majority of space */}
-              <div className="flex-1 min-w-0 p-6">
-                <ChatArea
-                  messages={messages}
-                  inputMessage={inputMessage}
-                  setInputMessage={setInputMessage}
-                  isLoading={isLoading}
-                  handleSendMessage={handleSendMessage}
-                  handleKeyPress={handleKeyPress}
-                  messagesEndRef={messagesEndRef}
-                  ragEnabled={ragEnabled}
-                  setRAGEnabled={setRAGEnabled}
-                  isSaving={isSaving}
-                />
-              </div>
-
-              {/* Sidebar - Fixed optimal width */}
-              <div className="w-80 xl:w-96 flex-shrink-0 border-l bg-white p-6">
-                <Sidebar
-                  showNotebook={showNotebook}
-                  messages={messages}
-                  thirtyDayMessages={thirtyDayMessages}
-                  selectedMessages={selectedMessages}
-                  setSelectedMessages={setSelectedMessages}
-                  exportSelected={handleExportSelected}
-                  clearSelected={clearSelectedMessages}
-                  clearAllConversations={clearAllConversations}
-                  isServerAvailable={isServerAvailable}
-                  onRefresh={handleRefreshConversations}
-                />
+                {/* Sidebar - Fixed optimal width with enhanced learning features */}
+                <div className="w-80 xl:w-96 flex-shrink-0 border-l bg-white p-6">
+                  <Sidebar
+                    showNotebook={showNotebook}
+                    messages={messages}
+                    thirtyDayMessages={thirtyDayMessages}
+                    selectedMessages={selectedMessages}
+                    setSelectedMessages={setSelectedMessages}
+                    exportSelected={handleExportSelected}
+                    clearSelected={clearSelectedMessages}
+                    clearAllConversations={clearAllConversations}
+                    isServerAvailable={isServerAvailable}
+                    onRefresh={handleRefreshConversations}
+                    // Enhanced props for learning suggestions
+                    user={user}
+                    learningSuggestions={learningSuggestions}
+                    isLoadingSuggestions={isLoadingSuggestions}
+                    onSuggestionsUpdate={handleSuggestionsUpdate}
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        {showNotebook && (
-          <NotebookOverlay
-            messages={messages}
-            thirtyDayMessages={thirtyDayMessages}
-            selectedMessages={selectedMessages}
-            setSelectedMessages={setSelectedMessages}
-            generateStudyNotes={generateStudyNotes}
-            isGeneratingNotes={isGeneratingNotes}
-            storedMessageCount={messages.length}
-            isServerAvailable={isServerAvailable}
-            exportNotebook={handleExport}
-            onClose={() => setShowNotebook(false)}
-          />
-        )}
+
+          {/* Notebook Overlay */}
+          {showNotebook && (
+            <NotebookOverlay
+              messages={messages}
+              thirtyDayMessages={thirtyDayMessages}
+              selectedMessages={selectedMessages}
+              setSelectedMessages={setSelectedMessages}
+              generateStudyNotes={generateStudyNotes}
+              isGeneratingNotes={isGeneratingNotes}
+              storedMessageCount={messages.length}
+              isServerAvailable={isServerAvailable}
+              exportNotebook={handleExport}
+              onClose={() => setShowNotebook(false)}
+            />
+          )}
         </>
       )}
     </ErrorBoundary>
@@ -297,42 +373,3 @@ function App() {
 }
 
 export default App;
-
-/*
-EXPLANATION OF THE LAYOUT IMPROVEMENTS:
-
-1. **Mobile-First Responsive Design**:
-   - Mobile: Stacked layout with chat taking most space
-   - Desktop: Side-by-side layout with optimal proportions
-
-2. **Better Column Proportions**:
-   - Chat Area: flex-1 (takes all available space)
-   - Sidebar: w-80 xl:w-96 (320px on lg, 384px on xl+)
-
-3. **Improved Space Usage**:
-   - Removed max-width constraint that was limiting the layout
-   - Chat area now uses full available width
-   - Sidebar has consistent, readable width
-
-4. **Better Mobile Experience**:
-   - Vertical stacking prevents cramped horizontal layout
-   - Sidebar becomes a collapsible bottom panel
-   - Chat gets priority on small screens
-
-5. **Flexbox vs Grid Benefits**:
-   - More precise control over sizing
-   - Better handling of content overflow
-   - Easier responsive adjustments
-
-ALTERNATIVE CSS GRID APPROACH:
-If you prefer CSS Grid, you can use:
-```
-<div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_384px] gap-6 h-full">
-```
-
-This gives you:
-- Mobile: Single column (full width)
-- Large: Chat (flexible) + Sidebar (320px)
-- XL: Chat (flexible) + Sidebar (384px)
-*/
-
