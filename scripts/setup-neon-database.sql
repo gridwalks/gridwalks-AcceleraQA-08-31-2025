@@ -121,6 +121,7 @@ async function setupNeonDatabase() {
     await sql`
       CREATE TABLE IF NOT EXISTS training_resources (
         id SERIAL PRIMARY KEY,
+        user_id VARCHAR(255) NOT NULL,
         name VARCHAR(255) NOT NULL,
         description TEXT,
         url TEXT NOT NULL,
@@ -157,6 +158,9 @@ async function setupNeonDatabase() {
     await sql`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_conversations_created ON conversations(user_id, created_at DESC)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_conversations_rag ON conversations(user_id, used_rag)`;
+
+    // Training resources indexes
+    await sql`CREATE INDEX IF NOT EXISTS idx_training_resources_user_id ON training_resources(user_id)`;
 
     // Full-text search indexes
     await sql`CREATE INDEX IF NOT EXISTS idx_rag_documents_fts ON rag_documents USING gin(to_tsvector('english', text_content))`;

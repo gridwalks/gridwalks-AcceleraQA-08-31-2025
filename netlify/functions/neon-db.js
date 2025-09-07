@@ -720,9 +720,9 @@ async function handleAddTrainingResource(sql, userId, data) {
 
     const { name, description = '', url, tag = null } = data;
     const [resource] = await sql`
-      INSERT INTO training_resources (name, description, url, tag)
-      VALUES (${name}, ${description}, ${url}, ${tag})
-      RETURNING id, name, description, url, tag, created_at, updated_at
+      INSERT INTO training_resources (user_id, name, description, url, tag)
+      VALUES (${userId}, ${name}, ${description}, ${url}, ${tag})
+      RETURNING id, user_id, name, description, url, tag, created_at, updated_at
     `;
 
     return {
@@ -743,8 +743,9 @@ async function handleAddTrainingResource(sql, userId, data) {
 async function handleGetTrainingResources(sql, userId) {
   try {
     const resources = await sql`
-      SELECT id, name, description, url, tag, created_at, updated_at
+      SELECT id, user_id, name, description, url, tag, created_at, updated_at
       FROM training_resources
+      WHERE user_id = ${userId}
       ORDER BY created_at DESC
     `;
 
