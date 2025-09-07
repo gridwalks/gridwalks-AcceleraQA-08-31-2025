@@ -52,9 +52,14 @@ export const UI_CONFIG = {
   PAGINATION_SIZE: 20
 };
 
+// Feature Flags
+export const FEATURE_FLAGS = {
+  ENABLE_AI_SUGGESTIONS: process.env.REACT_APP_ENABLE_AI_SUGGESTIONS !== 'false'
+};
+
 // Enhanced Error Messages with troubleshooting
 export const ERROR_MESSAGES = {
-  API_KEY_NOT_CONFIGURED: `⚠️ OpenAI API key not configured. 
+  API_KEY_NOT_CONFIGURED: `⚠️ OpenAI API key not configured.
 
 TROUBLESHOOTING STEPS:
 1. Check that REACT_APP_OPENAI_API_KEY is set in your environment
