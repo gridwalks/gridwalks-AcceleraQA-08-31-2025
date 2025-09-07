@@ -291,6 +291,20 @@ function App() {
     // Could trigger additional UI updates or analytics here
   }, []);
 
+  const handleAddResourceToNotebook = useCallback((item) => {
+    if (!item || !item.title) return;
+    const { title, url = '', type = item.type || 'Resource' } = item;
+    const newMessage = {
+      id: uuidv4(),
+      role: 'assistant',
+      type: 'ai',
+      content: `${title}${url ? ' - ' + url : ''}`,
+      timestamp: Date.now(),
+      resources: [{ title, url, type }],
+    };
+    setMessages(prev => [...prev, newMessage]);
+  }, [setMessages]);
+
   const handleShowRAGConfig = useCallback(() => setShowRAGConfig(true), []);
   const handleCloseRAGConfig = useCallback(() => setShowRAGConfig(false), []);
   const handleShowAdmin = useCallback(() => setShowAdmin(true), []);
@@ -363,6 +377,7 @@ function App() {
                     learningSuggestions={learningSuggestions}
                     isLoadingSuggestions={isLoadingSuggestions}
                     onSuggestionsUpdate={handleSuggestionsUpdate}
+                    onAddResource={handleAddResourceToNotebook}
                   />
                 </div>
               </div>
@@ -403,6 +418,7 @@ function App() {
                     learningSuggestions={learningSuggestions}
                     isLoadingSuggestions={isLoadingSuggestions}
                     onSuggestionsUpdate={handleSuggestionsUpdate}
+                    onAddResource={handleAddResourceToNotebook}
                   />
                 </div>
               </div>

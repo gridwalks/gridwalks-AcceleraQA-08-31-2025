@@ -1,9 +1,9 @@
 // Enhanced with Learning Suggestions
 import React, { memo, useState, useEffect } from 'react';
-import { Search, ChevronRight, ExternalLink, BookOpen, Brain, Sparkles, Target, Award } from 'lucide-react';
+import { Search, ChevronRight, ExternalLink, BookOpen, Brain, Sparkles, Target, Award, BookmarkPlus } from 'lucide-react';
 import learningSuggestionsService from '../services/learningSuggestionsService';
 
-const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }) => {
+const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate, onAddResource }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredResources, setFilteredResources] = useState(currentResources);
   const [learningSuggestions, setLearningSuggestions] = useState([]);
@@ -193,6 +193,7 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }
                     getDifficultyColor={getDifficultyColor}
                     getTypeIcon={getTypeIcon}
                     index={index}
+                    onAdd={() => onAddResource && onAddResource(suggestion)}
                   />
                 ))}
 
@@ -243,6 +244,7 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }
                     resource={resource}
                     onClick={() => handleResourceClick(resource)}
                     colorClass={resourceTypeColors[resource.type] || resourceTypeColors['Reference']}
+                    onAdd={() => onAddResource && onAddResource(resource)}
                   />
                 ))
               ) : (
@@ -278,7 +280,7 @@ const ResourcesView = memo(({ currentResources = [], user, onSuggestionsUpdate }
 });
 
 // Individual suggestion card component
-const SuggestionCard = memo(({ suggestion, onClick, getDifficultyColor, getTypeIcon, index }) => {
+const SuggestionCard = memo(({ suggestion, onClick, getDifficultyColor, getTypeIcon, index, onAdd }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -316,12 +318,21 @@ const SuggestionCard = memo(({ suggestion, onClick, getDifficultyColor, getTypeI
               </span>
             )}
           </div>
-          
-          <ChevronRight 
-            className={`h-4 w-4 text-gray-400 group-hover:text-purple-600 transition-all ml-3 flex-shrink-0 ${
-              isHovered ? 'translate-x-1' : ''
-            }`}
-          />
+
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
+              className="p-1 text-gray-400 hover:text-purple-600"
+              aria-label="Add to notebook"
+            >
+              <BookmarkPlus className="h-4 w-4" />
+            </button>
+            <ChevronRight
+              className={`h-4 w-4 text-gray-400 group-hover:text-purple-600 transition-all flex-shrink-0 ${
+                isHovered ? 'translate-x-1' : ''
+              }`}
+            />
+          </div>
         </div>
         
         <h4 className="font-semibold text-gray-900 group-hover:text-purple-800 mb-2 leading-snug">
@@ -377,7 +388,7 @@ const SuggestionCard = memo(({ suggestion, onClick, getDifficultyColor, getTypeI
 });
 
 // Individual resource card component (existing)
-const ResourceCard = memo(({ resource, onClick, colorClass }) => {
+const ResourceCard = memo(({ resource, onClick, colorClass, onAdd }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -399,7 +410,7 @@ const ResourceCard = memo(({ resource, onClick, colorClass }) => {
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
             <div className="flex items-center space-x-2 mb-3">
-              <span 
+              <span
                 className={`text-xs font-semibold uppercase tracking-wide px-2 py-1 rounded-full border ${colorClass}`}
               >
                 {resource.type}
@@ -418,11 +429,20 @@ const ResourceCard = memo(({ resource, onClick, colorClass }) => {
             </div>
           </div>
           
-          <ChevronRight 
-            className={`h-4 w-4 text-gray-400 group-hover:text-black transition-all ml-3 flex-shrink-0 ${
-              isHovered ? 'translate-x-1' : ''
-            }`}
-          />
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
+              className="p-1 text-gray-400 hover:text-blue-600"
+              aria-label="Add to notebook"
+            >
+              <BookmarkPlus className="h-4 w-4" />
+            </button>
+            <ChevronRight
+              className={`h-4 w-4 text-gray-400 group-hover:text-black transition-all flex-shrink-0 ${
+                isHovered ? 'translate-x-1' : ''
+              }`}
+            />
+          </div>
         </div>
         
         {/* Progress indicator for known long resources */}
