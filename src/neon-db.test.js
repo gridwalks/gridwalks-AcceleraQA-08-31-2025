@@ -11,7 +11,7 @@ describe('training resource handlers', () => {
     const body = JSON.parse(res.body);
     expect(res.statusCode).toBe(201);
     expect(body.resource.user_id).toBe('user1');
-    expect(calls[0].values[0]).toBe('user1');
+    expect(calls[1].values[0]).toBe('user1');
   });
 
   test('get_training_resources filters by user_id', async () => {
@@ -24,16 +24,20 @@ describe('training resource handlers', () => {
     expect(body.resources.every(r => r.user_id === 'user2')).toBe(true);
   });
 
-  test('add_training_resource handles missing table', async () => {
-    const sql = async () => {
-      const err = new Error('relation "training_resources" does not exist');
-      err.code = '42P01';
-      throw err;
+  test('add_training_resource creates table if missing', async () => {
+    const calls = [];
+    const sql = async (strings, ...values) => {
+      const query = strings.join('');
+      calls.push(query);
+      if (query.includes('INSERT INTO training_resources')) {
+        return [{ id: 1, user_id: values[0], name: values[1], description: values[2], url: values[3], tag: values[4], created_at: '', updated_at: '' }];
+      }
+      return [];
     };
     const res = await handleAddTrainingResource(sql, 'user1', { name: 'Doc', url: 'http://x' });
-    const body = JSON.parse(res.body);
-    expect(res.statusCode).toBe(500);
-    expect(body.error).toMatch(/table/i);
+    expect(res.statusCode).toBe(201);
+    expect(calls[0]).toMatch(/CREATE TABLE IF NOT EXISTS training_resources/);
+    expect(calls[1]).toMatch(/INSERT INTO training_resources/);
   });
 
   test('get_training_resources handles missing column', async () => {

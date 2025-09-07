@@ -708,6 +708,21 @@ async function handleAnalyzeConversationsForLearning(sql, userId, data) {
 
 
 // Training resources handlers
+async function ensureTrainingResourcesTable(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS training_resources (
+      id SERIAL PRIMARY KEY,
+      user_id VARCHAR(255) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      url TEXT NOT NULL,
+      tag VARCHAR(100),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+  `;
+}
+
 export async function handleAddTrainingResource(sql, userId, data) {
   try {
     if (!data || !data.name || !data.url) {
@@ -717,6 +732,8 @@ export async function handleAddTrainingResource(sql, userId, data) {
         body: JSON.stringify({ error: 'Name and URL are required' }),
       };
     }
+
+    await ensureTrainingResourcesTable(sql);
 
     const { name, description = '', url, tag = null } = data;
     const [resource] = await sql`
@@ -765,6 +782,7 @@ export async function handleAddTrainingResource(sql, userId, data) {
 
 export async function handleGetTrainingResources(sql, userId) {
   try {
+    await ensureTrainingResourcesTable(sql);
     const resources = await sql`
       SELECT id, user_id, name, description, url, tag, created_at, updated_at
       FROM training_resources
