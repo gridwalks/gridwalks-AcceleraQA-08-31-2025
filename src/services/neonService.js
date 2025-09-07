@@ -381,6 +381,38 @@ class NeonService {
   }
 
   /**
+   * Training resources management
+   */
+  async addTrainingResource(resource) {
+    try {
+      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'add_training_resource',
+          data: resource
+        })
+      });
+      return result.resource;
+    } catch (error) {
+      console.error('Failed to add training resource:', error);
+      throw error;
+    }
+  }
+
+  async getTrainingResources() {
+    try {
+      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'get_training_resources' })
+      });
+      return result.resources || [];
+    } catch (error) {
+      console.error('Failed to load training resources:', error);
+      return [];
+    }
+  }
+
+  /**
    * Check if the service is available
    */
   async isServiceAvailable() {

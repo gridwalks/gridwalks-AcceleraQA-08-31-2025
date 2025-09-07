@@ -22,7 +22,8 @@ import {
   Zap,
   Bug,
   Monitor,
-  Search
+  Search,
+  BookOpen
 } from 'lucide-react';
 
 // Import services
@@ -31,6 +32,7 @@ import ragService from '../services/ragService';
 import { getToken, getTokenInfo } from '../services/authService';
 import { hasAdminRole } from '../utils/auth';
 import RAGConfigurationPage from './RAGConfigurationPage';
+import TrainingResourcesAdmin from './TrainingResourcesAdmin';
 
 export const checkStorageHealth = async () => {
   // Check browser storage capacity
@@ -424,6 +426,7 @@ const AdminScreen = ({ user, onBack }) => {
               { id: 'rag', label: 'RAG System', icon: FileText },
               { id: 'ragConfig', label: 'RAG Config', icon: Search },
               { id: 'system', label: 'System Health', icon: Activity },
+              { id: 'training', label: 'Training Resources', icon: BookOpen },
               { id: 'tools', label: 'Admin Tools', icon: Settings }
             ].map(tab => {
               const Icon = tab.icon;
@@ -725,6 +728,16 @@ const AdminScreen = ({ user, onBack }) => {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Training Resources Tab */}
+          {activeTab === 'training' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Training Resources</h3>
+                <TrainingResourcesAdmin />
               </div>
             </div>
           )}

@@ -117,6 +117,18 @@ async function setupNeonDatabase() {
       )
     `;
 
+    // Create training_resources table
+    await sql`
+      CREATE TABLE IF NOT EXISTS training_resources (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        url TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `;
+
     console.log('✅ Database tables created successfully');
 
     // Create indexes for optimal performance
@@ -178,6 +190,17 @@ async function setupNeonDatabase() {
       DO $ BEGIN
         CREATE TRIGGER conversations_updated_at
           BEFORE UPDATE ON conversations
+          FOR EACH ROW
+          EXECUTE FUNCTION update_updated_at();
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $;
+    `;
+
+    await sql`
+      DO $ BEGIN
+        CREATE TRIGGER training_resources_updated_at
+          BEFORE UPDATE ON training_resources
           FOR EACH ROW
           EXECUTE FUNCTION update_updated_at();
       EXCEPTION
