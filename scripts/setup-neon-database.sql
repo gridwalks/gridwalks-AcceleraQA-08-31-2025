@@ -117,6 +117,19 @@ async function setupNeonDatabase() {
       )
     `;
 
+    // Create training_resources table
+    await sql`
+      CREATE TABLE IF NOT EXISTS training_resources (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        url TEXT NOT NULL,
+        tags TEXT[] DEFAULT '{}',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `;
+
     console.log('✅ Database tables created successfully');
 
     // Create indexes for optimal performance
@@ -131,7 +144,7 @@ async function setupNeonDatabase() {
 
     // Document chunks indexes
     await sql`CREATE INDEX IF NOT EXISTS idx_rag_chunks_document_id ON rag_document_chunks(document_id)`;
-    
+
     // Try to create vector index if extension is available
     try {
       await sql`CREATE INDEX IF NOT EXISTS idx_rag_chunks_embedding ON rag_document_chunks USING ivfflat (embedding vector_cosine_ops)`;
@@ -140,10 +153,14 @@ async function setupNeonDatabase() {
       console.log('ℹ️  Vector index skipped (will be created when embeddings are implemented)');
     }
 
-    // Conversations indexes  
+    // Conversations indexes
     await sql`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_conversations_created ON conversations(user_id, created_at DESC)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_conversations_rag ON conversations(user_id, used_rag)`;
+
+    // Training resources indexes
+    await sql`CREATE INDEX IF NOT EXISTS idx_training_resources_created ON training_resources(created_at DESC)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_training_resources_tags ON training_resources USING GIN(tags)`;
 
     // Full-text search indexes
     await sql`CREATE INDEX IF NOT EXISTS idx_rag_documents_fts ON rag_documents USING gin(to_tsvector('english', text_content))`;
@@ -178,6 +195,17 @@ async function setupNeonDatabase() {
       DO $ BEGIN
         CREATE TRIGGER conversations_updated_at
           BEFORE UPDATE ON conversations
+          FOR EACH ROW
+          EXECUTE FUNCTION update_updated_at();
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $;
+    `;
+
+    await sql`
+      DO $ BEGIN
+        CREATE TRIGGER training_resources_updated_at
+          BEFORE UPDATE ON training_resources
           FOR EACH ROW
           EXECUTE FUNCTION update_updated_at();
       EXCEPTION

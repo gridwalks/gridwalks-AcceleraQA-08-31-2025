@@ -234,7 +234,13 @@ export const handler = async (event, context) => {
 
       case 'health_check':
         return await handleHealthCheck(sql, userId);
-      
+
+      case 'add_training_resource':
+        return await handleAddTrainingResource(sql, userId, data);
+
+      case 'get_training_resources':
+        return await handleGetTrainingResources(sql, userId);
+
       default:
         return {
           statusCode: 400,
@@ -696,6 +702,63 @@ async function handleAnalyzeConversationsForLearning(sql, userId, data) {
         message: error.message,
         userId: userId
       }),
+    };
+  }
+}
+
+
+// Training resources handlers
+async function handleAddTrainingResource(sql, userId, data) {
+  try {
+    if (!data || !data.name || !data.url) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Name and URL are required' }),
+      };
+    }
+
+    const { name, description = '', url, tags = [] } = data;
+    const [resource] = await sql`
+      INSERT INTO training_resources (name, description, url, tags)
+      VALUES (${name}, ${description}, ${url}, ${tags})
+      RETURNING id, name, description, url, tags, created_at, updated_at
+    `;
+
+    return {
+      statusCode: 201,
+      headers,
+      body: JSON.stringify({ resource }),
+    };
+  } catch (error) {
+    console.error('❌ Error adding training resource:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Failed to add training resource', message: error.message }),
+    };
+  }
+}
+
+async function handleGetTrainingResources(sql, userId) {
+  try {
+    const resources = await sql`
+      SELECT id, name, description, url, tags, created_at, updated_at
+      FROM training_resources
+      ORDER BY created_at DESC
+    `;
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ resources }),
+    };
+  } catch (error) {
+    console.error('❌ Error loading training resources:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Failed to load training resources', message: error.message }),
     };
   }
 }
