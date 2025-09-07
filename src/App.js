@@ -175,6 +175,7 @@ function App() {
       type: 'user',
       content: inputMessage,
       timestamp: Date.now(),
+      resources: [],
     };
 
     // Add user's message immediately
@@ -193,6 +194,7 @@ function App() {
         content: response.answer,
         timestamp: Date.now(),
         sources: response.sources || [],
+        resources: response.resources || [],
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -213,6 +215,7 @@ function App() {
         content: error.message || 'An error occurred while fetching the response.',
         timestamp: Date.now(),
         sources: [],
+        resources: [],
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
