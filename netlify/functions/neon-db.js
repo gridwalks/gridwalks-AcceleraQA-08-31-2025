@@ -532,3 +532,171 @@ async function handleHealthCheck(sql, userId) {
     };
   }
 }
+
+
+// Add this to your existing netlify/functions/neon-db.js file
+
+/**
+ * Handle getting recent conversations for learning suggestions
+ */
+async function handleGetRecentConversations(sql, userId, data) {
+  try {
+    const { limit = 10 } = data;
+    
+    console.log(`📖 Loading recent ${limit} conversations for learning suggestions - user: ${userId}`);
+
+    const conversations = await sql`
+      SELECT 
+        id,
+        messages,
+        metadata,
+        message_count,
+        used_rag,
+        rag_documents_referenced,
+        created_at,
+        updated_at
+      FROM conversations 
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `;
+
+    console.log(`✅ Loaded ${conversations.length} recent conversations for learning analysis`);
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        conversations: conversations.map(conv => ({
+          id: conv.id,
+          messages: conv.messages,
+          metadata: conv.metadata,
+          messageCount: conv.message_count,
+          used_rag: conv.used_rag,
+          rag_documents_referenced: conv.rag_documents_referenced,
+          created_at: conv.created_at,
+          updated_at: conv.updated_at
+        })),
+        total: conversations.length,
+        userId: userId,
+        source: 'neon-postgresql',
+        purpose: 'learning-suggestions'
+      }),
+    };
+  } catch (error) {
+    console.error('❌ Error loading recent conversations for learning:', error);
+    
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ 
+        conversations: [], 
+        total: 0,
+        message: 'No recent conversations found or error occurred',
+        error: error.message,
+        userId: userId,
+        source: 'neon-postgresql'
+      }),
+    };
+  }
+}
+
+// Add this case to your existing switch statement in the main handler:
+case 'get_recent_conversations':
+  return await handleGetRecentConversations(sql, userId, data);
+
+// Also add this helper function for conversation analysis
+async function handleAnalyzeConversationsForLearning(sql, userId, data) {
+  try {
+    const { limit = 5 } = data;
+    
+    console.log(`🔍 Analyzing conversations for learning insights - user: ${userId}`);
+
+    // Get detailed conversation data for analysis
+    const conversations = await sql`
+      SELECT 
+        id,
+        messages,
+        metadata,
+        message_count,
+        used_rag,
+        rag_documents_referenced,
+        created_at,
+        extract(epoch from (NOW() - created_at)) / 3600 as hours_ago
+      FROM conversations 
+      WHERE user_id = ${userId}
+        AND message_count >= 2  -- Only conversations with actual exchanges
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `;
+
+    // Extract topics and patterns for learning analysis
+    const analysis = {
+      totalConversations: conversations.length,
+      topics: new Set(),
+      complexity: 'basic',
+      avgMessageCount: 0,
+      recentActivity: conversations.length > 0 ? conversations[0].hours_ago : null,
+      ragUsage: conversations.filter(c => c.used_rag).length,
+      timeframe: {
+        oldest: conversations.length > 0 ? conversations[conversations.length - 1].created_at : null,
+        newest: conversations.length > 0 ? conversations[0].created_at : null
+      }
+    };
+
+    // Analyze conversation content
+    let totalMessages = 0;
+    conversations.forEach(conv => {
+      totalMessages += conv.message_count;
+      
+      // Extract topics from metadata if available
+      if (conv.metadata && conv.metadata.topics) {
+        conv.metadata.topics.forEach(topic => analysis.topics.add(topic));
+      }
+      
+      // Basic complexity assessment
+      if (conv.message_count > 10) {
+        analysis.complexity = 'advanced';
+      } else if (conv.message_count > 5 && analysis.complexity === 'basic') {
+        analysis.complexity = 'intermediate';
+      }
+    });
+
+    analysis.avgMessageCount = conversations.length > 0 ? totalMessages / conversations.length : 0;
+    analysis.topics = Array.from(analysis.topics);
+
+    console.log(`✅ Conversation analysis complete:`, {
+      conversations: analysis.totalConversations,
+      topics: analysis.topics.length,
+      complexity: analysis.complexity
+    });
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        conversations,
+        analysis,
+        userId: userId,
+        source: 'neon-postgresql',
+        analyzedAt: new Date().toISOString()
+      }),
+    };
+  } catch (error) {
+    console.error('❌ Error analyzing conversations for learning:', error);
+    
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        error: 'Failed to analyze conversations',
+        message: error.message,
+        userId: userId
+      }),
+    };
+  }
+}
+
+// Add this case too:
+case 'analyze_conversations_for_learning':
+  return await handleAnalyzeConversationsForLearning(sql, userId, data);
