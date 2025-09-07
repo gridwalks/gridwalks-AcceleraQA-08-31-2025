@@ -19,7 +19,8 @@ const Sidebar = ({
   user,
   learningSuggestions = [],
   isLoadingSuggestions = false,
-  onSuggestionsUpdate
+  onSuggestionsUpdate,
+  onAddResource
 }) => {
   return (
     <div className="h-full flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 lg:min-h-0">
@@ -58,6 +59,7 @@ const Sidebar = ({
             learningSuggestions={learningSuggestions}
             isLoadingSuggestions={isLoadingSuggestions}
             onSuggestionsUpdate={onSuggestionsUpdate}
+            onAddResource={onAddResource}
           />
         )}
       </div>
