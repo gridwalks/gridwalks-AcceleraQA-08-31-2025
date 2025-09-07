@@ -2,25 +2,35 @@ import React, { memo, useMemo } from 'react';
 import { combineMessagesIntoConversations } from '../utils/messageUtils';
 import { Cloud, Smartphone } from 'lucide-react';
 
-const NotebookView = memo(({ 
+const NotebookView = memo(({
   messages, // Current session messages
   thirtyDayMessages, // Messages from last 30 days (should be current + stored)
-  selectedMessages, 
-  setSelectedMessages, 
-  generateStudyNotes, 
+  selectedMessages,
+  setSelectedMessages,
+  generateStudyNotes,
   isGeneratingNotes,
   storedMessageCount = 0,
-  isServerAvailable = true
+  isServerAvailable = true,
+  searchTerm = ''
 }) => {
-  
   // Use ALL available messages - try thirtyDayMessages first, fallback to messages
   const availableMessages = thirtyDayMessages.length > 0 ? thirtyDayMessages : messages;
-  
+
   // Convert to conversations
-  const conversations = useMemo(() => 
-    combineMessagesIntoConversations(availableMessages).slice(-20),
+  const baseConversations = useMemo(
+    () => combineMessagesIntoConversations(availableMessages).slice(-20),
     [availableMessages]
   );
+
+  // Filter conversations by search term
+  const conversations = useMemo(() => {
+    if (!searchTerm.trim()) return baseConversations;
+    const lower = searchTerm.toLowerCase();
+    return baseConversations.filter(conv =>
+      (conv.userContent && conv.userContent.toLowerCase().includes(lower)) ||
+      (conv.aiContent && conv.aiContent.toLowerCase().includes(lower))
+    );
+  }, [baseConversations, searchTerm]);
 
   const selectAllConversations = () => {
     const allIds = new Set(conversations.map(conv => conv.id));
@@ -140,14 +150,23 @@ const NotebookView = memo(({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.991 8.991 0 01-4.7-1.299L3 21l2.3-5.7A7.991 7.991 0 1121 12z" />
               </svg>
             </div>
-            <h4 className="text-lg font-medium text-gray-900 mb-2">No conversations yet</h4>
-            <p className="text-gray-600">
-              Start chatting to see your conversation history here
-            </p>
-            {!isServerAvailable && (
-              <div className="mt-4 text-xs text-orange-600 bg-orange-50 p-3 rounded-lg">
-                <strong>Note:</strong> Cloud storage is unavailable. Conversations will be lost on page refresh.
-              </div>
+            {searchTerm.trim() ? (
+              <>
+                <h4 className="text-lg font-medium text-gray-900 mb-2">No matches found</h4>
+                <p className="text-gray-600">Try a different search term.</p>
+              </>
+            ) : (
+              <>
+                <h4 className="text-lg font-medium text-gray-900 mb-2">No conversations yet</h4>
+                <p className="text-gray-600">
+                  Start chatting to see your conversation history here
+                </p>
+                {!isServerAvailable && (
+                  <div className="mt-4 text-xs text-orange-600 bg-orange-50 p-3 rounded-lg">
+                    <strong>Note:</strong> Cloud storage is unavailable. Conversations will be lost on page refresh.
+                  </div>
+                )}
+              </>
             )}
           </div>
         ) : (

@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Download } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Download, Search } from 'lucide-react';
 import NotebookView from './NotebookView';
 
 const NotebookOverlay = ({
@@ -14,6 +14,8 @@ const NotebookOverlay = ({
   exportNotebook,
   onClose
 }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+
   const handleExportClick = () => {
     try {
       exportNotebook();
@@ -28,6 +30,17 @@ const NotebookOverlay = ({
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Notebook</h2>
           <div className="flex items-center space-x-2">
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search..."
+                className="pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm w-48"
+                aria-label="Search notebook"
+              />
+            </div>
             <button
               onClick={handleExportClick}
               className="flex items-center space-x-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300"
@@ -56,6 +69,7 @@ const NotebookOverlay = ({
             isGeneratingNotes={isGeneratingNotes}
             storedMessageCount={storedMessageCount}
             isServerAvailable={isServerAvailable}
+            searchTerm={searchTerm}
           />
         </div>
       </div>
