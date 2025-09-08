@@ -177,7 +177,11 @@ async function getSql() {
 let poolInstance = null;
 async function getPool() {
   if (!poolInstance) {
-    const { Pool } = await import('@neondatabase/serverless');
+
+    const { Pool, neonConfig } = await import('@neondatabase/serverless');
+    const ws = (await import('ws')).default;
+    neonConfig.webSocketConstructor = ws;
+
     const connectionString = process.env.NEON_DATABASE_URL;
     if (!connectionString) {
       throw new Error('NEON_DATABASE_URL environment variable is not set');
