@@ -174,6 +174,19 @@ async function getSql() {
   return sqlInstance;
 }
 
+let poolInstance = null;
+async function getPool() {
+  if (!poolInstance) {
+    const { Pool } = await import('@neondatabase/serverless');
+    const connectionString = process.env.NEON_DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('NEON_DATABASE_URL environment variable is not set');
+    }
+    poolInstance = new Pool({ connectionString });
+  }
+  return poolInstance;
+}
+
 function chunkText(text, size = 800) {
   const chunks = [];
   let index = 0;
@@ -308,14 +321,18 @@ async function handleUpload(userId, document) {
         body: JSON.stringify({ error: 'Invalid document data' }),
       };
     }
-    const sql = await getSql();
     const text = document.text || '';
     const chunks = chunkText(text);
 
+    const pool = await getPool();
+    let client;
     let insertedDocument;
-    await sql.begin(async (tx) => {
-      const [doc] = await tx`
-        INSERT INTO rag_documents (
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+
+      const docResult = await client.query(
+        `INSERT INTO rag_documents (
           user_id,
           filename,
           original_filename,
@@ -323,36 +340,51 @@ async function handleUpload(userId, document) {
           file_size,
           text_content,
           metadata
-        ) VALUES (
-          ${userId},
-          ${document.filename},
-          ${document.filename},
-          ${getFileType(document.filename)},
-          ${document.size || text.length},
-          ${text},
-          ${JSON.stringify(document.metadata || {})}
-        ) RETURNING id, filename, created_at
-      `;
-      insertedDocument = doc;
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, filename, created_at`,
+        [
+          userId,
+          document.filename,
+          document.filename,
+          getFileType(document.filename),
+          document.size || text.length,
+          text,
+          JSON.stringify(document.metadata || {}),
+        ]
+      );
+      insertedDocument = docResult.rows[0];
 
       for (const chunk of chunks) {
-        await tx`
-          INSERT INTO rag_document_chunks (
+        await client.query(
+          `INSERT INTO rag_document_chunks (
             document_id,
             chunk_index,
             chunk_text,
             word_count,
             character_count
-          ) VALUES (
-            ${doc.id},
-            ${chunk.index},
-            ${chunk.text},
-            ${chunk.wordCount},
-            ${chunk.characterCount}
-          )
-        `;
+          ) VALUES ($1,$2,$3,$4,$5)`,
+          [
+            insertedDocument.id,
+            chunk.index,
+            chunk.text,
+            chunk.wordCount,
+            chunk.characterCount,
+          ]
+        );
       }
-    });
+
+      await client.query('COMMIT');
+    } catch (err) {
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error('Rollback error:', rollbackError);
+        }
+      }
+      throw err;
+    } finally {
+      if (client) client.release();
+    }
 
     return {
       statusCode: 201,
