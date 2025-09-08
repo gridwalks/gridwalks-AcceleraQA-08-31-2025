@@ -1,5 +1,9 @@
 import { jest } from '@jest/globals';
+import { TextEncoder, TextDecoder } from 'util';
 import { hasAdminRole } from '../utils/auth';
+
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
 
 describe('AuthService getUser', () => {
   beforeEach(() => {
