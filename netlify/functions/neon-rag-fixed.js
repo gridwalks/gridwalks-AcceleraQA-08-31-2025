@@ -160,11 +160,19 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
-// In-memory storage for documents and chunks
-const storage = {
-  documents: new Map(),
-  chunks: new Map(),
-};
+// Database connection helper
+let sqlInstance = null;
+async function getSql() {
+  if (!sqlInstance) {
+    const { neon } = await import('@neondatabase/serverless');
+    const connectionString = process.env.NEON_DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('NEON_DATABASE_URL environment variable is not set');
+    }
+    sqlInstance = neon(connectionString);
+  }
+  return sqlInstance;
+}
 
 function chunkText(text, size = 800) {
   const chunks = [];
@@ -300,41 +308,58 @@ async function handleUpload(userId, document) {
         body: JSON.stringify({ error: 'Invalid document data' }),
       };
     }
-
-    const documentId = `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const timestamp = new Date().toISOString();
+    const sql = await getSql();
     const text = document.text || '';
     const chunks = chunkText(text);
 
-    storage.documents.set(`${userId}/${documentId}`, {
-      id: documentId,
-      userId,
-      filename: document.filename,
-      fileType: getFileType(document.filename),
-      fileSize: document.size || text.length,
-      chunkCount: chunks.length,
-      createdAt: timestamp,
-      metadata: document.metadata || {},
-    });
+    let insertedDocument;
+    await sql.begin(async (tx) => {
+      const [doc] = await tx`
+        INSERT INTO rag_documents (
+          user_id,
+          filename,
+          original_filename,
+          file_type,
+          file_size,
+          text_content,
+          metadata
+        ) VALUES (
+          ${userId},
+          ${document.filename},
+          ${document.filename},
+          ${getFileType(document.filename)},
+          ${document.size || text.length},
+          ${text},
+          ${JSON.stringify(document.metadata || {})}
+        ) RETURNING id, filename, created_at
+      `;
+      insertedDocument = doc;
 
-    chunks.forEach((chunk) => {
-      const chunkId = `${documentId}_chunk_${chunk.index}`;
-      storage.chunks.set(`${userId}/${chunkId}`, {
-        id: chunkId,
-        documentId,
-        userId,
-        index: chunk.index,
-        text: chunk.text,
-        createdAt: timestamp,
-      });
+      for (const chunk of chunks) {
+        await tx`
+          INSERT INTO rag_document_chunks (
+            document_id,
+            chunk_index,
+            chunk_text,
+            word_count,
+            character_count
+          ) VALUES (
+            ${doc.id},
+            ${chunk.index},
+            ${chunk.text},
+            ${chunk.wordCount},
+            ${chunk.characterCount}
+          )
+        `;
+      }
     });
 
     return {
       statusCode: 201,
       headers,
       body: JSON.stringify({
-        id: documentId,
-        filename: document.filename,
+        id: insertedDocument.id,
+        filename: insertedDocument.filename,
         chunks: chunks.length,
         message: 'Document uploaded successfully',
       }),
@@ -351,22 +376,24 @@ async function handleUpload(userId, document) {
 
 async function handleList(userId) {
   try {
-    const documents = [];
-    for (const [key, doc] of storage.documents.entries()) {
-      if (key.startsWith(`${userId}/`)) {
-        documents.push({
-          id: doc.id,
-          filename: doc.filename,
-          type: `application/${doc.fileType}`,
-          size: doc.fileSize,
-          chunks: doc.chunkCount,
-          createdAt: doc.createdAt,
-          metadata: doc.metadata,
-        });
-      }
-    }
+    const sql = await getSql();
+    const rows = await sql`
+      SELECT d.id, d.filename, d.file_type, d.file_size, d.created_at, d.metadata,
+             (SELECT COUNT(*) FROM rag_document_chunks c WHERE c.document_id = d.id) AS chunk_count
+      FROM rag_documents d
+      WHERE d.user_id = ${userId}
+      ORDER BY d.created_at DESC
+    `;
 
-    documents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const documents = rows.map(doc => ({
+      id: doc.id,
+      filename: doc.filename,
+      type: `application/${doc.file_type}`,
+      size: doc.file_size,
+      chunks: doc.chunk_count,
+      createdAt: doc.created_at,
+      metadata: doc.metadata,
+    }));
 
     return {
       statusCode: 200,
@@ -392,10 +419,11 @@ async function handleDelete(userId, documentId) {
         body: JSON.stringify({ error: 'Document ID is required' }),
       };
     }
-
-    const docKey = `${userId}/${documentId}`;
-    const document = storage.documents.get(docKey);
-    if (!document) {
+    const sql = await getSql();
+    const [doc] = await sql`
+      SELECT id FROM rag_documents WHERE id = ${documentId} AND user_id = ${userId}
+    `;
+    if (!doc) {
       return {
         statusCode: 404,
         headers,
@@ -403,12 +431,9 @@ async function handleDelete(userId, documentId) {
       };
     }
 
-    storage.documents.delete(docKey);
-    for (const key of storage.chunks.keys()) {
-      if (key.startsWith(`${userId}/${documentId}_chunk_`)) {
-        storage.chunks.delete(key);
-      }
-    }
+    await sql`
+      DELETE FROM rag_documents WHERE id = ${documentId} AND user_id = ${userId}
+    `;
 
     return {
       statusCode: 200,
@@ -434,32 +459,29 @@ async function handleSearch(userId, query, options = {}) {
         body: JSON.stringify({ error: 'Valid search query is required' }),
       };
     }
-
     const { limit = 10 } = options;
-    const lcQuery = query.toLowerCase();
-    const results = [];
+    const sql = await getSql();
+    const rows = await sql`
+      SELECT c.document_id, c.chunk_index, c.chunk_text, d.filename
+      FROM rag_document_chunks c
+      JOIN rag_documents d ON c.document_id = d.id
+      WHERE d.user_id = ${userId}
+        AND c.chunk_text ILIKE ${'%' + query + '%'}
+      LIMIT ${limit}
+    `;
 
-    for (const [key, chunk] of storage.chunks.entries()) {
-      if (!key.startsWith(`${userId}/`)) continue;
-      const text = chunk.text || '';
-      const pos = text.toLowerCase().indexOf(lcQuery);
-      if (pos !== -1) {
-        const snippet = text.substring(Math.max(0, pos - 50), pos + lcQuery.length + 50);
-        const document = storage.documents.get(`${userId}/${chunk.documentId}`);
-        results.push({
-          documentId: chunk.documentId,
-          filename: document?.filename || 'Unknown',
-          chunkIndex: chunk.index,
-          text: snippet,
-          similarity: 1,
-        });
-      }
-    }
+    const results = rows.map(r => ({
+      documentId: r.document_id,
+      filename: r.filename,
+      chunkIndex: r.chunk_index,
+      text: r.chunk_text,
+      similarity: 1,
+    }));
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ results: results.slice(0, limit), totalFound: results.length }),
+      body: JSON.stringify({ results, totalFound: results.length }),
     };
   } catch (error) {
     console.error('Search error:', error);
@@ -473,25 +495,26 @@ async function handleSearch(userId, query, options = {}) {
 
 async function handleStats(userId) {
   try {
-    let docCount = 0;
-    let totalChunks = 0;
-    let totalSize = 0;
-
-    for (const [key, doc] of storage.documents.entries()) {
-      if (key.startsWith(`${userId}/`)) {
-        docCount++;
-        totalChunks += doc.chunkCount || 0;
-        totalSize += doc.fileSize || 0;
-      }
-    }
+    const sql = await getSql();
+    const [docInfo] = await sql`
+      SELECT COUNT(*) AS doc_count, COALESCE(SUM(file_size),0) AS total_size
+      FROM rag_documents
+      WHERE user_id = ${userId}
+    `;
+    const [chunkInfo] = await sql`
+      SELECT COUNT(*) AS chunk_count
+      FROM rag_document_chunks c
+      JOIN rag_documents d ON c.document_id = d.id
+      WHERE d.user_id = ${userId}
+    `;
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        totalDocuments: docCount,
-        totalChunks,
-        totalSize,
+        totalDocuments: parseInt(docInfo.doc_count, 10),
+        totalChunks: parseInt(chunkInfo.chunk_count, 10),
+        totalSize: parseInt(docInfo.total_size, 10) || 0,
         lastUpdated: new Date().toISOString(),
       }),
     };
