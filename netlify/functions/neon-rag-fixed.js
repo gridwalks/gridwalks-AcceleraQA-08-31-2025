@@ -160,6 +160,34 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
+// In-memory storage for documents and chunks
+const storage = {
+  documents: new Map(),
+  chunks: new Map(),
+};
+
+function chunkText(text, size = 800) {
+  const chunks = [];
+  let index = 0;
+  for (let i = 0; i < text.length; i += size) {
+    const chunkText = text.slice(i, i + size);
+    chunks.push({
+      text: chunkText,
+      index: index++,
+      wordCount: chunkText.split(/\s+/).filter(Boolean).length,
+      characterCount: chunkText.length,
+    });
+  }
+  return chunks;
+}
+
+function getFileType(filename = '') {
+  const ext = filename.split('.').pop().toLowerCase();
+  if (['pdf'].includes(ext)) return 'pdf';
+  if (['doc', 'docx'].includes(ext)) return 'doc';
+  return 'txt';
+}
+
 // Main handler that dispatches RAG actions
 exports.handler = async (event, context) => {
   console.log('Neon RAG Fixed function called:', {
@@ -254,51 +282,225 @@ exports.handler = async (event, context) => {
   }
 };
 
-// Placeholder action handlers
-async function handleTest(userId, data) {
+// Action handlers
+async function handleTest(userId) {
   return {
     statusCode: 200,
     headers,
-    body: JSON.stringify({ message: 'test action not implemented', userId }),
-  };
-}
-
-async function handleList(userId) {
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({ documents: [], userId }),
+    body: JSON.stringify({ message: 'RAG service operational', userId }),
   };
 }
 
 async function handleUpload(userId, document) {
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({ message: 'upload action not implemented', userId }),
-  };
+  try {
+    if (!document || !document.filename) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid document data' }),
+      };
+    }
+
+    const documentId = `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const timestamp = new Date().toISOString();
+    const text = document.text || '';
+    const chunks = chunkText(text);
+
+    storage.documents.set(`${userId}/${documentId}`, {
+      id: documentId,
+      userId,
+      filename: document.filename,
+      fileType: getFileType(document.filename),
+      fileSize: document.size || text.length,
+      chunkCount: chunks.length,
+      createdAt: timestamp,
+      metadata: document.metadata || {},
+    });
+
+    chunks.forEach((chunk) => {
+      const chunkId = `${documentId}_chunk_${chunk.index}`;
+      storage.chunks.set(`${userId}/${chunkId}`, {
+        id: chunkId,
+        documentId,
+        userId,
+        index: chunk.index,
+        text: chunk.text,
+        createdAt: timestamp,
+      });
+    });
+
+    return {
+      statusCode: 201,
+      headers,
+      body: JSON.stringify({
+        id: documentId,
+        filename: document.filename,
+        chunks: chunks.length,
+        message: 'Document uploaded successfully',
+      }),
+    };
+  } catch (error) {
+    console.error('Upload error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Failed to upload document', message: error.message }),
+    };
+  }
+}
+
+async function handleList(userId) {
+  try {
+    const documents = [];
+    for (const [key, doc] of storage.documents.entries()) {
+      if (key.startsWith(`${userId}/`)) {
+        documents.push({
+          id: doc.id,
+          filename: doc.filename,
+          type: `application/${doc.fileType}`,
+          size: doc.fileSize,
+          chunks: doc.chunkCount,
+          createdAt: doc.createdAt,
+          metadata: doc.metadata,
+        });
+      }
+    }
+
+    documents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ documents, total: documents.length }),
+    };
+  } catch (error) {
+    console.error('List error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Failed to list documents', message: error.message }),
+    };
+  }
 }
 
 async function handleDelete(userId, documentId) {
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({ message: 'delete action not implemented', userId, documentId }),
-  };
+  try {
+    if (!documentId) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Document ID is required' }),
+      };
+    }
+
+    const docKey = `${userId}/${documentId}`;
+    const document = storage.documents.get(docKey);
+    if (!document) {
+      return {
+        statusCode: 404,
+        headers,
+        body: JSON.stringify({ error: 'Document not found' }),
+      };
+    }
+
+    storage.documents.delete(docKey);
+    for (const key of storage.chunks.keys()) {
+      if (key.startsWith(`${userId}/${documentId}_chunk_`)) {
+        storage.chunks.delete(key);
+      }
+    }
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ message: 'Document deleted', documentId }),
+    };
+  } catch (error) {
+    console.error('Delete error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Failed to delete document', message: error.message }),
+    };
+  }
 }
 
-async function handleSearch(userId, query, options) {
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({ results: [], userId, query }),
-  };
+async function handleSearch(userId, query, options = {}) {
+  try {
+    if (!query || typeof query !== 'string') {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Valid search query is required' }),
+      };
+    }
+
+    const { limit = 10 } = options;
+    const lcQuery = query.toLowerCase();
+    const results = [];
+
+    for (const [key, chunk] of storage.chunks.entries()) {
+      if (!key.startsWith(`${userId}/`)) continue;
+      const text = chunk.text || '';
+      const pos = text.toLowerCase().indexOf(lcQuery);
+      if (pos !== -1) {
+        const snippet = text.substring(Math.max(0, pos - 50), pos + lcQuery.length + 50);
+        const document = storage.documents.get(`${userId}/${chunk.documentId}`);
+        results.push({
+          documentId: chunk.documentId,
+          filename: document?.filename || 'Unknown',
+          chunkIndex: chunk.index,
+          text: snippet,
+          similarity: 1,
+        });
+      }
+    }
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ results: results.slice(0, limit), totalFound: results.length }),
+    };
+  } catch (error) {
+    console.error('Search error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Search failed', message: error.message }),
+    };
+  }
 }
 
 async function handleStats(userId) {
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({ stats: {}, userId }),
-  };
+  try {
+    let docCount = 0;
+    let totalChunks = 0;
+    let totalSize = 0;
+
+    for (const [key, doc] of storage.documents.entries()) {
+      if (key.startsWith(`${userId}/`)) {
+        docCount++;
+        totalChunks += doc.chunkCount || 0;
+        totalSize += doc.fileSize || 0;
+      }
+    }
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        totalDocuments: docCount,
+        totalChunks,
+        totalSize,
+        lastUpdated: new Date().toISOString(),
+      }),
+    };
+  } catch (error) {
+    console.error('Stats error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Failed to get stats', message: error.message }),
+    };
+  }
 }
