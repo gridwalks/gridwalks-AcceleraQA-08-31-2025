@@ -1,7 +1,6 @@
 // src/services/ragService.js - Updated RAG service with FIXED authentication
 import openaiService from './openaiService';
 import authService, { getToken } from './authService';
-import mammoth from 'mammoth';
 
 const API_BASE_URL = '/.netlify/functions';
 
@@ -377,6 +376,22 @@ Answer:`;
     }
   }
 
+  async search(query, options = {}) {
+    try {
+      const searchData = await this.searchDocuments(query, options);
+      const matches = searchData.results || [];
+      const response = await this.generateRAGResponse(query, matches);
+      return {
+        answer: response.answer,
+        sources: response.sources || matches,
+        resources: response.resources || []
+      };
+    } catch (error) {
+      console.error('Error performing RAG search:', error);
+      throw error;
+    }
+  }
+
   async getStats() {
     try {
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
@@ -568,6 +583,7 @@ export default ragService;
 
 // Export convenience functions
 export const uploadDocument = (file, metadata) => ragService.uploadDocument(file, metadata);
+export const search = (query, options) => ragService.search(query, options);
 export const searchDocuments = (query, options) => ragService.searchDocuments(query, options);
 export const getDocuments = () => ragService.getDocuments();
 export const deleteDocument = (documentId) => ragService.deleteDocument(documentId);
