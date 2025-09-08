@@ -4,6 +4,7 @@
 // Requests lacking this header will be rejected with a 401 response.
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
+const crypto = require('crypto');
 
 // JWKS client for Auth0 token verification
 const client = jwksClient({
@@ -160,6 +161,65 @@ const headers = {
   'Content-Type': 'application/json',
 };
 
+// Neon Postgres connection and table setup
+const { neon } = require('@neondatabase/serverless');
+const sql = neon(process.env.NEON_DATABASE_URL);
+
+async function ensureRagTables() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS rag_documents (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id VARCHAR(255) NOT NULL,
+      filename VARCHAR(500) NOT NULL,
+      original_filename VARCHAR(500) NOT NULL,
+      file_type TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      text_content TEXT NOT NULL,
+      metadata JSONB DEFAULT '{}',
+      category TEXT DEFAULT 'general',
+      tags TEXT[] DEFAULT '{}',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS rag_document_chunks (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      document_id UUID NOT NULL REFERENCES rag_documents(id) ON DELETE CASCADE,
+      chunk_index INTEGER NOT NULL,
+      chunk_text TEXT NOT NULL,
+      word_count INTEGER NOT NULL,
+      character_count INTEGER NOT NULL,
+      embedding vector(1536),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(document_id, chunk_index)
+    )
+  `;
+}
+
+function chunkText(text, size = 800) {
+  const chunks = [];
+  let index = 0;
+  for (let i = 0; i < text.length; i += size) {
+    const chunkText = text.slice(i, i + size);
+    chunks.push({
+      text: chunkText,
+      index: index++,
+      wordCount: chunkText.split(/\s+/).filter(Boolean).length,
+      characterCount: chunkText.length,
+    });
+  }
+  return chunks;
+}
+
+function getFileType(filename = '') {
+  const ext = filename.split('.').pop().toLowerCase();
+  if (['pdf'].includes(ext)) return 'pdf';
+  if (['doc', 'docx'].includes(ext)) return 'doc';
+  return 'txt';
+}
+
 // Main handler that dispatches RAG actions
 exports.handler = async (event, context) => {
   console.log('Neon RAG Fixed function called:', {
@@ -254,51 +314,248 @@ exports.handler = async (event, context) => {
   }
 };
 
-// Placeholder action handlers
-async function handleTest(userId, data) {
+// Action handlers
+async function handleTest(userId) {
   return {
     statusCode: 200,
     headers,
-    body: JSON.stringify({ message: 'test action not implemented', userId }),
-  };
-}
-
-async function handleList(userId) {
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({ documents: [], userId }),
+    body: JSON.stringify({ message: 'RAG service operational', userId }),
   };
 }
 
 async function handleUpload(userId, document) {
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({ message: 'upload action not implemented', userId }),
-  };
+  try {
+    if (!document || !document.filename) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid document data' }),
+      };
+    }
+
+    await ensureRagTables();
+
+    const documentId = crypto.randomUUID();
+    const text = document.text || '';
+    const chunks = chunkText(text);
+    const fileType = getFileType(document.filename);
+    const fileSize = document.size || text.length;
+    const metadata = document.metadata || {};
+    const category = metadata.category || 'general';
+    const tags = metadata.tags || [];
+
+    await sql`
+      INSERT INTO rag_documents (
+        id, user_id, filename, original_filename, file_type,
+        file_size, text_content, metadata, category, tags
+      )
+      VALUES (
+        ${documentId}, ${userId}, ${document.filename},
+        ${document.originalFilename || document.filename},
+        ${fileType}, ${fileSize}, ${text},
+        ${JSON.stringify(metadata)}, ${category}, ${tags}
+      )
+    `;
+
+    for (const chunk of chunks) {
+      await sql`
+        INSERT INTO rag_document_chunks (
+          document_id, chunk_index, chunk_text,
+          word_count, character_count
+        )
+        VALUES (
+          ${documentId}, ${chunk.index}, ${chunk.text},
+          ${chunk.wordCount}, ${chunk.characterCount}
+        )
+      `;
+    }
+
+    return {
+      statusCode: 201,
+      headers,
+      body: JSON.stringify({
+        id: documentId,
+        filename: document.filename,
+        chunks: chunks.length,
+        message: 'Document uploaded successfully',
+      }),
+    };
+  } catch (error) {
+    console.error('Upload error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Failed to upload document', message: error.message }),
+    };
+  }
+}
+
+async function handleList(userId) {
+  try {
+    await ensureRagTables();
+    const rows = await sql`
+      SELECT d.id, d.filename, d.file_type, d.file_size,
+             d.created_at, d.metadata,
+             COUNT(c.id) AS chunk_count
+      FROM rag_documents d
+      LEFT JOIN rag_document_chunks c ON d.id = c.document_id
+      WHERE d.user_id = ${userId}
+      GROUP BY d.id
+      ORDER BY d.created_at DESC
+    `;
+
+    const documents = rows.map(row => ({
+      id: row.id,
+      filename: row.filename,
+      type: `application/${row.file_type}`,
+      size: row.file_size,
+      chunks: Number(row.chunk_count) || 0,
+      createdAt: row.created_at,
+      metadata: row.metadata,
+    }));
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ documents, total: documents.length }),
+    };
+  } catch (error) {
+    console.error('List error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Failed to list documents', message: error.message }),
+    };
+  }
 }
 
 async function handleDelete(userId, documentId) {
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({ message: 'delete action not implemented', userId, documentId }),
-  };
+  try {
+    if (!documentId) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Document ID is required' }),
+      };
+    }
+
+    await ensureRagTables();
+
+    const [deleted] = await sql`
+      DELETE FROM rag_documents
+      WHERE id = ${documentId} AND user_id = ${userId}
+      RETURNING id
+    `;
+
+    if (!deleted) {
+      return {
+        statusCode: 404,
+        headers,
+        body: JSON.stringify({ error: 'Document not found' }),
+      };
+    }
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ message: 'Document deleted', documentId }),
+    };
+  } catch (error) {
+    console.error('Delete error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Failed to delete document', message: error.message }),
+    };
+  }
 }
 
-async function handleSearch(userId, query, options) {
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({ results: [], userId, query }),
-  };
+async function handleSearch(userId, query, options = {}) {
+  try {
+    if (!query || typeof query !== 'string') {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Valid search query is required' }),
+      };
+    }
+
+    await ensureRagTables();
+    const { limit = 10 } = options;
+
+    const rows = await sql`
+      SELECT c.document_id, c.chunk_index, c.chunk_text, d.filename
+      FROM rag_document_chunks c
+      JOIN rag_documents d ON c.document_id = d.id
+      WHERE d.user_id = ${userId}
+        AND c.chunk_text ILIKE ${'%' + query + '%'}
+      ORDER BY c.chunk_index
+      LIMIT ${limit}
+    `;
+
+    const results = rows.map(row => {
+      const text = row.chunk_text || '';
+      const lcQuery = query.toLowerCase();
+      const pos = text.toLowerCase().indexOf(lcQuery);
+      const snippet = pos !== -1 ? text.substring(Math.max(0, pos - 50), pos + lcQuery.length + 50) : text;
+      return {
+        documentId: row.document_id,
+        filename: row.filename,
+        chunkIndex: row.chunk_index,
+        text: snippet,
+        similarity: 1,
+      };
+    });
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ results, totalFound: results.length }),
+    };
+  } catch (error) {
+    console.error('Search error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Search failed', message: error.message }),
+    };
+  }
 }
 
 async function handleStats(userId) {
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({ stats: {}, userId }),
-  };
+  try {
+    await ensureRagTables();
+
+    const [docStats] = await sql`
+      SELECT COUNT(*) AS doc_count,
+             COALESCE(SUM(file_size), 0) AS total_size
+      FROM rag_documents
+      WHERE user_id = ${userId}
+    `;
+
+    const [chunkStats] = await sql`
+      SELECT COUNT(*) AS chunk_count
+      FROM rag_document_chunks c
+      JOIN rag_documents d ON c.document_id = d.id
+      WHERE d.user_id = ${userId}
+    `;
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        totalDocuments: Number(docStats.doc_count) || 0,
+        totalChunks: Number(chunkStats.chunk_count) || 0,
+        totalSize: Number(docStats.total_size) || 0,
+        lastUpdated: new Date().toISOString(),
+      }),
+    };
+  } catch (error) {
+    console.error('Stats error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Failed to get stats', message: error.message }),
+    };
+  }
 }
