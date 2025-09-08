@@ -222,17 +222,34 @@ class RAGService {
   }
 
   async extractTextFromFile(file) {
-    return new Promise((resolve, reject) => {
-      if (file.type === 'text/plain') {
+    if (file.type === 'text/plain') {
+      return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => resolve(e.target.result);
         reader.onerror = () => reject(new Error('Failed to read text file'));
         reader.readAsText(file);
-      } else {
-        // For non-text files, return empty string for now
-        resolve('');
+      });
+    }
+
+    // Handle DOCX files using a dynamic import to avoid bundling mammoth
+    if (
+      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      file.name?.toLowerCase().endsWith('.docx')
+    ) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const mammoth = await import('mammoth');
+        const { value } = await mammoth.extractRawText({ arrayBuffer });
+        return value;
+      } catch (err) {
+        console.error('Failed to extract DOCX text:', err);
+        return '';
       }
-    });
+    }
+
+    // For unsupported file types return empty string for now
+    console.warn('Unsupported file type for text extraction:', file.type || file.name);
+    return '';
   }
 
   async getDocuments() {
