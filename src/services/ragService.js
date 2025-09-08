@@ -232,9 +232,16 @@ class RAGService {
       });
     }
 
-    if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+
+    // Handle DOCX files using a dynamic import to avoid bundling mammoth
+    if (
+      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      file.name?.toLowerCase().endsWith('.docx')
+    ) {
       try {
         const arrayBuffer = await file.arrayBuffer();
+        const mammoth = await import('mammoth');
+
         const { value } = await mammoth.extractRawText({ arrayBuffer });
         return value;
       } catch (err) {
@@ -244,6 +251,8 @@ class RAGService {
     }
 
     // For unsupported file types return empty string for now
+    console.warn('Unsupported file type for text extraction:', file.type || file.name);
+
     return '';
   }
 
