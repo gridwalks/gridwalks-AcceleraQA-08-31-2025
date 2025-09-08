@@ -1,6 +1,7 @@
 // src/services/ragService.js - Updated RAG service with FIXED authentication
 import openaiService from './openaiService';
 import authService, { getToken } from './authService';
+import mammoth from 'mammoth';
 
 const API_BASE_URL = '/.netlify/functions';
 
@@ -231,6 +232,7 @@ class RAGService {
       });
     }
 
+
     // Handle DOCX files using a dynamic import to avoid bundling mammoth
     if (
       file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
@@ -239,6 +241,7 @@ class RAGService {
       try {
         const arrayBuffer = await file.arrayBuffer();
         const mammoth = await import('mammoth');
+
         const { value } = await mammoth.extractRawText({ arrayBuffer });
         return value;
       } catch (err) {
@@ -249,6 +252,7 @@ class RAGService {
 
     // For unsupported file types return empty string for now
     console.warn('Unsupported file type for text extraction:', file.type || file.name);
+
     return '';
   }
 
