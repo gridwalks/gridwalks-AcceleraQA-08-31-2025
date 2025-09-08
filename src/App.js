@@ -15,7 +15,7 @@ import NotebookOverlay from './components/NotebookOverlay';
 // Utility
 import { v4 as uuidv4 } from 'uuid';
 import authService, { initializeAuth } from './services/authService';
-import ragService from './services/ragService';
+import { search as ragSearch } from './services/ragService';
 import openaiService from './services/openaiService';
 
 import { initializeNeonService, loadConversations as loadNeonConversations, saveConversation as saveNeonConversation } from './services/neonService';
@@ -188,7 +188,7 @@ function App() {
 
     try {
       const response = ragEnabled
-        ? await ragService.search(inputMessage)
+        ? await ragSearch(inputMessage)
         : await openaiService.getChatResponse(inputMessage);
 
       const assistantMessage = {
