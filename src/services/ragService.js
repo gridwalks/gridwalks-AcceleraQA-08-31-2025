@@ -1,6 +1,7 @@
 // src/services/ragService.js - Updated RAG service with FIXED authentication
 import openaiService from './openaiService';
 import authService, { getToken } from './authService';
+import mammoth from 'mammoth';
 
 const API_BASE_URL = '/.netlify/functions';
 
@@ -222,17 +223,28 @@ class RAGService {
   }
 
   async extractTextFromFile(file) {
-    return new Promise((resolve, reject) => {
-      if (file.type === 'text/plain') {
+    if (file.type === 'text/plain') {
+      return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => resolve(e.target.result);
         reader.onerror = () => reject(new Error('Failed to read text file'));
         reader.readAsText(file);
-      } else {
-        // For non-text files, return empty string for now
-        resolve('');
+      });
+    }
+
+    if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const { value } = await mammoth.extractRawText({ arrayBuffer });
+        return value;
+      } catch (err) {
+        console.error('Failed to extract DOCX text:', err);
+        return '';
       }
-    });
+    }
+
+    // For unsupported file types return empty string for now
+    return '';
   }
 
   async getDocuments() {
