@@ -1,7 +1,7 @@
 // src/components/ChatArea.js - DEPLOYMENT READY (fixes DatabaseOff issue)
 
 import React from 'react';
-import { Send, Loader2, Database, Search, BookOpen } from 'lucide-react';
+import { Send, Loader2, Database, BookOpen } from 'lucide-react';
 
 const ChatArea = ({
   messages,
@@ -32,25 +32,29 @@ const ChatArea = ({
             )}
           </div>
           
-          {/* RAG Toggle Button - FIXED: No DatabaseOff dependency */}
-          <button
-            onClick={() => setRAGEnabled(!ragEnabled)}
-            className={`flex items-center space-x-2 px-3 py-2 rounded-lg font-medium transition-all duration-200 ${
-              ragEnabled 
-                ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 ring-2 ring-purple-500 ring-opacity-50' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-            title={ragEnabled ? 'RAG enabled - searching uploaded documents' : 'RAG disabled - AI knowledge only'}
-          >
-            {ragEnabled ? (
-              <Search className="h-4 w-4 text-purple-600" />
-            ) : (
-              <BookOpen className="h-4 w-4 text-gray-500" />
-            )}
+          {/* RAG Toggle Switch */}
+          <label className="flex items-center space-x-2 cursor-pointer" title={ragEnabled ? 'RAG enabled - searching uploaded documents' : 'RAG disabled - AI knowledge only'}>
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={ragEnabled}
+              onChange={() => setRAGEnabled(!ragEnabled)}
+            />
+            <span
+              className={`relative inline-block h-5 w-10 rounded-full transition-colors ${
+                ragEnabled ? 'bg-purple-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`absolute left-1 top-1 h-3 w-3 rounded-full bg-white transition-transform ${
+                  ragEnabled ? 'translate-x-5' : ''
+                }`}
+              />
+            </span>
             <span className="hidden sm:inline text-sm">
               {ragEnabled ? 'Document Search' : 'AI Knowledge'}
             </span>
-          </button>
+          </label>
         </div>
         
         {/* RAG Status Description */}
