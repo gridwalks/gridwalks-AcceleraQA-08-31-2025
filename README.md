@@ -62,6 +62,8 @@ src/
 
 ## 🚀 Quick Start
 
+Ensure Node.js **18.19.0** is in use (see `.nvmrc` and `netlify.toml`). If you use [nvm](https://github.com/nvm-sh/nvm), run `nvm use` to automatically select this version.
+
 ### 1. Install Dependencies
 ```bash
 npm install
