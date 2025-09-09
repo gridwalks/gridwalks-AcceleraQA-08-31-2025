@@ -4,7 +4,7 @@
   functions = "netlify/functions"
 
 [build.environment]
-  NODE_VERSION = "18.19.0"
+  NODE_VERSION = "20.19.0"
   CI = "false"
   GENERATE_SOURCEMAP = "false"
   SECRETS_SCAN_ENABLED = "false"
