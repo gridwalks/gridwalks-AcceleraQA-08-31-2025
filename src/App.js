@@ -83,6 +83,98 @@ function App() {
     }
   };
 
+  /**
+   * Enhanced conversation loading with learning suggestions trigger
+   */
+  const loadConversations = async () => {
+    if (!isAuthenticated || !user) return;
+
+    try {
+      setIsLoading(true);
+      const token = await getAccessTokenSilently();
+
+      const response = await fetch('/.netlify/functions/neon-db', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'get_conversations',
+          userId: user.sub
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setConversations(result.conversations || []);
+
+        // If user has conversations but no learning suggestions, generate them
+        if (result.conversations?.length > 0 && learningSuggestions.length === 0) {
+          setTimeout(() => {
+            loadLearningSuggestions(user.sub);
+          }, 1000);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Enhanced save conversation with learning suggestions tracking
+   */
+  const saveConversation = async (messages, conversationId = null, isNewConversation = false) => {
+    if (!isAuthenticated || !user || messages.length === 0) return null;
+
+    try {
+      const token = await getAccessTokenSilently();
+
+      const conversationData = {
+        messages,
+        metadata: {
+          ragEnabled,
+          lastUpdated: new Date().toISOString(),
+          messageCount: messages.length,
+          learningContext: {
+            suggestionsGenerated: learningSuggestions.length > 0,
+            lastSuggestionRefresh: messagesSinceLastRefresh === 0 ? new Date().toISOString() : null
+          }
+        }
+      };
+
+      const response = await fetch('/.netlify/functions/neon-db', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: conversationId ? 'update_conversation' : 'save_conversation',
+          userId: user.sub,
+          conversationId,
+          data: conversationData
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Conversation saved with learning context');
+
+        // Reload conversations to reflect changes
+        await loadConversations();
+
+        return result.conversationId || conversationId;
+      }
+    } catch (error) {
+      console.error('Error saving conversation:', error);
+    }
+
+    return null;
+  };
+
   // Enhanced useEffect for user authentication
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -274,97 +366,3 @@ function App() {
 }
 
 export default App;
-
-// Additional helper functions to add to your App.js:
-
-/**
- * Enhanced conversation loading with learning suggestions trigger
- */
-const loadConversations = async () => {
-  if (!isAuthenticated || !user) return;
-
-  try {
-    setIsLoading(true);
-    const token = await getAccessTokenSilently();
-    
-    const response = await fetch('/.netlify/functions/neon-db', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        action: 'get_conversations',
-        userId: user.sub
-      })
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      setConversations(result.conversations || []);
-      
-      // If user has conversations but no learning suggestions, generate them
-      if (result.conversations?.length > 0 && learningSuggestions.length === 0) {
-        setTimeout(() => {
-          loadLearningSuggestions(user.sub);
-        }, 1000);
-      }
-    }
-  } catch (error) {
-    console.error('Error loading conversations:', error);
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-/**
- * Enhanced save conversation with learning suggestions tracking
- */
-const saveConversation = async (messages, conversationId = null, isNewConversation = false) => {
-  if (!isAuthenticated || !user || messages.length === 0) return null;
-
-  try {
-    const token = await getAccessTokenSilently();
-    
-    const conversationData = {
-      messages,
-      metadata: {
-        ragEnabled,
-        lastUpdated: new Date().toISOString(),
-        messageCount: messages.length,
-        learningContext: {
-          suggestionsGenerated: learningSuggestions.length > 0,
-          lastSuggestionRefresh: messagesSinceLastRefresh === 0 ? new Date().toISOString() : null
-        }
-      }
-    };
-
-    const response = await fetch('/.netlify/functions/neon-db', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        action: conversationId ? 'update_conversation' : 'save_conversation',
-        userId: user.sub,
-        conversationId,
-        data: conversationData
-      })
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      console.log('✅ Conversation saved with learning context');
-      
-      // Reload conversations to reflect changes
-      await loadConversations();
-      
-      return result.conversationId || conversationId;
-    }
-  } catch (error) {
-    console.error('Error saving conversation:', error);
-  }
-  
-  return null;
-};
