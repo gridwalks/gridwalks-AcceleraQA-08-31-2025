@@ -1,461 +1,370 @@
-// src/App.js - Updated to integrate learning suggestions
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+// src/App.js - ADD THESE UPDATES TO YOUR EXISTING APP.JS
 
-// Components
-import Header from './components/Header';
-import ChatArea from './components/ChatArea';
-import Sidebar from './components/Sidebar';
-import AuthScreen from './components/AuthScreen';
-import LoadingScreen from './components/LoadingScreen';
-import ErrorBoundary from './components/ErrorBoundary';
-import RAGConfigurationPage from './components/RAGConfigurationPage';
-import AdminScreen from './components/AdminScreen';
-import NotebookOverlay from './components/NotebookOverlay';
-
-// Utility
-import { v4 as uuidv4 } from 'uuid';
-import authService, { initializeAuth } from './services/authService';
-import { search as ragSearch } from './services/ragService';
-import openaiService from './services/openaiService';
-
-import { initializeNeonService, loadConversations as loadNeonConversations, saveConversation as saveNeonConversation } from './services/neonService';
-//import { initializeNeonService, loadConversations as loadNeonConversations, saveConversation as saveNeonConversation } from './services/neonService';
-//import { initializeNeonService, loadConversations as loadNeonConversations } from './services/neonService';
-
-import { FEATURE_FLAGS } from './config/featureFlags';
+import React, { useState, useEffect } from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
+// ... other imports
+import learningSuggestionsService from './services/learningSuggestionsService';
 
 function App() {
-  // Authentication state
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
-
-  // UI state
-  const [showRAGConfig, setShowRAGConfig] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [showNotebook, setShowNotebook] = useState(false);
-  const [isServerAvailable] = useState(true);
-
-  // Conversation state
-  const [messages, setMessages] = useState([]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [ragEnabled, setRAGEnabled] = useState(false);
-
-  // Learning suggestions state
+  // ... existing state
   const [learningSuggestions, setLearningSuggestions] = useState([]);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [messagesSinceLastRefresh, setMessagesSinceLastRefresh] = useState(0);
+  const [learningConfig, setLearningConfig] = useState({
+    learningChatCount: 5,
+    enableAISuggestions: true,
+    autoRefresh: true
+  });
 
-  // Save status
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSaveTime, setLastSaveTime] = useState(null);
+  // ... existing useEffect and functions
 
-  // Sidebar state
-  const [selectedMessages, setSelectedMessages] = useState(new Set());
-  const [thirtyDayMessages, setThirtyDayMessages] = useState([]);
-  const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
+  /**
+   * Load learning suggestions on user login
+   */
+  const loadLearningSuggestions = async (userId) => {
+    if (!learningConfig.enableAISuggestions) return;
 
-  const messagesEndRef = useRef(null);
-  const isAdmin = useMemo(() => user?.roles?.includes('admin'), [user]);
-
-  // Initialize authentication on mount
-  useEffect(() => {
-    const initAuth = async () => {
-      setLoading(true);
-      await initializeAuth(
-        (authUser) => setUser(authUser),
-        () => {}
+    try {
+      console.log('🎓 Loading learning suggestions for user:', userId);
+      const suggestions = await learningSuggestionsService.getLearningSuggestions(
+        userId, 
+        learningConfig.learningChatCount
       );
-      const authStatus = await authService.isAuthenticated();
-      setIsAuthenticated(authStatus);
-      if (!authStatus) {
-        setUser(null);
-      }
-      setLoading(false);
-    };
-
-    initAuth();
-  }, []);
-
-  // Load learning suggestions when user logs in
-  const loadInitialLearningSuggestions = useCallback(async () => {
-    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS || !user?.sub) return;
-
-    setIsLoadingSuggestions(true);
-    try {
-      console.log('Loading initial learning suggestions for user:', user.sub);
-      const { default: learningSuggestionsService } = await import('./services/learningSuggestionsService');
-      const suggestions = await learningSuggestionsService.getLearningSuggestions(user.sub);
       setLearningSuggestions(suggestions);
-      console.log('Loaded learning suggestions:', suggestions.length);
+      console.log(`✅ Loaded ${suggestions.length} learning suggestions`);
     } catch (error) {
-      console.error('Error loading initial learning suggestions:', error);
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
-  }, [user]);
-
-  // Initialize backend services when user is available
-  useEffect(() => {
-    if (user) {
-      initializeNeonService(user);
-      if (FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
-        loadInitialLearningSuggestions();
-      }
-    }
-  }, [user, loadInitialLearningSuggestions]);
-
-  // Load conversations from Neon when user is available or refresh requested
-  useEffect(() => {
-    const fetchConversations = async () => {
-      if (!user) return;
-      try {
-        const loaded = await loadNeonConversations();
-        setThirtyDayMessages(loaded);
-      } catch (error) {
-        console.error('Error loading conversations from Neon:', error);
-      }
-    };
-
-    fetchConversations();
-  }, [user, lastSaveTime, setThirtyDayMessages, loadNeonConversations]);
-
-  // Refresh learning suggestions after new conversations
-  const refreshLearningSuggestions = useCallback(async () => {
-    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS || !user?.sub) return;
-
-    try {
-      console.log('Refreshing learning suggestions...');
-      const { default: learningSuggestionsService } = await import('./services/learningSuggestionsService');
-      const suggestions = await learningSuggestionsService.refreshSuggestions(user.sub);
-      setLearningSuggestions(suggestions);
-    } catch (error) {
-      console.error('Error refreshing learning suggestions:', error);
-    }
-  }, [user]);
-
-  // Auto-scroll messages
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
-
-  // Save conversation to Neon after assistant responses
-  useEffect(() => {
-    if (!user || messages.length < 2) return;
-
-    const last = messages[messages.length - 1];
-    if (last.role !== 'assistant') return;
-
-    const messagesWithType = messages.map(msg => ({
-      ...msg,
-      type: msg.type || msg.role,
-    }));
-
-    const save = async () => {
-      setIsSaving(true);
-      try {
-        await saveNeonConversation(messagesWithType);
-        setLastSaveTime(new Date().toISOString());
-      } catch (error) {
-        console.error('Error saving conversation to Neon:', error);
-      } finally {
-        setIsSaving(false);
-      }
-    };
-
-    save();
-  }, [messages, user]);
-
-  const handleSendMessage = useCallback(async () => {
-    if (!inputMessage.trim()) return;
-
-    setIsLoading(true);
-
-    const userMessage = {
-      id: uuidv4(),
-      role: 'user',
-      type: 'user',
-      content: inputMessage,
-      timestamp: Date.now(),
-      resources: [],
-    };
-
-    // Add user's message immediately
-    setMessages((prev) => [...prev, userMessage]);
-    setInputMessage('');
-
-    try {
-      const response = ragEnabled
-        ? await ragSearch(inputMessage)
-        : await openaiService.getChatResponse(inputMessage);
-
-      const assistantMessage = {
-        id: uuidv4(),
-        role: 'assistant',
-        type: 'ai',
-        content: response.answer,
-        timestamp: Date.now(),
-        sources: response.sources || [],
-        resources: response.resources || [],
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-
-      // Refresh learning suggestions after every few messages
-      const totalMessages = messages.length + 2; // +2 for the new messages we just added
-      if (FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS && totalMessages % 4 === 0) { // Every 4 messages (2 conversation pairs)
-        setTimeout(() => {
-          refreshLearningSuggestions();
-        }, 1000); // Small delay to let the conversation save first
-      }
-
-    } catch (error) {
-      const errorMessage = {
-        id: uuidv4(),
-        role: 'assistant',
-        type: 'ai',
-        content: error.message || 'An error occurred while fetching the response.',
-        timestamp: Date.now(),
-        sources: [],
-        resources: [],
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [inputMessage, ragEnabled, messages.length, refreshLearningSuggestions]);
-
-  const handleKeyPress = useCallback(
-    (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSendMessage();
-      }
-    },
-    [handleSendMessage]
-  );
-
-  const handleRefreshConversations = useCallback(async () => {
-    console.log('Refreshing conversations');
-    try {
-      const loaded = await loadNeonConversations(false);
-      setThirtyDayMessages(loaded);
-    } catch (error) {
-      console.error('Error refreshing conversations from Neon:', error);
-    }
-    setLastSaveTime(new Date().toISOString());
-    // Also refresh learning suggestions when conversations are refreshed
-    if (FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
-      refreshLearningSuggestions();
-    }
-  }, [refreshLearningSuggestions, setThirtyDayMessages, loadNeonConversations]);
-
-  const clearChat = useCallback(() => {
-    setMessages([]);
-    // Refresh suggestions when chat is cleared (might reveal different patterns)
-    if (FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
-      setTimeout(() => {
-        refreshLearningSuggestions();
-      }, 500);
-    }
-  }, [refreshLearningSuggestions]);
-
-  const clearAllConversations = useCallback(() => {
-    setMessages([]);
-    setSelectedMessages(new Set());
-    setThirtyDayMessages([]);
-    // Clear learning suggestions cache when all conversations are cleared
-    if (FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS && user?.sub) {
-      import('./services/learningSuggestionsService').then(({ default: learningSuggestionsService }) => {
-        learningSuggestionsService.clearCache(user.sub);
-      });
+      console.error('Error loading learning suggestions:', error);
       setLearningSuggestions([]);
     }
-  }, [user]);
+  };
 
-  const handleExport = useCallback(() => {
-    console.log('Exporting conversation', messages);
-  }, [messages]);
+  /**
+   * Refresh learning suggestions manually
+   */
+  const refreshLearningSuggestions = async () => {
+    if (!isAuthenticated || !user) return;
 
-  const handleExportSelected = useCallback(() => {
-    console.log('Exporting selected messages', Array.from(selectedMessages));
-  }, [selectedMessages]);
-
-  const clearSelectedMessages = useCallback(() => setSelectedMessages(new Set()), []);
-
-  const generateStudyNotes = useCallback(() => {
-    if (selectedMessages.size === 0) return;
-    setIsGeneratingNotes(true);
     try {
-      console.log('Generating study notes', Array.from(selectedMessages));
-    } finally {
-      setIsGeneratingNotes(false);
+      const suggestions = await learningSuggestionsService.refreshSuggestions(
+        user.sub, 
+        learningConfig.learningChatCount
+      );
+      setLearningSuggestions(suggestions);
+      setMessagesSinceLastRefresh(0);
+      return suggestions;
+    } catch (error) {
+      console.error('Error refreshing learning suggestions:', error);
+      return [];
     }
-  }, [selectedMessages]);
+  };
 
-  // Handle learning suggestions updates
-  const handleSuggestionsUpdate = useCallback((suggestions) => {
-    console.log('Learning suggestions updated:', suggestions.length);
-    // Could trigger additional UI updates or analytics here
-  }, []);
+  /**
+   * Auto-refresh suggestions based on conversation activity
+   */
+  const checkAutoRefreshSuggestions = async () => {
+    if (!learningConfig.autoRefresh || !learningConfig.enableAISuggestions) return;
+    if (!isAuthenticated || !user) return;
 
-  const handleAddResourceToNotebook = useCallback((item) => {
-    if (!item || !item.title) return;
-    const { title, url = '', type = item.type || 'Resource' } = item;
-    const newMessage = {
-      id: uuidv4(),
-      role: 'assistant',
-      type: 'ai',
-      content: `${title}${url ? ' - ' + url : ''}`,
-      timestamp: Date.now(),
-      resources: [{ title, url, type, addedAt: Date.now() }],
-      // Mark message so it can be hidden from the chat area
-      isResource: true,
-    };
-    setMessages(prev => [...prev, newMessage]);
-  }, [setMessages]);
+    // Refresh suggestions every 4 messages (2 conversation pairs)
+    if (messagesSinceLastRefresh >= 4) {
+      console.log('🔄 Auto-refreshing learning suggestions based on conversation activity');
+      await refreshLearningSuggestions();
+    }
+  };
 
-  const handleShowRAGConfig = useCallback(() => setShowRAGConfig(true), []);
-  const handleCloseRAGConfig = useCallback(() => setShowRAGConfig(false), []);
-  const handleShowAdmin = useCallback(() => setShowAdmin(true), []);
-  const handleCloseAdmin = useCallback(() => setShowAdmin(false), []);
+  /**
+   * Load learning configuration
+   */
+  const loadLearningConfig = async () => {
+    try {
+      const config = await learningSuggestionsService.getAdminConfig();
+      setLearningConfig(prev => ({ ...prev, ...config }));
+    } catch (error) {
+      console.error('Error loading learning config:', error);
+    }
+  };
 
-  const handleLogoutComplete = useCallback(() => {
-    setIsAuthenticated(false);
-    setUser(null);
-    setLearningSuggestions([]); // Clear suggestions on logout
-  }, []);
+  // Enhanced useEffect for user authentication
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      console.log('🔐 User authenticated, loading learning system...');
+      
+      // Load learning configuration first
+      loadLearningConfig().then(() => {
+        // Then load suggestions
+        loadLearningSuggestions(user.sub);
+      });
+
+      // Set user for RAG system
+      if (window.ragSystem) {
+        window.ragSystem.setUser(user);
+      }
+
+      // Load conversations
+      loadConversations();
+    } else {
+      // Clear learning suggestions on logout
+      setLearningSuggestions([]);
+      setMessagesSinceLastRefresh(0);
+    }
+  }, [isAuthenticated, user]);
+
+  // Enhanced sendMessage function with learning suggestions tracking
+  const sendMessage = async (messageContent, isNewConversation = false, useRag = ragEnabled) => {
+    if (!messageContent.trim()) return;
+
+    setIsLoading(true);
+    setShowTypingIndicator(true);
+
+    try {
+      // ... existing message sending logic
+
+      // After successful message send, increment counter for auto-refresh
+      if (learningConfig.autoRefresh && learningConfig.enableAISuggestions) {
+        const newCount = messagesSinceLastRefresh + 1;
+        setMessagesSinceLastRefresh(newCount);
+        
+        // Check if we should auto-refresh suggestions
+        setTimeout(() => {
+          checkAutoRefreshSuggestions();
+        }, 1000); // Small delay to ensure message is saved
+      }
+
+      // ... rest of existing logic
+
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // ... existing error handling
+    } finally {
+      setIsLoading(false);
+      setShowTypingIndicator(false);
+    }
+  };
+
+  // Enhanced sidebar props
+  const sidebarProps = {
+    conversations,
+    currentConversation,
+    onConversationSelect: handleConversationSelect,
+    onNewConversation: handleNewConversation,
+    onDeleteConversation: handleDeleteConversation,
+    onRenameConversation: handleRenameConversation,
+    learningSuggestions,
+    onRefreshSuggestions: refreshLearningSuggestions,
+    ragEnabled,
+    onToggleRag: setRagEnabled,
+    // ... other existing props
+  };
+
+  // Updated ResourcesView component props
+  const resourcesViewProps = {
+    learningSuggestions,
+    onRefreshSuggestions: refreshLearningSuggestions,
+    // ... other props
+  };
+
+  // Add learning suggestions info to the main view
+  const renderLearningInfo = () => {
+    if (!learningConfig.enableAISuggestions || !isAuthenticated) return null;
+
+    return (
+      <div className="mb-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Brain className="h-4 w-4 text-purple-600" />
+            <span className="text-sm font-medium text-purple-900">
+              AI Learning Suggestions Active
+            </span>
+            {learningSuggestions.length > 0 && (
+              <span className="bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded-full">
+                {learningSuggestions.length} personalized
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-purple-700">
+            Analyzing last {learningConfig.learningChatCount} conversations
+          </div>
+        </div>
+        
+        {messagesSinceLastRefresh > 0 && learningConfig.autoRefresh && (
+          <div className="mt-2 text-xs text-purple-600">
+            {4 - messagesSinceLastRefresh} more messages until suggestions refresh
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Enhanced admin screen props
+  const adminScreenProps = {
+    onClose: () => setShowAdminScreen(false),
+    onConfigUpdate: (newConfig) => {
+      setLearningConfig(prev => ({ ...prev, ...newConfig }));
+      // Refresh suggestions if chat count changed
+      if (newConfig.learningChatCount !== learningConfig.learningChatCount) {
+        refreshLearningSuggestions();
+      }
+    }
+  };
 
   return (
-    <ErrorBoundary>
-      {!isAuthenticated ? (
-        <AuthScreen />
-      ) : loading ? (
-        <LoadingScreen />
-      ) : showRAGConfig ? (
-        <RAGConfigurationPage onClose={handleCloseRAGConfig} user={user} />
-      ) : showAdmin ? (
-        <AdminScreen onBack={handleCloseAdmin} user={user} />
-      ) : (
-        <>
-          <div className="min-h-screen bg-gray-50">
-            {/* Header remains the same */}
-            <Header
-              user={user}
-              isSaving={isSaving}
-              lastSaveTime={lastSaveTime}
-              onShowAdmin={handleShowAdmin}
-              onOpenNotebook={() => setShowNotebook(true)}
-              onLogout={handleLogoutComplete}
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar */}
+      <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 overflow-hidden border-r border-gray-200 bg-white flex-shrink-0`}>
+        <Sidebar {...sidebarProps} />
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <Header 
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          onShowAdminScreen={() => setShowAdminScreen(true)}
+          // ... other props
+        />
+
+        {/* Main Chat Area */}
+        <div className="flex-1 flex">
+          {/* Chat Section */}
+          <div className={`${showResources ? 'flex-1' : 'w-full'} flex flex-col`}>
+            {/* Learning Info Banner */}
+            <div className="p-4 border-b bg-white">
+              {renderLearningInfo()}
+            </div>
+
+            {/* Chat Messages */}
+            <ChatInterface 
+              messages={messages}
+              onSendMessage={sendMessage}
+              isLoading={isLoading}
+              showTypingIndicator={showTypingIndicator}
+              ragEnabled={ragEnabled}
+              setRagEnabled={setRagEnabled}
+              // ... other props
             />
+          </div>
 
-            {/* Main Layout */}
-            <div className="h-[calc(100vh-64px)]">
-              {/* Mobile Layout (stacked vertically) */}
-              <div className="lg:hidden h-full flex flex-col">
-                {/* Chat takes most space on mobile */}
-                <div className="flex-1 min-h-0 p-4">
-                  <ChatArea
-                    messages={messages}
-                    inputMessage={inputMessage}
-                    setInputMessage={setInputMessage}
-                    isLoading={isLoading}
-                    handleSendMessage={handleSendMessage}
-                    handleKeyPress={handleKeyPress}
-                    messagesEndRef={messagesEndRef}
-                    ragEnabled={ragEnabled}
-                    setRAGEnabled={setRAGEnabled}
-                    isSaving={isSaving}
-                  />
+          {/* Resources Panel */}
+          {showResources && (
+            <div className="w-96 border-l border-gray-200 bg-white flex-shrink-0">
+              <div className="h-full flex flex-col">
+                <div className="p-4 border-b">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-gray-900">Learning Center</h2>
+                    <button
+                      onClick={() => setShowResources(false)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
-
-                {/* Sidebar is collapsible on mobile */}
-                <div className="flex-shrink-0 border-t bg-white max-h-60 overflow-hidden">
-                  <Sidebar
-                    showNotebook={showNotebook}
-                    messages={messages}
-                    thirtyDayMessages={thirtyDayMessages}
-                    selectedMessages={selectedMessages}
-                    setSelectedMessages={setSelectedMessages}
-                    exportSelected={handleExportSelected}
-                    clearSelected={clearSelectedMessages}
-                    clearAllConversations={clearAllConversations}
-                    isServerAvailable={isServerAvailable}
-                    onRefresh={handleRefreshConversations}
-                    // Enhanced props for learning suggestions
-                    user={user}
-                    learningSuggestions={learningSuggestions}
-                    isLoadingSuggestions={isLoadingSuggestions}
-                    onSuggestionsUpdate={handleSuggestionsUpdate}
-                    onAddResource={handleAddResourceToNotebook}
-                  />
-                </div>
-              </div>
-
-              {/* Desktop Layout (side by side) */}
-              <div className="hidden lg:flex h-full">
-                {/* Chat Area - Takes majority of space */}
-                <div className="flex-1 min-w-0 p-6">
-                  <ChatArea
-                    messages={messages}
-                    inputMessage={inputMessage}
-                    setInputMessage={setInputMessage}
-                    isLoading={isLoading}
-                    handleSendMessage={handleSendMessage}
-                    handleKeyPress={handleKeyPress}
-                    messagesEndRef={messagesEndRef}
-                    ragEnabled={ragEnabled}
-                    setRAGEnabled={setRAGEnabled}
-                    isSaving={isSaving}
-                  />
-                </div>
-
-                {/* Sidebar - Fixed optimal width with enhanced learning features */}
-                <div className="w-80 xl:w-96 flex-shrink-0 border-l bg-white p-6">
-                  <Sidebar
-                    showNotebook={showNotebook}
-                    messages={messages}
-                    thirtyDayMessages={thirtyDayMessages}
-                    selectedMessages={selectedMessages}
-                    setSelectedMessages={setSelectedMessages}
-                    exportSelected={handleExportSelected}
-                    clearSelected={clearSelectedMessages}
-                    clearAllConversations={clearAllConversations}
-                    isServerAvailable={isServerAvailable}
-                    onRefresh={handleRefreshConversations}
-                    // Enhanced props for learning suggestions
-                    user={user}
-                    learningSuggestions={learningSuggestions}
-                    isLoadingSuggestions={isLoadingSuggestions}
-                    onSuggestionsUpdate={handleSuggestionsUpdate}
-                    onAddResource={handleAddResourceToNotebook}
-                  />
+                <div className="flex-1 overflow-hidden">
+                  <ResourcesView {...resourcesViewProps} />
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Notebook Overlay */}
-          {showNotebook && (
-            <NotebookOverlay
-              messages={messages}
-              thirtyDayMessages={thirtyDayMessages}
-              selectedMessages={selectedMessages}
-              setSelectedMessages={setSelectedMessages}
-              generateStudyNotes={generateStudyNotes}
-              isGeneratingNotes={isGeneratingNotes}
-              storedMessageCount={messages.length}
-              isServerAvailable={isServerAvailable}
-              exportNotebook={handleExport}
-              onClose={() => setShowNotebook(false)}
-            />
           )}
-        </>
-      )}
-    </ErrorBoundary>
+        </div>
+      </div>
+
+      {/* Admin Screen Modal */}
+      {showAdminScreen && <AdminScreen {...adminScreenProps} />}
+    </div>
   );
 }
 
 export default App;
+
+// Additional helper functions to add to your App.js:
+
+/**
+ * Enhanced conversation loading with learning suggestions trigger
+ */
+const loadConversations = async () => {
+  if (!isAuthenticated || !user) return;
+
+  try {
+    setIsLoading(true);
+    const token = await getAccessTokenSilently();
+    
+    const response = await fetch('/.netlify/functions/neon-db', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        action: 'get_conversations',
+        userId: user.sub
+      })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      setConversations(result.conversations || []);
+      
+      // If user has conversations but no learning suggestions, generate them
+      if (result.conversations?.length > 0 && learningSuggestions.length === 0) {
+        setTimeout(() => {
+          loadLearningSuggestions(user.sub);
+        }, 1000);
+      }
+    }
+  } catch (error) {
+    console.error('Error loading conversations:', error);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+/**
+ * Enhanced save conversation with learning suggestions tracking
+ */
+const saveConversation = async (messages, conversationId = null, isNewConversation = false) => {
+  if (!isAuthenticated || !user || messages.length === 0) return null;
+
+  try {
+    const token = await getAccessTokenSilently();
+    
+    const conversationData = {
+      messages,
+      metadata: {
+        ragEnabled,
+        lastUpdated: new Date().toISOString(),
+        messageCount: messages.length,
+        learningContext: {
+          suggestionsGenerated: learningSuggestions.length > 0,
+          lastSuggestionRefresh: messagesSinceLastRefresh === 0 ? new Date().toISOString() : null
+        }
+      }
+    };
+
+    const response = await fetch('/.netlify/functions/neon-db', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        action: conversationId ? 'update_conversation' : 'save_conversation',
+        userId: user.sub,
+        conversationId,
+        data: conversationData
+      })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log('✅ Conversation saved with learning context');
+      
+      // Reload conversations to reflect changes
+      await loadConversations();
+      
+      return result.conversationId || conversationId;
+    }
+  } catch (error) {
+    console.error('Error saving conversation:', error);
+  }
+  
+  return null;
+};
