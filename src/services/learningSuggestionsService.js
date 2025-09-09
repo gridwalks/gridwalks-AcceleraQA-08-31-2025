@@ -1,94 +1,102 @@
-// src/services/learningSuggestionsService.js
-import neonService from './neonService';
-import openaiService from './openaiService';
+// src/services/learningSuggestionsService.js - ENHANCED VERSION WITH CONFIGURABLE MODELS
 import { getToken } from './authService';
-import { FEATURE_FLAGS } from '../config/featureFlags';
 
 class LearningSuggestionsService {
   constructor() {
     this.apiUrl = '/.netlify/functions/neon-db';
     this.cache = new Map();
     this.cacheTTL = 5 * 60 * 1000; // 5 minutes cache
+    this.defaultChatCount = 5; // Default number of conversations to analyze
   }
 
   /**
    * Gets learning suggestions based on user's recent conversations
    * @param {string} userId - User identifier
+   * @param {number} chatCount - Number of recent chats to analyze (configurable from admin)
    * @returns {Promise<Object[]>} - Array of learning suggestions
    */
-  async getLearningSuggestions(userId) {
-    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
-      return [];
-    }
+  async getLearningSuggestions(userId, chatCount = null) {
     try {
-      console.log('Getting learning suggestions for user:', userId);
+      console.log('🎓 Getting learning suggestions for user:', userId);
+
+      // Get admin configuration for chat count
+      const adminConfig = await this.getAdminConfig();
+      const analysisCount = chatCount || adminConfig.learningChatCount || this.defaultChatCount;
+      
+      console.log(`📊 Analyzing last ${analysisCount} conversations for learning suggestions`);
 
       // Check cache first
-      const cacheKey = `suggestions_${userId}`;
-      const cached = this.cache.get(cacheKey);
-      if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
-        console.log('Returning cached learning suggestions');
-        return cached.suggestions;
+      const cacheKey = `suggestions_${userId}_${analysisCount}`;
+      if (this.cache.has(cacheKey)) {
+        const cached = this.cache.get(cacheKey);
+        if (Date.now() - cached.timestamp < this.cacheTTL) {
+          console.log('📋 Returning cached learning suggestions');
+          return cached.data;
+        }
       }
 
-      // Get user's recent conversations from Neon database
-      const recentConversations = await this.getRecentConversations(userId);
+      // Fetch recent conversations from database
+      const conversations = await this.fetchRecentConversations(userId, analysisCount * 2); // Fetch double to ensure we have enough
 
-      if (!recentConversations || recentConversations.length === 0) {
-        console.log('No recent conversations found, returning default suggestions');
+      if (!conversations || conversations.length === 0) {
+        console.log('⚠️ No conversation history found for learning suggestions');
         return this.getDefaultSuggestions();
       }
 
-      // Analyze conversations and generate suggestions
-      const suggestions = await this.generateSuggestionsFromConversations(
-        recentConversations.slice(0, 5) // Use last 5 as specified
-      );
+      // Filter for conversations with meaningful content (at least 2 messages)
+      const meaningfulConversations = conversations
+        .filter(conv => conv.messageCount >= 2)
+        .slice(0, analysisCount);
+
+      if (meaningfulConversations.length === 0) {
+        console.log('⚠️ No meaningful conversations found for learning suggestions');
+        return this.getDefaultSuggestions();
+      }
+
+      // Generate suggestions using ChatGPT-4o-mini
+      const suggestions = await this.generateAISuggestions(meaningfulConversations);
 
       // Cache the results
       this.cache.set(cacheKey, {
-        suggestions,
+        data: suggestions,
         timestamp: Date.now()
       });
 
+      console.log(`✅ Generated ${suggestions.length} learning suggestions`);
       return suggestions;
 
     } catch (error) {
-      console.error('Error getting learning suggestions:', error);
+      console.error('❌ Error generating learning suggestions:', error);
       return this.getDefaultSuggestions();
     }
   }
 
   /**
-   * Fetches last 10 conversations from Neon database
-   * @param {string} userId - User identifier
-   * @returns {Promise<Object[]>} - Recent conversations
+   * Fetch recent conversations from Neon database
    */
-  async getRecentConversations(userId) {
-    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
-      return [];
-    }
+  async fetchRecentConversations(userId, limit) {
     try {
-      const token = await getToken();
+      const token = getToken();
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'x-user-id': userId
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           action: 'get_recent_conversations',
-          data: { limit: 10 }
+          userId: userId,
+          data: { limit }
         })
       });
 
+      const result = await response.json();
+      
       if (!response.ok) {
-        throw new Error(`Failed to fetch conversations: ${response.status}`);
+        throw new Error(result.error || 'Failed to fetch conversations');
       }
 
-      const result = await response.json();
-      return result.conversations || [];
-
+      return result.conversations;
     } catch (error) {
       console.error('Error fetching recent conversations:', error);
       throw error;
@@ -96,370 +104,381 @@ class LearningSuggestionsService {
   }
 
   /**
-   * Generates learning suggestions using ChatGPT based on conversation analysis
-   * @param {Object[]} conversations - Recent conversations
-   * @returns {Promise<Object[]>} - Generated suggestions
+   * Generate AI-powered learning suggestions using ChatGPT-4o-mini
    */
-  async generateSuggestionsFromConversations(conversations) {
-    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
-      return [];
-    }
+  async generateAISuggestions(conversations) {
     try {
-      // Extract and analyze conversation topics
-      const conversationSummary = this.analyzeConversationTopics(conversations);
+      // Analyze conversation content to extract learning context
+      const conversationAnalysis = this.analyzeConversations(conversations);
       
-      // Create prompt for ChatGPT to generate learning suggestions
-      const prompt = this.createLearningPrompt(conversationSummary);
+      // Create prompt for ChatGPT-4o-mini
+      const prompt = this.createLearningPrompt(conversationAnalysis);
+
+      // Call ChatGPT API using 4o-mini model (configured for learning suggestions)
+      const response = await fetch('/.netlify/functions/chatgpt-learning', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini', // Use 4o-mini for cost-effective learning suggestions
+          messages: [
+            {
+              role: 'system',
+              content: `You are an expert pharmaceutical quality and compliance learning advisor. 
+                       Generate personalized learning suggestions based on conversation history.
+                       Focus on practical, actionable learning resources for pharmaceutical professionals.
+                       Return suggestions in JSON format with title, description, difficulty, relevance, and category.`
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 1500
+        })
+      });
+
+      const result = await response.json();
       
-      // Get suggestions from ChatGPT
-      const response = await openaiService.getChatResponse(prompt);
-      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to generate AI suggestions');
+      }
+
       // Parse and format the suggestions
-      const suggestions = this.parseSuggestions(response.answer);
-      
-      return suggestions;
+      return this.formatAISuggestions(result.choices[0].message.content);
 
     } catch (error) {
-      console.error('Error generating suggestions from conversations:', error);
+      console.error('Error generating AI suggestions:', error);
       return this.getDefaultSuggestions();
     }
   }
 
   /**
-   * Analyzes conversation topics and patterns
-   * @param {Object[]} conversations - Conversations to analyze
-   * @returns {Object} - Analysis summary
+   * Analyze conversations to extract learning themes and topics
    */
-  analyzeConversationTopics(conversations) {
-    const analysis = {
-      topics: new Set(),
-      questionTypes: new Set(),
-      complexity: 'basic',
-      industries: new Set(),
-      totalMessages: 0,
-      timeframe: null
-    };
+  analyzeConversations(conversations) {
+    const topics = new Set();
+    const questionTypes = new Set();
+    const complexityLevels = [];
+    const industryContext = new Set();
 
     conversations.forEach(conv => {
-      if (conv.messages && Array.isArray(conv.messages)) {
-        analysis.totalMessages += conv.messages.length;
-        
+      if (conv.messages && conv.messages.length > 0) {
         conv.messages.forEach(msg => {
-          if (msg.type === 'user' && msg.content) {
+          if (msg.role === 'user' && msg.content) {
             // Extract pharmaceutical topics
-            this.extractPharmaceuticalTopics(msg.content, analysis.topics);
-            
+            const pharmaTopics = this.extractPharmaTopics(msg.content);
+            pharmaTopics.forEach(topic => topics.add(topic));
+
             // Determine question complexity
-            this.analyzeQuestionComplexity(msg.content, analysis);
-            
+            const complexity = this.assessComplexity(msg.content);
+            complexityLevels.push(complexity);
+
+            // Extract question type
+            const qType = this.classifyQuestionType(msg.content);
+            questionTypes.add(qType);
+
             // Extract industry context
-            this.extractIndustryContext(msg.content, analysis.industries);
+            const context = this.extractIndustryContext(msg.content);
+            context.forEach(ctx => industryContext.add(ctx));
           }
         });
       }
     });
 
-    // Determine overall complexity level
-    if (analysis.totalMessages > 20) {
-      analysis.complexity = 'advanced';
-    } else if (analysis.totalMessages > 10) {
-      analysis.complexity = 'intermediate';
+    return {
+      topics: Array.from(topics),
+      questionTypes: Array.from(questionTypes),
+      averageComplexity: complexityLevels.reduce((a, b) => a + b, 0) / complexityLevels.length || 1,
+      industryContext: Array.from(industryContext),
+      conversationCount: conversations.length
+    };
+  }
+
+  /**
+   * Extract pharmaceutical topics from conversation content
+   */
+  extractPharmaTopics(content) {
+    const topics = [];
+    const contentLower = content.toLowerCase();
+
+    const topicKeywords = {
+      'GMP': ['gmp', 'good manufacturing practice', 'current good manufacturing'],
+      'Validation': ['validation', 'qualify', 'protocol', 'IQ', 'OQ', 'PQ'],
+      'CAPA': ['capa', 'corrective action', 'preventive action', 'root cause'],
+      'Quality Control': ['qc', 'quality control', 'testing', 'analytical', 'laboratory'],
+      'Quality Assurance': ['qa', 'quality assurance', 'audit', 'inspection'],
+      'Regulatory Affairs': ['fda', 'ema', 'ich', 'regulatory', 'submission', 'guidance'],
+      'Manufacturing': ['manufacturing', 'production', 'batch', 'lot', 'process'],
+      'Documentation': ['sop', 'procedure', 'record', 'documentation', 'batch record'],
+      'Change Control': ['change control', 'change management', 'deviation', 'impact assessment'],
+      'Risk Management': ['risk', 'risk management', 'hazard', 'risk assessment', 'FMEA']
+    };
+
+    for (const [topic, keywords] of Object.entries(topicKeywords)) {
+      if (keywords.some(keyword => contentLower.includes(keyword))) {
+        topics.push(topic);
+      }
     }
 
-    return {
-      ...analysis,
-      topics: Array.from(analysis.topics),
-      questionTypes: Array.from(analysis.questionTypes),
-      industries: Array.from(analysis.industries)
-    };
+    return topics;
   }
 
   /**
-   * Extracts pharmaceutical topics from conversation content
-   * @param {string} content - Message content
-   * @param {Set} topics - Topics set to update
+   * Assess the complexity level of a question
    */
-  extractPharmaceuticalTopics(content, topics) {
-    const lowerContent = content.toLowerCase();
-    
-    const topicMap = {
-      'gmp': ['gmp', 'cgmp', 'good manufacturing practice'],
-      'validation': ['validation', 'qualify', 'qualification', 'iq', 'oq', 'pq'],
-      'capa': ['capa', 'corrective', 'preventive', 'root cause'],
-      'regulatory': ['fda', 'ema', 'ich', 'regulatory', 'compliance'],
-      'quality_control': ['qc', 'quality control', 'testing', 'analytical'],
-      'sterile_processing': ['sterile', 'aseptic', 'contamination'],
-      'supply_chain': ['supply chain', 'vendor', 'supplier', 'logistics'],
-      'risk_management': ['risk', 'qrm', 'fmea', 'risk assessment'],
-      'documentation': ['documentation', 'sop', 'procedure', 'protocol'],
-      'training': ['training', 'competency', 'qualification']
-    };
-
-    Object.entries(topicMap).forEach(([topic, keywords]) => {
-      if (keywords.some(keyword => lowerContent.includes(keyword))) {
-        topics.add(topic);
-      }
-    });
-  }
-
-  /**
-   * Analyzes question complexity
-   * @param {string} content - Message content
-   * @param {Object} analysis - Analysis object to update
-   */
-  analyzeQuestionComplexity(content, analysis) {
-    const lowerContent = content.toLowerCase();
-    
-    // Complexity indicators
+  assessComplexity(content) {
     const complexityIndicators = {
-      basic: ['what is', 'how to', 'explain', 'define'],
-      intermediate: ['why does', 'how would', 'compare', 'analyze'],
-      advanced: ['optimize', 'implement', 'strategy', 'framework', 'methodology']
+      beginner: ['what is', 'define', 'explain', 'basic', 'introduction'],
+      intermediate: ['how to', 'process', 'implement', 'procedure', 'best practice'],
+      advanced: ['optimize', 'troubleshoot', 'complex', 'integrate', 'strategic', 'regulatory impact']
     };
 
-    Object.entries(complexityIndicators).forEach(([level, indicators]) => {
-      if (indicators.some(indicator => lowerContent.includes(indicator))) {
-        analysis.questionTypes.add(level);
-      }
-    });
+    const contentLower = content.toLowerCase();
+    let score = 1; // Default to beginner
+
+    if (complexityIndicators.intermediate.some(indicator => contentLower.includes(indicator))) {
+      score = 2;
+    }
+    if (complexityIndicators.advanced.some(indicator => contentLower.includes(indicator))) {
+      score = 3;
+    }
+
+    // Adjust based on question length and technical terms
+    if (content.length > 200) score += 0.5;
+    if (content.split(' ').length > 30) score += 0.5;
+
+    return Math.min(3, score);
   }
 
   /**
-   * Extracts industry context
-   * @param {string} content - Message content
-   * @param {Set} industries - Industries set to update
+   * Classify the type of question being asked
    */
-  extractIndustryContext(content, industries) {
-    const lowerContent = content.toLowerCase();
+  classifyQuestionType(content) {
+    const contentLower = content.toLowerCase();
     
-    const industryKeywords = {
-      'biologics': ['biologics', 'biosimilar', 'monoclonal', 'antibody'],
-      'small_molecule': ['tablet', 'capsule', 'api', 'synthesis'],
-      'medical_device': ['device', 'diagnostic', 'medical device'],
-      'vaccines': ['vaccine', 'immunization', 'adjuvant'],
-      'gene_therapy': ['gene therapy', 'cell therapy', 'car-t']
-    };
-
-    Object.entries(industryKeywords).forEach(([industry, keywords]) => {
-      if (keywords.some(keyword => lowerContent.includes(keyword))) {
-        industries.add(industry);
-      }
-    });
+    if (contentLower.includes('what') || contentLower.includes('define')) return 'Definition';
+    if (contentLower.includes('how') || contentLower.includes('procedure')) return 'Procedure';
+    if (contentLower.includes('why') || contentLower.includes('reason')) return 'Explanation';
+    if (contentLower.includes('when') || contentLower.includes('timeline')) return 'Timeline';
+    if (contentLower.includes('best practice') || contentLower.includes('recommend')) return 'Best Practice';
+    if (contentLower.includes('compliance') || contentLower.includes('requirement')) return 'Compliance';
+    
+    return 'General';
   }
 
   /**
-   * Creates a detailed prompt for ChatGPT to generate learning suggestions
-   * @param {Object} analysis - Conversation analysis
-   * @returns {string} - ChatGPT prompt
+   * Extract industry context from content
+   */
+  extractIndustryContext(content) {
+    const contexts = [];
+    const contentLower = content.toLowerCase();
+
+    const contextKeywords = {
+      'Pharmaceutical Manufacturing': ['tablet', 'capsule', 'injection', 'API', 'excipient'],
+      'Biotechnology': ['biologic', 'vaccine', 'protein', 'cell culture', 'fermentation'],
+      'Medical Device': ['device', 'instrument', 'diagnostic', 'implant'],
+      'Clinical Trials': ['clinical', 'trial', 'study', 'patient', 'protocol'],
+      'Regulatory Submission': ['submission', 'filing', 'application', 'dossier', 'CTD']
+    };
+
+    for (const [context, keywords] of Object.entries(contextKeywords)) {
+      if (keywords.some(keyword => contentLower.includes(keyword))) {
+        contexts.push(context);
+      }
+    }
+
+    return contexts;
+  }
+
+  /**
+   * Create a focused prompt for ChatGPT learning suggestions
    */
   createLearningPrompt(analysis) {
-    return `Based on a pharmaceutical professional's recent conversation history, generate 4-6 personalized learning suggestions. 
+    return `Based on the following conversation analysis, generate 4-6 personalized learning suggestions for a pharmaceutical professional:
 
 CONVERSATION ANALYSIS:
 - Topics discussed: ${analysis.topics.join(', ') || 'General pharmaceutical topics'}
-- Question complexity: ${analysis.complexity}
-- Industry focus: ${analysis.industries.join(', ') || 'General pharmaceutical'}
-- Total interactions: ${analysis.totalMessages}
+- Question types: ${analysis.questionTypes.join(', ')}
+- Average complexity level: ${analysis.averageComplexity.toFixed(1)}/3.0
+- Industry context: ${analysis.industryContext.join(', ') || 'General pharmaceutical'}
+- Number of conversations analyzed: ${analysis.conversationCount}
 
-Generate learning suggestions that:
-1. Build on topics already discussed
-2. Address knowledge gaps revealed in questions
-3. Provide next-level learning opportunities
-4. Include mix of theoretical and practical resources
-5. Are specific to pharmaceutical quality and compliance
+Please generate learning suggestions that:
+1. Build upon the topics they've already shown interest in
+2. Fill knowledge gaps indicated by their question patterns
+3. Progress appropriately from their current complexity level
+4. Are relevant to their industry context
+5. Include a mix of theoretical knowledge and practical application
 
 For each suggestion, provide:
-- Title (concise, specific)
-- Type (Training, Guideline, Reference, Portal, etc.)
-- Description (1-2 sentences explaining relevance)
-- Learning objective (what they'll gain)
-- Difficulty level (Beginner/Intermediate/Advanced)
+- title: Brief, engaging title
+- description: 2-3 sentence description of what they'll learn
+- difficulty: "Beginner", "Intermediate", or "Advanced"
+- relevance: Score from 1-5 based on their conversation history
+- category: Primary topic category
+- estimatedTime: Learning time estimate
+- actionable: Specific next step they can take
 
-Format as JSON array with objects containing: title, type, description, objective, difficulty, relevance_score (1-10).
-
-Focus on actionable learning that will help them advance their pharmaceutical quality expertise.`;
+Return the response in valid JSON format as an array of suggestion objects.`;
   }
 
   /**
-   * Parses ChatGPT response into structured suggestions
-   * @param {string} response - ChatGPT response
-   * @returns {Object[]} - Parsed suggestions
+   * Format AI-generated suggestions into consistent structure
    */
-  parseSuggestions(response) {
-    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
-      return [];
-    }
+  formatAISuggestions(aiResponse) {
     try {
-      // Try to extract JSON from the response
-      const jsonMatch = response.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        const suggestions = JSON.parse(jsonMatch[0]);
-        return suggestions.map(suggestion => ({
-          id: `suggestion_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          title: suggestion.title || 'Learning Resource',
-          type: suggestion.type || 'Reference',
-          description: suggestion.description || '',
-          objective: suggestion.objective || '',
-          difficulty: suggestion.difficulty || 'Intermediate',
-          relevanceScore: suggestion.relevance_score || 5,
-          source: 'ai_generated',
-          isPersonalized: true,
-          generatedAt: new Date().toISOString()
-        }));
+      // Try to parse JSON response
+      let suggestions = JSON.parse(aiResponse);
+      
+      // Ensure it's an array
+      if (!Array.isArray(suggestions)) {
+        suggestions = [suggestions];
+      }
+
+      // Format and validate each suggestion
+      return suggestions.map((suggestion, index) => ({
+        id: `ai-suggestion-${Date.now()}-${index}`,
+        title: suggestion.title || `Learning Suggestion ${index + 1}`,
+        description: suggestion.description || 'AI-generated learning recommendation',
+        difficulty: suggestion.difficulty || 'Intermediate',
+        relevance: Math.min(5, Math.max(1, suggestion.relevance || 4)),
+        category: suggestion.category || 'General',
+        estimatedTime: suggestion.estimatedTime || '30-45 minutes',
+        actionable: suggestion.actionable || 'Start learning about this topic',
+        source: 'AI-Generated',
+        type: 'suggestion',
+        generatedAt: new Date().toISOString()
+      }));
+
+    } catch (error) {
+      console.error('Error parsing AI suggestions:', error);
+      return this.getDefaultSuggestions();
+    }
+  }
+
+  /**
+   * Get admin configuration including chat count for learning suggestions
+   */
+  async getAdminConfig() {
+    try {
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({
+          action: 'get_admin_config',
+          configKey: 'learning_suggestions'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        return result.config || {};
       }
     } catch (error) {
-      console.error('Error parsing ChatGPT suggestions:', error);
+      console.error('Error fetching admin config:', error);
     }
 
-    // Fallback: parse text-based response
-    return this.parseTextSuggestions(response);
+    return {
+      learningChatCount: this.defaultChatCount,
+      enableAISuggestions: true
+    };
   }
 
   /**
-   * Parses text-based suggestions as fallback
-   * @param {string} response - Text response
-   * @returns {Object[]} - Parsed suggestions
+   * Update admin configuration for learning suggestions
    */
-  parseTextSuggestions(response) {
-    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
-      return [];
+  async updateAdminConfig(config) {
+    try {
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({
+          action: 'update_admin_config',
+          configKey: 'learning_suggestions',
+          config: config
+        })
+      });
+
+      return response.ok;
+    } catch (error) {
+      console.error('Error updating admin config:', error);
+      return false;
     }
-    const suggestions = [];
-    const lines = response.split('\n').filter(line => line.trim());
-    
-    let currentSuggestion = null;
-    
-    lines.forEach(line => {
-      // Look for numbered items or bullet points
-      if (/^\d+\.|\*|\-/.test(line.trim())) {
-        if (currentSuggestion) {
-          suggestions.push(currentSuggestion);
-        }
-        
-        currentSuggestion = {
-          id: `suggestion_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          title: line.replace(/^\d+\.|\*|\-/, '').trim(),
-          type: 'Training',
-          description: '',
-          objective: 'Enhance pharmaceutical quality knowledge',
-          difficulty: 'Intermediate',
-          relevanceScore: 7,
-          source: 'ai_generated',
-          isPersonalized: true,
-          generatedAt: new Date().toISOString()
-        };
-      } else if (currentSuggestion && line.trim()) {
-        // Add description
-        currentSuggestion.description += (currentSuggestion.description ? ' ' : '') + line.trim();
-      }
-    });
-    
-    if (currentSuggestion) {
-      suggestions.push(currentSuggestion);
-    }
-    
-    return suggestions.slice(0, 6); // Limit to 6 suggestions
   }
 
   /**
-   * Returns default learning suggestions when no conversations available
-   * @returns {Object[]} - Default suggestions
+   * Get default learning suggestions when AI generation fails
    */
   getDefaultSuggestions() {
-    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
-      return [];
-    }
     return [
       {
-        id: 'default_gmp_fundamentals',
-        title: 'GMP Fundamentals for New Professionals',
-        type: 'Training',
-        description: 'Essential Good Manufacturing Practice principles every pharmaceutical professional should master.',
-        objective: 'Build foundational knowledge of GMP requirements and implementation',
+        id: 'default-1',
+        title: 'GMP Fundamentals Review',
+        description: 'Strengthen your foundation in Good Manufacturing Practices with current FDA and ICH guidelines.',
         difficulty: 'Beginner',
-        relevanceScore: 9,
-        source: 'default',
-        isPersonalized: false
+        relevance: 4,
+        category: 'GMP',
+        estimatedTime: '45 minutes',
+        actionable: 'Review FDA CFR Part 211 requirements',
+        source: 'Default',
+        type: 'suggestion'
       },
       {
-        id: 'default_validation_lifecycle',
-        title: 'Process Validation Lifecycle Approach',
-        type: 'Guideline',
-        description: 'FDA guidance on modern process validation methodology and continuous verification.',
-        objective: 'Understand the three-stage validation approach and implementation strategies',
+        id: 'default-2',
+        title: 'Validation Protocol Best Practices',
+        description: 'Learn to write effective IQ, OQ, and PQ protocols that meet regulatory expectations.',
         difficulty: 'Intermediate',
-        relevanceScore: 8,
-        source: 'default',
-        isPersonalized: false
+        relevance: 4,
+        category: 'Validation',
+        estimatedTime: '60 minutes',
+        actionable: 'Practice writing a simple equipment validation protocol',
+        source: 'Default',
+        type: 'suggestion'
       },
       {
-        id: 'default_capa_effectiveness',
-        title: 'CAPA System Effectiveness Metrics',
-        type: 'Reference',
-        description: 'Key performance indicators and best practices for measuring CAPA system success.',
-        objective: 'Learn to evaluate and improve CAPA system performance',
+        id: 'default-3',
+        title: 'CAPA Investigation Techniques',
+        description: 'Master root cause analysis and develop effective corrective and preventive actions.',
         difficulty: 'Intermediate',
-        relevanceScore: 7,
-        source: 'default',
-        isPersonalized: false
-      },
-      {
-        id: 'default_risk_management',
-        title: 'ICH Q9 Quality Risk Management Implementation',
-        type: 'Guideline',
-        description: 'Practical application of risk management principles in pharmaceutical operations.',
-        objective: 'Apply systematic risk assessment and control strategies',
-        difficulty: 'Advanced',
-        relevanceScore: 8,
-        source: 'default',
-        isPersonalized: false
+        relevance: 3,
+        category: 'CAPA',
+        estimatedTime: '50 minutes',
+        actionable: 'Apply the 5 Whys technique to a recent quality issue',
+        source: 'Default',
+        type: 'suggestion'
       }
     ];
   }
 
   /**
-   * Clears the suggestion cache for a user
-   * @param {string} userId - User identifier
+   * Clear cache for a specific user or all users
    */
-  clearCache(userId) {
-    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
-      return;
+  clearCache(userId = null) {
+    if (userId) {
+      const keysToDelete = Array.from(this.cache.keys()).filter(key => key.includes(userId));
+      keysToDelete.forEach(key => this.cache.delete(key));
+    } else {
+      this.cache.clear();
     }
-    const cacheKey = `suggestions_${userId}`;
-    this.cache.delete(cacheKey);
   }
 
   /**
-   * Forces refresh of suggestions by clearing cache
-   * @param {string} userId - User identifier
-   * @returns {Promise<Object[]>} - Fresh suggestions
+   * Refresh suggestions for a user (clears cache and regenerates)
    */
-  async refreshSuggestions(userId) {
-    if (!FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS) {
-      return [];
-    }
+  async refreshSuggestions(userId, chatCount = null) {
     this.clearCache(userId);
-    return await this.getLearningSuggestions(userId);
+    return await this.getLearningSuggestions(userId, chatCount);
   }
 }
 
-// Create singleton instance
-const learningSuggestionsService = new LearningSuggestionsService();
-
-export default learningSuggestionsService;
-
-// Export convenience functions
-export const getLearningSuggestions = (userId) =>
-  FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS
-    ? learningSuggestionsService.getLearningSuggestions(userId)
-    : [];
-
-export const refreshSuggestions = (userId) =>
-  FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS
-    ? learningSuggestionsService.refreshSuggestions(userId)
-    : [];
-
-export const clearSuggestionCache = (userId) =>
-  FEATURE_FLAGS.ENABLE_AI_SUGGESTIONS
-    ? learningSuggestionsService.clearCache(userId)
-    : undefined;
+export default new LearningSuggestionsService();
