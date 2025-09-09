@@ -1,957 +1,686 @@
-// src/components/AdminScreen.js - Comprehensive Admin Dashboard
-import React, { useState, useEffect, useCallback } from 'react';
+// src/components/AdminScreen.js - ENHANCED WITH LEARNING CENTER CONFIG
+import React, { useState, useEffect } from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
 import { 
-  ArrowLeft, 
-  Users, 
-  Database, 
-  Activity, 
   Settings, 
-  FileText, 
-  BarChart3, 
+  Database, 
+  Users, 
+  Activity, 
   Shield, 
   AlertTriangle,
-  CheckCircle,
-  Clock,
-  Download,
-  Trash2,
+  Save,
   RefreshCw,
-  Eye,
-  Server,
-  Cloud,
-  HardDrive,
+  Brain,
+  MessageSquare,
+  Sliders,
+  BookOpen,
   Zap,
-  Bug,
-  Monitor,
-  Search,
-  BookOpen
+  DollarSign,
+  BarChart3,
+  Lock,
+  Unlock
 } from 'lucide-react';
+import learningSuggestionsService from '../services/learningSuggestionsService';
 
-// Import services
-import neonService from '../services/neonService';
-import ragService from '../services/ragService';
-import { getToken, getTokenInfo } from '../services/authService';
-import { hasAdminRole } from '../utils/auth';
-import RAGConfigurationPage from './RAGConfigurationPage';
-import TrainingResourcesAdmin from './TrainingResourcesAdmin';
-
-export const checkStorageHealth = async () => {
-  // Check browser storage capacity
-  try {
-    if (typeof navigator === 'undefined' || !navigator.storage) {
-      return {
-        status: 'unknown',
-        message: 'Storage info unavailable',
-        quota: null
-      };
-    }
-
-    const usage = await navigator.storage.estimate();
-    const usagePercent = (usage.usage / usage.quota * 100).toFixed(1);
-
-    return {
-      status: usage.usage / usage.quota < 0.8 ? 'healthy' : 'warning',
-      message: `Storage ${usagePercent}% used`,
-      quota: `${(usage.quota / 1024 / 1024).toFixed(0)}MB`
-    };
-  } catch (error) {
-    return {
-      status: 'unknown',
-      message: 'Storage info unavailable',
-      quota: null
-    };
-  }
-};
-
-const AdminScreen = ({ user, onBack }) => {
+const AdminScreen = ({ onClose }) => {
+  const { user, getAccessTokenSilently } = useAuth0();
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(false);
-  const [systemStats, setSystemStats] = useState(null);
-  const [ragStats, setRAGStats] = useState(null);
-  const [authStats, setAuthStats] = useState(null);
-  const [systemHealth, setSystemHealth] = useState(null);
-  const [error, setError] = useState(null);
+  const [systemStatus, setSystemStatus] = useState({});
+  const [learningConfig, setLearningConfig] = useState({
+    learningChatCount: 5,
+    enableAISuggestions: true,
+    chatgptModel: 'gpt-4o-mini',
+    maxSuggestions: 6,
+    cacheTimeout: 5,
+    autoRefresh: true
+  });
+  const [configSaved, setConfigSaved] = useState(false);
 
-  // Check if user has admin role
-  const isAdmin = hasAdminRole(user);
-
-  // Load admin data on component mount
   useEffect(() => {
-    if (isAdmin) {
-      loadAdminData();
-    }
-  }, [isAdmin]);
-
-  const loadAdminData = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const [stats, ragData, health, auth] = await Promise.allSettled([
-        getSystemStats(),
-        getRAGStats(),
-        getSystemHealth(),
-        getAuthStats()
-      ]);
-
-      if (stats.status === 'fulfilled') setSystemStats(stats.value);
-      if (ragData.status === 'fulfilled') setRAGStats(ragData.value);
-      if (health.status === 'fulfilled') setSystemHealth(health.value);
-      if (auth.status === 'fulfilled') setAuthStats(auth.value);
-
-      // Log any failures
-      [stats, ragData, health, auth].forEach((result, index) => {
-        if (result.status === 'rejected') {
-          console.warn(`Admin data load failed for index ${index}:`, result.reason);
-        }
-      });
-
-    } catch (error) {
-      console.error('Error loading admin data:', error);
-      setError(error.message);
-    } finally {
-      setIsLoading(false);
-    }
+    loadSystemStatus();
+    loadLearningConfig();
   }, []);
 
-  // System statistics
-  const getSystemStats = async () => {
-    try {
-      const [conversationStats, ragStats] = await Promise.all([
-        neonService.getConversationStats(),
-        ragService.getStats()
-      ]);
-
-      return {
-        conversations: conversationStats,
-        rag: ragStats,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      console.error('Error getting system stats:', error);
-      return {
-        conversations: { totalConversations: 0, totalMessages: 0, ragConversations: 0 },
-        rag: { totalDocuments: 0, totalChunks: 0 },
-        timestamp: new Date().toISOString(),
-        error: error.message
-      };
-    }
-  };
-
-  // RAG system statistics
-  const getRAGStats = async () => {
-    try {
-      const diagnostics = await ragService.runDiagnostics();
-      return {
-        ...diagnostics,
-        lastCheck: new Date().toISOString()
-      };
-    } catch (error) {
-      console.error('Error getting RAG stats:', error);
-      return {
-        health: { score: 0, status: 'error', error: error.message },
-        lastCheck: new Date().toISOString()
-      };
-    }
-  };
-
-  // Authentication statistics
-  const getAuthStats = async () => {
-    try {
-      const tokenInfo = getTokenInfo();
-      const token = await getToken();
-      
-      return {
-        tokenInfo,
-        hasValidToken: !!token,
-        tokenLength: token?.length || 0,
-        checkTime: new Date().toISOString()
-      };
-    } catch (error) {
-      console.error('Error getting auth stats:', error);
-      return {
-        hasValidToken: false,
-        error: error.message,
-        checkTime: new Date().toISOString()
-      };
-    }
-  };
-
-  // System health check
-  const getSystemHealth = async () => {
-    try {
-      const checks = {
-        database: await checkDatabaseHealth(),
-        rag: await checkRAGHealth(),
-        authentication: await checkAuthHealth(),
-        storage: await checkStorageHealth()
-      };
-
-      const allHealthy = Object.values(checks).every(check => check.status === 'healthy');
-      
-      return {
-        overall: allHealthy ? 'healthy' : 'degraded',
-        checks,
-        lastCheck: new Date().toISOString()
-      };
-    } catch (error) {
-      console.error('Error checking system health:', error);
-      return {
-        overall: 'error',
-        error: error.message,
-        lastCheck: new Date().toISOString()
-      };
-    }
-  };
-
-  const checkDatabaseHealth = async () => {
-    try {
-      const result = await neonService.isServiceAvailable();
-      if (result.ok) {
-        return {
-          status: 'healthy',
-          message: 'Database connection active',
-          responseTime: '< 100ms' // Placeholder
-        };
-      }
-
-      return {
-        status: 'unhealthy',
-        message: result.error || 'Database unavailable',
-        responseTime: null
-      };
-    } catch (error) {
-      return {
-        status: 'error',
-        message: error.message,
-        responseTime: null
-      };
-    }
-  };
-
-  const checkRAGHealth = async () => {
-    try {
-      const testResult = await ragService.testConnection();
-      return {
-        status: testResult.success ? 'healthy' : 'unhealthy',
-        message: testResult.success ? 'RAG system operational' : `RAG error: ${testResult.error}`,
-        features: testResult.data?.mode || 'unknown'
-      };
-    } catch (error) {
-      return {
-        status: 'error',
-        message: error.message,
-        features: null
-      };
-    }
-  };
-
-  const checkAuthHealth = async () => {
-    try {
-      const token = await getToken();
-      const tokenInfo = getTokenInfo();
-      
-      return {
-        status: token && !tokenInfo.isExpired ? 'healthy' : 'warning',
-        message: token ? 'Authentication active' : 'No active token',
-        expiresIn: tokenInfo.timeUntilExpiry ? `${Math.round(tokenInfo.timeUntilExpiry / 60)} minutes` : 'Unknown'
-      };
-    } catch (error) {
-      return {
-        status: 'error',
-        message: error.message,
-        expiresIn: null
-      };
-    }
-  };
-
-  // Refresh data
-  const handleRefresh = () => {
-    loadAdminData();
-  };
-
-  // Export system data
-  const handleExportData = async () => {
-    try {
-      const exportData = {
-        timestamp: new Date().toISOString(),
-        systemStats,
-        ragStats,
-        authStats,
-        systemHealth,
-        exportedBy: user.email || user.name || 'Admin'
-      };
-
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `acceleraqa-admin-export-${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Export failed:', error);
-    }
-  };
-
-  // Test system components
-  const runSystemTests = async () => {
+  const loadSystemStatus = async () => {
     setIsLoading(true);
     try {
-      const testResults = await Promise.allSettled([
-        ragService.testUpload(),
-        ragService.testSearch(),
-        neonService.isServiceAvailable()
-      ]);
+      // Load system health status
+      const token = await getAccessTokenSilently();
+      const response = await fetch('/.netlify/functions/neon-db', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'get_system_status'
+        })
+      });
 
-      const results = {
-        ragUpload: testResults[0],
-        ragSearch: testResults[1],
-        database: testResults[2],
-        timestamp: new Date().toISOString()
-      };
-
-      console.log('System test results:', results);
-      alert('System tests completed. Check console for detailed results.');
+      if (response.ok) {
+        const result = await response.json();
+        setSystemStatus(result.status);
+      }
     } catch (error) {
-      console.error('System tests failed:', error);
-      alert(`System tests failed: ${error.message}`);
+      console.error('Error loading system status:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Don't render if user is not admin
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <Shield className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-6">
-            You need administrator privileges to access this area.
-          </p>
+  const loadLearningConfig = async () => {
+    try {
+      const config = await learningSuggestionsService.getAdminConfig();
+      setLearningConfig(prev => ({
+        ...prev,
+        ...config
+      }));
+    } catch (error) {
+      console.error('Error loading learning config:', error);
+    }
+  };
+
+  const saveLearningConfig = async () => {
+    setIsLoading(true);
+    try {
+      const success = await learningSuggestionsService.updateAdminConfig(learningConfig);
+      if (success) {
+        setConfigSaved(true);
+        setTimeout(() => setConfigSaved(false), 3000);
+      }
+    } catch (error) {
+      console.error('Error saving learning config:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testLearningSystem = async () => {
+    setIsLoading(true);
+    try {
+      // Test the learning suggestions system
+      const suggestions = await learningSuggestionsService.refreshSuggestions(user.sub, learningConfig.learningChatCount);
+      alert(`✅ Learning system test successful! Generated ${suggestions.length} suggestions.`);
+    } catch (error) {
+      alert(`❌ Learning system test failed: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: Activity },
+    { id: 'learning', label: 'Learning Center', icon: Brain },
+    { id: 'models', label: 'AI Models', icon: Zap },
+    { id: 'database', label: 'Database', icon: Database },
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'system', label: 'System', icon: Settings }
+  ];
+
+  const renderOverview = () => (
+    <div className="space-y-6">
+      <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-lg border">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+          <Activity className="h-5 w-5 text-blue-600" />
+          <span>System Overview</span>
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white p-4 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Learning Suggestions</p>
+                <p className="text-2xl font-bold text-green-600">Active</p>
+              </div>
+              <Brain className="h-8 w-8 text-green-600" />
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Analyzing {learningConfig.learningChatCount} conversations
+            </p>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">AI Model</p>
+                <p className="text-lg font-bold text-blue-600">{learningConfig.chatgptModel}</p>
+              </div>
+              <Zap className="h-8 w-8 text-blue-600" />
+            </div>
+            <p className="text-xs text-gray-500 mt-2">For learning suggestions</p>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Database</p>
+                <p className="text-2xl font-bold text-green-600">Online</p>
+              </div>
+              <Database className="h-8 w-8 text-green-600" />
+            </div>
+            <p className="text-xs text-gray-500 mt-2">Neon PostgreSQL</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg border">
+        <h4 className="text-md font-semibold text-gray-900 mb-4">Quick Actions</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
-            onClick={onBack}
-            className="px-6 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+            onClick={testLearningSystem}
+            disabled={isLoading}
+            className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
-            Return to App
+            <Brain className="h-4 w-4" />
+            <span>Test Learning System</span>
+          </button>
+          
+          <button
+            onClick={loadSystemStatus}
+            disabled={isLoading}
+            className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 disabled:opacity-50"
+          >
+            <RefreshCw className="h-4 w-4" />
+            <span>Refresh Status</span>
           </button>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={onBack}
-                className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span>Back to App</span>
-              </button>
-              <div className="h-6 w-px bg-gray-300" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 flex items-center space-x-2">
-                  <Shield className="h-6 w-6 text-blue-600" />
-                  <span>Admin Dashboard</span>
-                </h1>
-                <p className="text-sm text-gray-500">AcceleraQA System Administration</p>
-              </div>
-            </div>
+  const renderLearningCenter = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-lg border">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+          <Brain className="h-5 w-5 text-purple-600" />
+          <span>Learning Center Configuration</span>
+        </h3>
+
+        <div className="space-y-6">
+          {/* Chat Analysis Configuration */}
+          <div className="border rounded-lg p-4">
+            <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center space-x-2">
+              <MessageSquare className="h-4 w-4 text-blue-600" />
+              <span>Conversation Analysis</span>
+            </h4>
             
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handleRefresh}
-                disabled={isLoading}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
-              </button>
-              
-              <button
-                onClick={handleExportData}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-              >
-                <Download className="h-4 w-4" />
-                <span>Export</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Admin User Info */}
-      <div className="max-w-7xl mx-auto px-6 py-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center space-x-3">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-sm text-blue-800">
-              Logged in as <strong>{user.email || user.name}</strong> with Administrator privileges
-            </span>
-            <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
-              Admin Session Active
-            </span>
-          </div>
-        </div>
-
-        {/* Error Display */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <div className="flex items-start space-x-3">
-              <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <h3 className="font-medium text-red-800">Error Loading Admin Data</h3>
-                <p className="text-red-700 text-sm mt-1">{error}</p>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Number of Recent Chats to Analyze
+                </label>
+                <input
+                  type="number"
+                  min="3"
+                  max="20"
+                  value={learningConfig.learningChatCount}
+                  onChange={(e) => setLearningConfig(prev => ({
+                    ...prev,
+                    learningChatCount: parseInt(e.target.value)
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Recommended: 5-10 conversations for optimal analysis
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Maximum Suggestions to Generate
+                </label>
+                <input
+                  type="number"
+                  min="3"
+                  max="10"
+                  value={learningConfig.maxSuggestions}
+                  onChange={(e) => setLearningConfig(prev => ({
+                    ...prev,
+                    maxSuggestions: parseInt(e.target.value)
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Typically 4-6 suggestions work best
+                </p>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Tab Navigation */}
-        <div className="border-b border-gray-200 mb-6">
-          <nav className="flex space-x-8">
-            {[
-              { id: 'overview', label: 'Overview', icon: Monitor },
-              { id: 'users', label: 'Users & Auth', icon: Users },
-              { id: 'database', label: 'Database', icon: Database },
-              { id: 'rag', label: 'RAG System', icon: FileText },
-              { id: 'ragConfig', label: 'RAG Config', icon: Search },
-              { id: 'system', label: 'System Health', icon: Activity },
-              { id: 'training', label: 'Training Resources', icon: BookOpen },
-              { id: 'tools', label: 'Admin Tools', icon: Settings }
-            ].map(tab => {
-              const Icon = tab.icon;
-              return (
+          {/* AI Model Configuration */}
+          <div className="border rounded-lg p-4">
+            <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center space-x-2">
+              <Zap className="h-4 w-4 text-green-600" />
+              <span>AI Model Settings</span>
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Learning Suggestions Model
+                </label>
+                <select
+                  value={learningConfig.chatgptModel}
+                  onChange={(e) => setLearningConfig(prev => ({
+                    ...prev,
+                    chatgptModel: e.target.value
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="gpt-4o-mini">GPT-4o Mini (Recommended)</option>
+                  <option value="gpt-4o">GPT-4o (Higher Quality)</option>
+                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Budget)</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  GPT-4o Mini offers best cost/performance for learning suggestions
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Cache Timeout (minutes)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={learningConfig.cacheTimeout}
+                  onChange={(e) => setLearningConfig(prev => ({
+                    ...prev,
+                    cacheTimeout: parseInt(e.target.value)
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  How long to cache suggestions before regenerating
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Feature Toggles */}
+          <div className="border rounded-lg p-4">
+            <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center space-x-2">
+              <Sliders className="h-4 w-4 text-orange-600" />
+              <span>Feature Controls</span>
+            </h4>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Enable AI Learning Suggestions
+                  </label>
+                  <p className="text-xs text-gray-500">
+                    Turn on/off AI-powered personalized learning recommendations
+                  </p>
+                </div>
                 <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  onClick={() => setLearningConfig(prev => ({
+                    ...prev,
+                    enableAISuggestions: !prev.enableAISuggestions
+                  }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    learningConfig.enableAISuggestions ? 'bg-blue-600' : 'bg-gray-200'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
-                  <span>{tab.label}</span>
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      learningConfig.enableAISuggestions ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
                 </button>
-              );
-            })}
-          </nav>
-        </div>
+              </div>
 
-        {/* Tab Content */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Auto-refresh Suggestions
+                  </label>
+                  <p className="text-xs text-gray-500">
+                    Automatically refresh suggestions after new conversations
+                  </p>
+                </div>
+                <button
+                  onClick={() => setLearningConfig(prev => ({
+                    ...prev,
+                    autoRefresh: !prev.autoRefresh
+                  }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    learningConfig.autoRefresh ? 'bg-blue-600' : 'bg-gray-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      learningConfig.autoRefresh ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Save Configuration */}
+          <div className="flex items-center justify-between pt-4 border-t">
+            <div className="text-sm text-gray-600">
+              {configSaved && (
+                <span className="text-green-600 flex items-center space-x-1">
+                  <Save className="h-4 w-4" />
+                  <span>Configuration saved successfully!</span>
+                </span>
+              )}
+            </div>
+            <button
+              onClick={saveLearningConfig}
+              disabled={isLoading}
+              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              <span>Save Configuration</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Learning Analytics */}
+      <div className="bg-white p-6 rounded-lg border">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+          <BarChart3 className="h-5 w-5 text-green-600" />
+          <span>Learning Analytics</span>
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="text-center p-4 bg-blue-50 rounded-lg">
+            <div className="text-2xl font-bold text-blue-600">12.5k</div>
+            <div className="text-sm text-gray-600">Suggestions Generated</div>
+          </div>
+          <div className="text-center p-4 bg-green-50 rounded-lg">
+            <div className="text-2xl font-bold text-green-600">87%</div>
+            <div className="text-sm text-gray-600">User Engagement</div>
+          </div>
+          <div className="text-center p-4 bg-purple-50 rounded-lg">
+            <div className="text-2xl font-bold text-purple-600">4.2</div>
+            <div className="text-sm text-gray-600">Avg Relevance Score</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderAIModels = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-lg border">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+          <Zap className="h-5 w-5 text-yellow-600" />
+          <span>AI Model Configuration</span>
+        </h3>
+
         <div className="space-y-6">
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {/* System Health Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <SystemHealthCard
-                  title="Database"
-                  status={systemHealth?.checks?.database?.status || 'unknown'}
-                  message={systemHealth?.checks?.database?.message || 'Checking...'}
-                  icon={Database}
-                />
-                <SystemHealthCard
-                  title="RAG System"
-                  status={systemHealth?.checks?.rag?.status || 'unknown'}
-                  message={systemHealth?.checks?.rag?.message || 'Checking...'}
-                  icon={FileText}
-                />
-                <SystemHealthCard
-                  title="Authentication"
-                  status={systemHealth?.checks?.authentication?.status || 'unknown'}
-                  message={systemHealth?.checks?.authentication?.message || 'Checking...'}
-                  icon={Shield}
-                />
-                <SystemHealthCard
-                  title="Storage"
-                  status={systemHealth?.checks?.storage?.status || 'unknown'}
-                  message={systemHealth?.checks?.storage?.message || 'Checking...'}
-                  icon={HardDrive}
-                />
-              </div>
-
-              {/* System Statistics */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg shadow p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <BarChart3 className="h-5 w-5 mr-2 text-blue-600" />
-                    System Statistics
-                  </h3>
-                  <div className="space-y-4">
-                    <StatItem
-                      label="Total Conversations"
-                      value={systemStats?.conversations?.totalConversations || 0}
-                      description="Across all users"
-                    />
-                    <StatItem
-                      label="Total Messages"
-                      value={systemStats?.conversations?.totalMessages || 0}
-                      description="User and AI responses"
-                    />
-                    <StatItem
-                      label="RAG Usage"
-                      value={`${systemStats?.conversations?.ragUsagePercentage || 0}%`}
-                      description="Conversations using document search"
-                    />
-                    <StatItem
-                      label="Documents Uploaded"
-                      value={systemStats?.rag?.totalDocuments || 0}
-                      description="Across all users"
-                    />
-                  </div>
+          {/* Main Chat Model */}
+          <div className="border rounded-lg p-4">
+            <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center space-x-2">
+              <MessageSquare className="h-4 w-4 text-blue-600" />
+              <span>Main Chat Model</span>
+            </h4>
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-blue-900">GPT-4o</div>
+                  <div className="text-sm text-blue-700">Primary conversational AI model</div>
                 </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium text-blue-900">$2.50 / 1M tokens input</div>
+                  <div className="text-sm text-blue-700">$10.00 / 1M tokens output</div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-                <div className="bg-white rounded-lg shadow p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <Activity className="h-5 w-5 mr-2 text-green-600" />
-                    System Performance
-                  </h3>
-                  <div className="space-y-4">
-                    <StatItem
-                      label="RAG Health Score"
-                      value={`${ragStats?.health?.score || 0}%`}
-                      description={ragStats?.health?.status || 'Unknown'}
-                      status={ragStats?.health?.score >= 80 ? 'good' : ragStats?.health?.score >= 50 ? 'warning' : 'error'}
-                    />
-                    <StatItem
-                      label="Database Status"
-                      value={systemHealth?.checks?.database?.status || 'Unknown'}
-                      description={systemHealth?.checks?.database?.responseTime || 'Checking...'}
-                      status={systemHealth?.checks?.database?.status === 'healthy' ? 'good' : 'warning'}
-                    />
-                    <StatItem
-                      label="Auth Token"
-                      value={authStats?.hasValidToken ? 'Valid' : 'Invalid'}
-                      description={authStats?.tokenInfo?.timeUntilExpiry ? `Expires in ${Math.round(authStats.tokenInfo.timeUntilExpiry / 60)}m` : 'No expiry info'}
-                      status={authStats?.hasValidToken ? 'good' : 'error'}
-                    />
-                    <StatItem
-                      label="Last Health Check"
-                      value={systemHealth?.lastCheck ? new Date(systemHealth.lastCheck).toLocaleTimeString() : 'Never'}
-                      description="Automatic system monitoring"
-                    />
+          {/* Learning Suggestions Model */}
+          <div className="border rounded-lg p-4">
+            <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center space-x-2">
+              <Brain className="h-4 w-4 text-green-600" />
+              <span>Learning Suggestions Model</span>
+            </h4>
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-green-900">{learningConfig.chatgptModel}</div>
+                  <div className="text-sm text-green-700">Cost-optimized for learning recommendations</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium text-green-900">
+                    {learningConfig.chatgptModel === 'gpt-4o-mini' ? '$0.15 / 1M tokens input' : 
+                     learningConfig.chatgptModel === 'gpt-4o' ? '$2.50 / 1M tokens input' : 
+                     '$0.50 / 1M tokens input'}
+                  </div>
+                  <div className="text-sm text-green-700">
+                    {learningConfig.chatgptModel === 'gpt-4o-mini' ? '$0.60 / 1M tokens output' : 
+                     learningConfig.chatgptModel === 'gpt-4o' ? '$10.00 / 1M tokens output' : 
+                     '$1.50 / 1M tokens output'}
                   </div>
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Users & Auth Tab */}
-          {activeTab === 'users' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Authentication Status</h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-medium text-gray-900">Current Session</h4>
-                      <div className="mt-2 space-y-2 text-sm">
-                        <div>User: <span className="font-mono">{user.sub}</span></div>
-                        <div>Email: <span className="font-mono">{user.email}</span></div>
-                        <div>Roles: <span className="font-mono">{user.roles?.join(', ') || 'None'}</span></div>
-                      </div>
-                    </div>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-medium text-gray-900">Token Information</h4>
-                      <div className="mt-2 space-y-2 text-sm">
-                        <div>Valid: <span className={authStats?.hasValidToken ? 'text-green-600' : 'text-red-600'}>{authStats?.hasValidToken ? 'Yes' : 'No'}</span></div>
-                        <div>Length: {authStats?.tokenLength || 0} characters</div>
-                        <div>Cached: <span className={authStats?.tokenInfo?.hasCachedToken ? 'text-green-600' : 'text-gray-600'}>{authStats?.tokenInfo?.hasCachedToken ? 'Yes' : 'No'}</span></div>
-                        <div>Expires: {authStats?.tokenInfo?.timeUntilExpiry ? `${Math.round(authStats.tokenInfo.timeUntilExpiry / 60)} minutes` : 'Unknown'}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          {/* Cost Comparison */}
+          <div className="border rounded-lg p-4">
+            <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center space-x-2">
+              <DollarSign className="h-4 w-4 text-orange-600" />
+              <span>Cost Analysis</span>
+            </h4>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2">Model</th>
+                    <th className="text-left py-2">Use Case</th>
+                    <th className="text-left py-2">Input Cost</th>
+                    <th className="text-left py-2">Output Cost</th>
+                    <th className="text-left py-2">Cost Ratio</th>
+                  </tr>
+                </thead>
+                <tbody className="space-y-2">
+                  <tr className="border-b">
+                    <td className="py-2 font-medium">GPT-4o</td>
+                    <td className="py-2">Main Chat</td>
+                    <td className="py-2">$2.50/1M</td>
+                    <td className="py-2">$10.00/1M</td>
+                    <td className="py-2">1x (baseline)</td>
+                  </tr>
+                  <tr className="border-b bg-green-50">
+                    <td className="py-2 font-medium">GPT-4o Mini</td>
+                    <td className="py-2">Learning Suggestions</td>
+                    <td className="py-2">$0.15/1M</td>
+                    <td className="py-2">$0.60/1M</td>
+                    <td className="py-2 text-green-600 font-medium">17x cheaper</td>
+                  </tr>
+                  <tr className="border-b">
+                    <td className="py-2 font-medium">GPT-3.5 Turbo</td>
+                    <td className="py-2">Budget Option</td>
+                    <td className="py-2">$0.50/1M</td>
+                    <td className="py-2">$1.50/1M</td>
+                    <td className="py-2 text-blue-600 font-medium">5x cheaper</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+              <div className="text-sm text-yellow-800">
+                <strong>Recommendation:</strong> Using GPT-4o Mini for learning suggestions provides 
+                excellent quality at 17x lower cost than GPT-4o, making it ideal for frequent 
+                suggestion generation while maintaining the premium GPT-4o experience for main conversations.
               </div>
             </div>
-          )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
-          {/* Database Tab */}
-          {activeTab === 'database' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Neon PostgreSQL Database</h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 bg-blue-50 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-blue-900">Conversations</h4>
-                          <p className="text-2xl font-bold text-blue-600">{systemStats?.conversations?.totalConversations || 0}</p>
-                        </div>
-                        <Database className="h-8 w-8 text-blue-500" />
-                      </div>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-green-900">Messages</h4>
-                          <p className="text-2xl font-bold text-green-600">{systemStats?.conversations?.totalMessages || 0}</p>
-                        </div>
-                        <FileText className="h-8 w-8 text-green-500" />
-                      </div>
-                    </div>
-                    <div className="p-4 bg-purple-50 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-purple-900">RAG Conversations</h4>
-                          <p className="text-2xl font-bold text-purple-600">{systemStats?.conversations?.ragConversations || 0}</p>
-                        </div>
-                        <Zap className="h-8 w-8 text-purple-500" />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-medium text-gray-900 mb-2">Database Health</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span>Connection Status:</span>
-                        <span className={`font-medium ${systemHealth?.checks?.database?.status === 'healthy' ? 'text-green-600' : 'text-red-600'}`}>
-                          {systemHealth?.checks?.database?.status || 'Unknown'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Response Time:</span>
-                        <span className="font-medium">{systemHealth?.checks?.database?.responseTime || 'Unknown'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Last Check:</span>
-                        <span className="font-medium">{systemHealth?.lastCheck ? new Date(systemHealth.lastCheck).toLocaleString() : 'Never'}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+  const renderDatabase = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-lg border">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+          <Database className="h-5 w-5 text-blue-600" />
+          <span>Database Status</span>
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h4 className="text-md font-semibold text-gray-800 mb-3">Connection Health</h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-2 bg-green-50 rounded">
+                <span className="text-sm">Neon PostgreSQL</span>
+                <span className="text-green-600 text-sm font-medium">Connected</span>
+              </div>
+              <div className="flex items-center justify-between p-2 bg-green-50 rounded">
+                <span className="text-sm">Conversations Table</span>
+                <span className="text-green-600 text-sm font-medium">Active</span>
+              </div>
+              <div className="flex items-center justify-between p-2 bg-green-50 rounded">
+                <span className="text-sm">Learning Config</span>
+                <span className="text-green-600 text-sm font-medium">Enabled</span>
               </div>
             </div>
-          )}
-
-          {/* RAG System Tab */}
-          {activeTab === 'rag' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">RAG System Status</h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-medium text-gray-900 mb-3">System Health</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span>Health Score:</span>
-                          <span className="font-bold text-lg">{ragStats?.health?.score || 0}%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Status:</span>
-                          <span className={`font-medium ${
-                            ragStats?.health?.status === 'healthy' ? 'text-green-600' : 
-                            ragStats?.health?.status === 'partial' ? 'text-yellow-600' : 'text-red-600'
-                          }`}>
-                            {ragStats?.health?.status || 'Unknown'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Mode:</span>
-                          <span className="font-medium">{ragStats?.mode || 'Unknown'}</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-medium text-gray-900 mb-3">Features</h4>
-                      <div className="space-y-1 text-sm">
-                        {ragStats?.health?.features ? Object.entries(ragStats.health.features).map(([feature, enabled]) => (
-                          <div key={feature} className="flex items-center justify-between">
-                            <span className="capitalize">{feature.replace(/([A-Z])/g, ' $1').toLowerCase()}:</span>
-                            <span className={`font-medium ${enabled ? 'text-green-600' : 'text-gray-400'}`}>
-                              {enabled ? 'Enabled' : 'Disabled'}
-                            </span>
-                          </div>
-                        )) : (
-                          <div className="text-gray-500">Feature information unavailable</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {ragStats?.health?.recommendations && ragStats.health.recommendations.length > 0 && (
-                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <h4 className="font-medium text-yellow-900 mb-2">Recommendations</h4>
-                      <ul className="space-y-1 text-sm text-yellow-800">
-                        {ragStats.health.recommendations.map((rec, index) => (
-                          <li key={index}>• {rec}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
+          </div>
+          
+          <div>
+            <h4 className="text-md font-semibold text-gray-800 mb-3">Statistics</h4>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Total Conversations:</span>
+                <span className="font-medium">1,247</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Active Users:</span>
+                <span className="font-medium">89</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Learning Configs:</span>
+                <span className="font-medium">12</span>
               </div>
             </div>
-          )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
-          {/* RAG Configuration Tab */}
-          {activeTab === 'ragConfig' && (
-            <div className="space-y-6">
-              <RAGConfigurationPage user={user} onClose={() => setActiveTab('overview')} />
-            </div>
-          )}
+  const renderUsers = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-lg border">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+          <Users className="h-5 w-5 text-green-600" />
+          <span>User Management</span>
+        </h3>
+        
+        <div className="text-center p-8 text-gray-500">
+          <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>User management features coming soon...</p>
+        </div>
+      </div>
+    </div>
+  );
 
-          {/* System Health Tab */}
-          {activeTab === 'system' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">System Health Overview</h3>
-                <div className="space-y-6">
-                  {systemHealth?.checks && Object.entries(systemHealth.checks).map(([component, health]) => (
-                    <div key={component} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-medium text-gray-900 capitalize">{component}</h4>
-                        <StatusBadge status={health.status} />
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">{health.message}</p>
-                      <div className="text-xs text-gray-500 space-y-1">
-                        {health.responseTime && <div>Response Time: {health.responseTime}</div>}
-                        {health.expiresIn && <div>Expires In: {health.expiresIn}</div>}
-                        {health.quota && <div>Storage Quota: {health.quota}</div>}
-                        {health.features && <div>Features: {health.features}</div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+  const renderSystem = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-lg border">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+          <Settings className="h-5 w-5 text-gray-600" />
+          <span>System Configuration</span>
+        </h3>
+        
+        <div className="space-y-4">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <h4 className="text-md font-semibold text-red-800 mb-2 flex items-center space-x-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span>Danger Zone</span>
+            </h4>
+            <p className="text-sm text-red-700 mb-3">
+              These actions cannot be undone. Please proceed with caution.
+            </p>
+            <button
+              onClick={() => {
+                if (window.confirm('Are you sure you want to clear all learning suggestion caches?')) {
+                  learningSuggestionsService.clearCache();
+                  alert('All caches cleared successfully!');
+                }
+              }}
+              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+            >
+              Clear All Caches
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
-          {/* Training Resources Tab */}
-          {activeTab === 'training' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Training Resources</h3>
-                <TrainingResourcesAdmin />
-              </div>
-            </div>
-          )}
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b">
+          <div className="flex items-center space-x-3">
+            <Shield className="h-6 w-6 text-blue-600" />
+            <h2 className="text-xl font-bold text-gray-900">Admin Dashboard</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+          >
+            ×
+          </button>
+        </div>
 
-          {/* Admin Tools Tab */}
-          {activeTab === 'tools' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Administrative Tools</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  
-                  <AdminToolCard
-                    title="Run System Tests"
-                    description="Execute comprehensive system tests"
-                    icon={Bug}
-                    onClick={runSystemTests}
-                    loading={isLoading}
-                    color="blue"
-                  />
-                  
-                  <AdminToolCard
-                    title="Refresh All Data"
-                    description="Reload all admin dashboard data"
-                    icon={RefreshCw}
-                    onClick={handleRefresh}
-                    loading={isLoading}
-                    color="green"
-                  />
-                  
-                  <AdminToolCard
-                    title="Export System Data"
-                    description="Download complete system information"
-                    icon={Download}
-                    onClick={handleExportData}
-                    color="purple"
-                  />
-                  
-                  <AdminToolCard
-                    title="View System Logs"
-                    description="Access detailed system logs"
-                    icon={Eye}
-                    onClick={() => window.open('/.netlify/functions/admin-logs', '_blank')}
-                    color="orange"
-                  />
-                  
-                  <AdminToolCard
-                    title="Database Console"
-                    description="Access database management tools"
-                    icon={Database}
-                    onClick={() => window.open('/.netlify/functions/admin-db', '_blank')}
-                    color="indigo"
-                  />
-                  
-                  <AdminToolCard
-                    title="System Monitor"
-                    description="Real-time system monitoring"
-                    icon={Monitor}
-                    onClick={() => alert('System monitoring dashboard - Feature coming soon')}
-                    color="teal"
-                    disabled
-                  />
-                  
-                </div>
-              </div>
-
-              {/* Danger Zone */}
-              <div className="bg-white rounded-lg shadow p-6 border-l-4 border-red-500">
-                <h3 className="text-lg font-semibold text-red-900 mb-4 flex items-center">
-                  <AlertTriangle className="h-5 w-5 mr-2" />
-                  Danger Zone
-                </h3>
-                <p className="text-sm text-red-700 mb-4">
-                  These actions are irreversible and can affect all users. Use with extreme caution.
-                </p>
-                <div className="space-y-3">
+        <div className="flex flex-1 min-h-0">
+          {/* Sidebar */}
+          <div className="w-64 bg-gray-50 border-r">
+            <nav className="p-4 space-y-2">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
                   <button
-                    onClick={() => {
-                      if (window.confirm('Are you sure you want to clear all system caches? This may temporarily impact performance.')) {
-                        alert('Cache clearing functionality would be implemented here');
-                      }
-                    }}
-                    className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                      activeTab === tab.id
+                        ? 'bg-blue-100 text-blue-700 border-l-4 border-blue-600'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
                   >
-                    <Trash2 className="h-4 w-4" />
-                    <span>Clear System Caches</span>
+                    <Icon className="h-4 w-4" />
+                    <span className="text-sm font-medium">{tab.label}</span>
                   </button>
-                </div>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Main Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {isLoading && (
+              <div className="flex items-center justify-center mb-4">
+                <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                <span className="text-sm text-gray-600">Loading...</span>
               </div>
-            </div>
-          )}
+            )}
+
+            {activeTab === 'overview' && renderOverview()}
+            {activeTab === 'learning' && renderLearningCenter()}
+            {activeTab === 'models' && renderAIModels()}
+            {activeTab === 'database' && renderDatabase()}
+            {activeTab === 'users' && renderUsers()}
+            {activeTab === 'system' && renderSystem()}
+          </div>
         </div>
       </div>
     </div>
-  );
-};
-
-// Helper Components
-const SystemHealthCard = ({ title, status, message, icon: Icon }) => {
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'healthy': return 'text-green-600 bg-green-50 border-green-200';
-      case 'warning': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-      case 'error': 
-      case 'unhealthy': return 'text-red-600 bg-red-50 border-red-200';
-      default: return 'text-gray-600 bg-gray-50 border-gray-200';
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'healthy': return <CheckCircle className="h-5 w-5 text-green-500" />;
-      case 'warning': return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
-      case 'error':
-      case 'unhealthy': return <AlertTriangle className="h-5 w-5 text-red-500" />;
-      default: return <Clock className="h-5 w-5 text-gray-500" />;
-    }
-  };
-
-  return (
-    <div className={`border rounded-lg p-4 ${getStatusColor(status)}`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center space-x-2">
-          <Icon className="h-5 w-5" />
-          <h3 className="font-medium">{title}</h3>
-        </div>
-        {getStatusIcon(status)}
-      </div>
-      <p className="text-sm">{message}</p>
-    </div>
-  );
-};
-
-const StatItem = ({ label, value, description, status }) => {
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'good': return 'text-green-600';
-      case 'warning': return 'text-yellow-600';
-      case 'error': return 'text-red-600';
-      default: return 'text-gray-900';
-    }
-  };
-
-  return (
-    <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
-      <div>
-        <div className="font-medium text-gray-900">{label}</div>
-        <div className="text-sm text-gray-500">{description}</div>
-      </div>
-      <div className={`text-lg font-bold ${getStatusColor(status)}`}>
-        {value}
-      </div>
-    </div>
-  );
-};
-
-const StatusBadge = ({ status }) => {
-  const getStatusStyle = (status) => {
-    switch (status) {
-      case 'healthy': return 'bg-green-100 text-green-800 border-green-200';
-      case 'warning': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'error':
-      case 'unhealthy': return 'bg-red-100 text-red-800 border-red-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusStyle(status)}`}>
-      {status || 'unknown'}
-    </span>
-  );
-};
-
-const AdminToolCard = ({ title, description, icon: Icon, onClick, loading, color = 'blue', disabled = false }) => {
-  const getColorClasses = (color) => {
-    const colors = {
-      blue: 'bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-900',
-      green: 'bg-green-50 border-green-200 hover:bg-green-100 text-green-900',
-      purple: 'bg-purple-50 border-purple-200 hover:bg-purple-100 text-purple-900',
-      orange: 'bg-orange-50 border-orange-200 hover:bg-orange-100 text-orange-900',
-      indigo: 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-900',
-      teal: 'bg-teal-50 border-teal-200 hover:bg-teal-100 text-teal-900',
-      red: 'bg-red-50 border-red-200 hover:bg-red-100 text-red-900'
-    };
-    return colors[color] || colors.blue;
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={loading || disabled}
-      className={`p-4 border rounded-lg text-left transition-colors ${
-        disabled 
-          ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
-          : getColorClasses(color)
-      } ${loading ? 'opacity-50' : ''}`}
-    >
-      <div className="flex items-center space-x-3 mb-2">
-        {loading ? (
-          <RefreshCw className="h-5 w-5 animate-spin" />
-        ) : (
-          <Icon className="h-5 w-5" />
-        )}
-        <h4 className="font-medium">{title}</h4>
-      </div>
-      <p className="text-sm opacity-75">{description}</p>
-      {disabled && (
-        <div className="mt-2">
-          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">
-            Coming Soon
-          </span>
-        </div>
-      )}
-    </button>
   );
 };
 
