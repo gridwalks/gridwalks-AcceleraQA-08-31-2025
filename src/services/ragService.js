@@ -1,6 +1,7 @@
 // src/services/ragService.js - Updated RAG service with FIXED authentication
 import openaiService from './openaiService';
 import authService, { getToken } from './authService';
+import logger from '../utils/logger';
 
 const API_BASE_URL = '/.netlify/functions';
 
@@ -13,19 +14,17 @@ class RAGService {
 
   async makeAuthenticatedRequest(endpoint, data = {}) {
     try {
-      console.log('=== RAG SERVICE AUTH REQUEST ===');
-      console.log('Endpoint:', endpoint);
-      console.log('Data action:', data.action);
+      logger.debug('RAG service authenticated request');
+      logger.debug('Endpoint:', endpoint);
+      logger.debug('Data action:', data.action);
       
       // CRITICAL FIX: Get token with retry and better error handling
       let token = null;
       try {
         token = await getToken();
-        console.log('Token retrieved:', !!token);
-        console.log('Token length:', token?.length || 0);
-        console.log('Token starts correctly:', token?.startsWith('eyJ') || false);
+        logger.debug('Token retrieved:', !!token);
       } catch (tokenError) {
-        console.error('Failed to get token:', tokenError);
+        logger.error('Failed to get token:', tokenError);
         throw new Error('Authentication failed: Could not retrieve access token');
       }
 
@@ -37,7 +36,7 @@ class RAGService {
       if (token) {
         // Method 1: Standard Authorization Bearer header
         headers['Authorization'] = `Bearer ${token}`;
-        console.log('Added Authorization header');
+        logger.debug('Added Authorization header');
 
         // Method 2: Extract user ID and add as x-user-id header
         try {
@@ -54,54 +53,54 @@ class RAGService {
 
             if (parsed.sub) {
               headers['x-user-id'] = parsed.sub;
-              console.log('Added x-user-id header:', parsed.sub.substring(0, 10) + '...');
+              logger.debug('Added x-user-id header from token');
             } else {
-              console.warn('No sub field in JWT token');
+              logger.warn('No sub field in JWT token');
             }
           } else if (tokenParts.length === 5) {
-            console.log('Encrypted token detected - fetching user profile for x-user-id');
+            logger.debug('Encrypted token detected - fetching user profile for x-user-id');
             try {
               const user = await authService.getUser();
               if (user?.sub) {
                 headers['x-user-id'] = user.sub;
-                console.log('Added x-user-id header from profile for encrypted token:', user.sub.substring(0, 10) + '...');
+                logger.debug('Added x-user-id header from profile for encrypted token');
               } else {
-                console.warn('Could not retrieve user profile for x-user-id');
+                logger.warn('Could not retrieve user profile for x-user-id');
               }
             } catch (profileError) {
-              console.warn('Error fetching user profile for x-user-id:', profileError.message);
+              logger.warn('Error fetching user profile for x-user-id:', profileError.message);
             }
           } else {
-            console.warn('Invalid JWT format - parts:', tokenParts.length);
+            logger.warn('Invalid JWT format - parts:', tokenParts.length);
             try {
               const user = await authService.getUser();
               if (user?.sub) {
                 headers['x-user-id'] = user.sub;
-                console.log('Added x-user-id header from profile:', user.sub.substring(0, 10) + '...');
+                logger.debug('Added x-user-id header from profile');
               } else {
-                console.warn('Could not retrieve user profile for x-user-id');
+                logger.warn('Could not retrieve user profile for x-user-id');
               }
             } catch (profileError) {
-              console.warn('Error fetching user profile for x-user-id:', profileError.message);
+              logger.warn('Error fetching user profile for x-user-id:', profileError.message);
             }
           }
         } catch (jwtError) {
-          console.warn('Could not parse JWT for x-user-id:', jwtError.message);
+          logger.warn('Could not parse JWT for x-user-id:', jwtError.message);
           try {
             const user = await authService.getUser();
             if (user?.sub) {
               headers['x-user-id'] = user.sub;
-              console.log('Added x-user-id header from profile:', user.sub.substring(0, 10) + '...');
+              logger.debug('Added x-user-id header from profile');
             } else {
-              console.warn('Could not retrieve user profile for x-user-id');
+              logger.warn('Could not retrieve user profile for x-user-id');
             }
           } catch (profileError) {
-            console.warn('Error fetching user profile for x-user-id:', profileError.message);
+            logger.warn('Error fetching user profile for x-user-id:', profileError.message);
           }
           // Continue anyway - the function should handle JWT parsing server-side
         }
       } else {
-        console.error('No token available for authentication');
+        logger.error('No token available for authentication');
         throw new Error('Authentication required: No access token available');
       }
 
@@ -110,8 +109,8 @@ class RAGService {
       headers['X-Client-Version'] = '2.1.0';
       headers['X-Timestamp'] = new Date().toISOString();
 
-      console.log('Request headers prepared:', Object.keys(headers));
-      console.log('Making request to:', endpoint);
+      logger.debug('Request headers prepared:', Object.keys(headers));
+      logger.debug('Making request to:', endpoint);
 
       // Make the request with proper error handling
       const response = await fetch(endpoint, {
@@ -120,18 +119,18 @@ class RAGService {
         body: JSON.stringify(data)
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
+      logger.debug('Response status:', response.status);
+      logger.debug('Response ok:', response.ok);
 
       if (!response.ok) {
-        console.error('Request failed with status:', response.status);
+        logger.error('Request failed with status:', response.status);
         
         let errorData;
         try {
           errorData = await response.json();
-          console.error('Error response data:', errorData);
+          logger.error('Error response data:', errorData);
         } catch (parseError) {
-          console.error('Could not parse error response:', parseError);
+          logger.error('Could not parse error response:', parseError);
           errorData = { 
             error: `HTTP ${response.status}: ${response.statusText}`,
             details: 'Could not parse error response'
@@ -151,22 +150,19 @@ class RAGService {
       }
 
       const result = await response.json();
-      console.log('Request successful, response keys:', Object.keys(result));
-      console.log('=== REQUEST COMPLETED ===');
+      logger.debug('Request successful, response keys:', Object.keys(result));
+      logger.debug('Request completed');
       return result;
 
     } catch (error) {
-      console.error('=== REQUEST FAILED ===');
-      console.error('Error type:', error.constructor.name);
-      console.error('Error message:', error.message);
-      console.error('=======================');
+      logger.error('Request failed:', error);
       throw error;
     }
   }
 
   async testConnection() {
     try {
-      console.log('Testing RAG connection...');
+      logger.debug('Testing RAG connection...');
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         action: 'test'
       });
@@ -178,7 +174,7 @@ class RAGService {
       };
       
     } catch (error) {
-      console.error('RAG connection test failed:', error);
+      logger.error('RAG connection test failed:', error);
       return {
         success: false,
         error: error.message,
@@ -193,7 +189,7 @@ class RAGService {
         throw new Error('File is required');
       }
 
-      console.log('Uploading document:', file.name);
+      logger.debug('Uploading document:', file.name);
       const text = await this.extractTextFromFile(file);
       
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
@@ -216,7 +212,7 @@ class RAGService {
       return result;
 
     } catch (error) {
-      console.error('Error uploading document:', error);
+      logger.error('Error uploading document:', error);
       throw error;
     }
   }
@@ -244,20 +240,20 @@ class RAGService {
         const { value } = await mammoth.extractRawText({ arrayBuffer });
         return value;
       } catch (err) {
-        console.error('Failed to extract DOCX text:', err);
+        logger.error('Failed to extract DOCX text:', err);
         return '';
       }
     }
 
     // For unsupported file types return empty string for now
-    console.warn('Unsupported file type for text extraction:', file.type || file.name);
+    logger.warn('Unsupported file type for text extraction:', file.type || file.name);
 
     return '';
   }
 
   async getDocuments() {
     try {
-      console.log('Getting documents list...');
+      logger.debug('Getting documents list...');
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         action: 'list'
       });
@@ -265,7 +261,7 @@ class RAGService {
       return result.documents || [];
 
     } catch (error) {
-      console.error('Error getting documents:', error);
+      logger.error('Error getting documents:', error);
       throw error;
     }
   }
@@ -280,7 +276,7 @@ class RAGService {
       return result;
 
     } catch (error) {
-      console.error('Error deleting document:', error);
+      logger.error('Error deleting document:', error);
       throw error;
     }
   }
@@ -304,7 +300,7 @@ class RAGService {
       return result;
 
     } catch (error) {
-      console.error('Error searching documents:', error);
+      logger.error('Error searching documents:', error);
       throw error;
     }
   }
@@ -371,7 +367,7 @@ Answer:`;
       };
 
     } catch (error) {
-      console.error('Error generating RAG response:', error);
+      logger.error('Error generating RAG response:', error);
       throw error;
     }
   }
@@ -387,7 +383,7 @@ Answer:`;
         resources: response.resources || []
       };
     } catch (error) {
-      console.error('Error performing RAG search:', error);
+      logger.error('Error performing RAG search:', error);
       throw error;
     }
   }
@@ -401,7 +397,7 @@ Answer:`;
       return result;
 
     } catch (error) {
-      console.error('Error getting stats:', error);
+      logger.error('Error getting stats:', error);
       throw error;
     }
   }
@@ -500,7 +496,7 @@ Answer:`;
       return diagnostics;
       
     } catch (error) {
-      console.error('Error running diagnostics:', error);
+      logger.error('Error running diagnostics:', error);
       return {
         timestamp: new Date().toISOString(),
         mode: 'neon-postgresql',
@@ -543,7 +539,7 @@ This test ensures the Neon RAG system can process documents efficiently and prov
       };
       
     } catch (error) {
-      console.error('Test upload failed:', error);
+      logger.error('Test upload failed:', error);
       return {
         success: false,
         error: error.message,
@@ -566,7 +562,7 @@ This test ensures the Neon RAG system can process documents efficiently and prov
       };
       
     } catch (error) {
-      console.error('Test search failed:', error);
+      logger.error('Test search failed:', error);
       return {
         success: false,
         error: error.message,

@@ -1,5 +1,6 @@
 import { createAuth0Client } from '@auth0/auth0-spa-js';
 import { AUTH0_CONFIG, ERROR_MESSAGES } from '../config/constants';
+import logger from '../utils/logger';
 
 class AuthService {
   constructor() {
@@ -20,7 +21,7 @@ class AuthService {
         throw new Error('Auth0 configuration missing. Please check environment variables.');
       }
 
-      console.log('Initializing Auth0 client...');
+      logger.info('Initializing Auth0 client...');
       this.auth0Client = await createAuth0Client({
         domain: AUTH0_CONFIG.DOMAIN,
         clientId: AUTH0_CONFIG.CLIENT_ID,
@@ -32,10 +33,10 @@ class AuthService {
       });
 
       this.isInitialized = true;
-      console.log('Auth0 client initialized successfully');
+      logger.info('Auth0 client initialized successfully');
       return this.auth0Client;
     } catch (error) {
-      console.error('Auth0 initialization failed:', error);
+      logger.error('Auth0 initialization failed:', error);
       throw new Error(`Authentication service initialization failed: ${error.message}`);
     }
   }
@@ -50,7 +51,7 @@ class AuthService {
       // Clean up the URL
       window.history.replaceState({}, document.title, window.location.pathname);
     } catch (error) {
-      console.error('Error handling redirect callback:', error);
+      logger.error('Error handling redirect callback:', error);
       throw new Error('Failed to complete authentication');
     }
   }
@@ -63,7 +64,7 @@ class AuthService {
     try {
       return await this.auth0Client.isAuthenticated();
     } catch (error) {
-      console.error('Error checking authentication status:', error);
+      logger.error('Error checking authentication status:', error);
       return false;
     }
   }
@@ -84,7 +85,7 @@ class AuthService {
 
       return { ...user, roles };
     } catch (error) {
-      console.error('Error getting user:', error);
+      logger.error('Error getting user:', error);
       return null;
     }
   }
@@ -96,30 +97,30 @@ class AuthService {
   }
 
   async getToken() {
-    console.log('=== GET TOKEN DEBUG ===');
+    logger.debug('Requesting access token');
     
     if (!this.auth0Client) {
-      console.error('Auth0 client not initialized');
+      logger.error('Auth0 client not initialized');
       throw new Error('Auth0 client not initialized');
     }
 
     try {
       // Check if user is authenticated first
       const isAuth = await this.isAuthenticated();
-      console.log('User is authenticated:', isAuth);
+      logger.debug('User is authenticated:', isAuth);
       
       if (!isAuth) {
-        console.error('User is not authenticated');
+        logger.error('User is not authenticated');
         throw new Error('User is not authenticated');
       }
 
       // Check if we have a cached token that's still valid
       if (this.cachedToken && this.tokenExpiry && Date.now() < this.tokenExpiry - 60000) {
-        console.log('Using cached token (expires in:', Math.round((this.tokenExpiry - Date.now()) / 1000), 'seconds)');
+        logger.debug(`Using cached token, expires in ${Math.round((this.tokenExpiry - Date.now()) / 1000)} seconds`);
         return this.cachedToken;
       }
 
-      console.log('Getting fresh token from Auth0...');
+      logger.debug('Getting fresh token from Auth0...');
       
       // Get fresh token with enhanced options
       const token = await this.auth0Client.getTokenSilently({
@@ -134,13 +135,11 @@ class AuthService {
       });
 
       if (!token) {
-        console.error('No token returned from Auth0');
+        logger.error('No token returned from Auth0');
         throw new Error('No token returned from authentication service');
       }
 
-      console.log('Token received successfully');
-      console.log('Token length:', token.length);
-      console.log('Token starts correctly:', token.startsWith('eyJ'));
+      logger.debug('Token received successfully');
 
       // Parse token to get expiry
       try {
@@ -154,26 +153,22 @@ class AuthService {
           const decoded = JSON.parse(atob(payload));
           if (decoded.exp) {
             this.tokenExpiry = decoded.exp * 1000; // Convert to milliseconds
-            console.log('Token expires at:', new Date(this.tokenExpiry).toISOString());
+            logger.debug('Token expires at', new Date(this.tokenExpiry).toISOString());
           }
           
-          console.log('Token subject:', decoded.sub);
-          console.log('Token audience:', decoded.aud);
         }
       } catch (parseError) {
-        console.warn('Could not parse token for caching:', parseError);
+        logger.warn('Could not parse token for caching:', parseError);
       }
 
       // Cache the token
       this.cachedToken = token;
       
-      console.log('=== TOKEN SUCCESS ===');
+      logger.debug('Token retrieval succeeded');
       return token;
 
     } catch (error) {
-      console.error('=== TOKEN ERROR ===');
-      console.error('Error type:', error.constructor.name);
-      console.error('Error message:', error.message);
+      logger.error('Token retrieval failed:', error);
       
       // Clear cached token on error
       this.cachedToken = null;
@@ -181,17 +176,16 @@ class AuthService {
 
       // Handle specific Auth0 errors
       if (error.error === 'login_required') {
-        console.error('Login required - redirecting to login');
+        logger.error('Login required - redirecting to login');
         throw new Error('Please sign in again to continue');
       } else if (error.error === 'consent_required') {
-        console.error('Consent required');
+        logger.error('Consent required');
         throw new Error('Additional consent required');
       } else if (error.error === 'interaction_required') {
-        console.error('Interaction required');
+        logger.error('Interaction required');
         throw new Error('Additional authentication required');
       }
 
-      console.error('=== END TOKEN ERROR ===');
       throw new Error(`Failed to get access token: ${error.message}`);
     }
   }
@@ -202,7 +196,7 @@ class AuthService {
     }
 
     try {
-      console.log('Initiating login...');
+      logger.info('Initiating login...');
       await this.auth0Client.loginWithRedirect({
         authorizationParams: {
           redirect_uri: AUTH0_CONFIG.REDIRECT_URI,
@@ -211,7 +205,7 @@ class AuthService {
         }
       });
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       throw new Error('Failed to initiate login');
     }
   }
@@ -222,7 +216,7 @@ class AuthService {
       try {
         await this.initialize();
       } catch (initError) {
-        console.error('Auth0 initialization failed during logout:', initError);
+        logger.error('Auth0 initialization failed during logout:', initError);
       }
     }
 
@@ -243,14 +237,14 @@ class AuthService {
       // Ensure the browser returns to the landing page after logging out
       window.location.assign(AUTH0_CONFIG.LOGOUT_URI);
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error('Logout error:', error);
       throw new Error('Failed to logout');
     }
   }
 
   // Clear token cache (useful for debugging)
   clearTokenCache() {
-    console.log('Clearing token cache...');
+    logger.debug('Clearing token cache');
     this.cachedToken = null;
     this.tokenExpiry = null;
   }
@@ -266,7 +260,7 @@ class AuthService {
   }
 
   handleAuthError(error) {
-    console.error('Auth Error:', error);
+    logger.error('Auth Error:', error);
     
     if (!error.error) {
       return ERROR_MESSAGES.AUTH_ERROR;
@@ -319,7 +313,7 @@ export const initializeAuth = async (setUser, setIsLoadingAuth, initializeWelcom
     
     setIsLoadingAuth(false);
   } catch (error) {
-    console.error('Auth initialization error:', error);
+    logger.error('Auth initialization error:', error);
     setIsLoadingAuth(false);
   }
 };
@@ -329,7 +323,7 @@ export const handleLogin = async () => {
   try {
     await authService.login();
   } catch (error) {
-    console.error('Login failed:', error);
+    logger.error('Login failed:', error);
     // Could show a toast notification here
   }
 };
@@ -339,7 +333,7 @@ export const handleLogout = async () => {
   try {
     await authService.logout();
   } catch (error) {
-    console.error('Logout failed:', error);
+    logger.error('Logout failed:', error);
     // Could show a toast notification here
   }
 };
@@ -349,7 +343,7 @@ export const getToken = async () => {
   try {
     return await authService.getToken();
   } catch (error) {
-    console.error('Token retrieval failed:', error);
+    logger.error('Token retrieval failed:', error);
     throw error;
   }
 };
@@ -359,7 +353,7 @@ export const getUserId = async () => {
   try {
     return await authService.getUserId();
   } catch (error) {
-    console.error('User ID retrieval failed:', error);
+    logger.error('User ID retrieval failed:', error);
     return null;
   }
 };
