@@ -1,4 +1,568 @@
-// Add these handlers to your existing netlify/functions/neon-db.js file
+// netlify/functions/neon-db.js
+import { neon } from '@neondatabase/serverless';
+
+const headers = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-user-id',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Content-Type': 'application/json',
+};
+
+// Initialize Neon connection
+const getDatabaseConnection = () => {
+  const connectionString = process.env.NEON_DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('NEON_DATABASE_URL environment variable is not set');
+  }
+  return neon(connectionString);
+};
+
+// Extract the user ID from various sources
+const extractUserId = async (event, context, requestData = {}) => {
+  console.log('=== USER ID EXTRACTION ===');
+  console.log('Available headers:', Object.keys(event.headers || {}));
+  
+  let userId = null;
+  let source = 'unknown';
+  let debugInfo = {};
+  
+  // Method 1: Direct x-user-id header (most reliable)
+  if (event.headers['x-user-id']) {
+    userId = event.headers['x-user-id'];
+    source = 'x-user-id header';
+    debugInfo.foundInHeader = true;
+    console.log('✅ Found user ID in x-user-id header');
+  }
+  
+  // Method 2: Case variations of x-user-id header
+  if (!userId && event.headers['X-User-ID']) {
+    userId = event.headers['X-User-ID'];
+    source = 'X-User-ID header (case variation)';
+    debugInfo.foundInHeaderCaseVar = true;
+    console.log('✅ Found user ID in X-User-ID header');
+  }
+  
+  // Method 3: Extract from Authorization Bearer token
+  if (!userId && event.headers.authorization) {
+    try {
+      const authHeader = event.headers.authorization;
+      console.log('Processing Authorization header...');
+      debugInfo.hasAuthHeader = true;
+      
+      if (authHeader.startsWith('Bearer ')) {
+        const token = authHeader.replace('Bearer ', '');
+        debugInfo.tokenLength = token.length;
+        
+        const parts = token.split('.');
+        console.log('JWT parts count:', parts.length);
+        debugInfo.jwtPartsCount = parts.length;
+        
+        // Handle different JWT formats
+        if (parts.length === 3) {
+          // Standard JWT (JWS): header.payload.signature
+          try {
+            let payload = parts[1];
+            // Add padding if needed
+            while (payload.length % 4) {
+              payload += '=';
+            }
+            
+            const decoded = Buffer.from(payload, 'base64').toString('utf8');
+            const parsed = JSON.parse(decoded);
+            
+            console.log('JWT payload decoded successfully');
+            debugInfo.jwtDecoded = true;
+            debugInfo.jwtSubject = parsed.sub ? 'present' : 'missing';
+            
+            if (parsed.sub) {
+              userId = parsed.sub;
+              source = 'JWT Bearer token (3-part)';
+              debugInfo.extractedFromJWT = true;
+              console.log('✅ Extracted user ID from JWT');
+            }
+          } catch (jwtError) {
+            console.log('3-part JWT parsing error:', jwtError.message);
+            debugInfo.jwtError = jwtError.message;
+          }
+        } else if (parts.length === 5) {
+          // Encrypted JWT (JWE): header.encrypted_key.iv.ciphertext.tag
+          console.log('🔒 Detected 5-part JWT (JWE - encrypted)');
+          debugInfo.jwtType = 'JWE (encrypted)';
+          debugInfo.requiresServerDecryption = true;
+          
+          // For JWE, we cannot decode the payload client-side
+          // The client MUST send the user ID via x-user-id header
+          console.log('❌ Cannot decode JWE payload - x-user-id header required');
+        } else {
+          console.log('⚠️ Unexpected JWT format - parts:', parts.length);
+          debugInfo.jwtUnexpectedFormat = true;
+        }
+      } else {
+        console.log('Authorization header does not start with Bearer');
+        debugInfo.authHeaderFormat = 'not_bearer';
+      }
+    } catch (error) {
+      console.log('Auth header processing error:', error.message);
+      debugInfo.authProcessingError = error.message;
+    }
+  }
+  
+  // Method 4: Check Netlify context (backup)
+  if (!userId && context.clientContext?.user?.sub) {
+    userId = context.clientContext.user.sub;
+    source = 'netlify context';
+    debugInfo.foundInContext = true;
+    console.log('✅ Found user ID in Netlify context');
+  }
+  
+  // Method 5: Check request body for explicit user ID
+  if (!userId && requestData.userId) {
+    userId = requestData.userId;
+    source = 'request body';
+    debugInfo.foundInBody = true;
+    console.log('✅ Found user ID in request body');
+  }
+
+  // Method 6: Development fallback
+  if (!userId && (process.env.NODE_ENV === 'development' || process.env.NETLIFY_DEV === 'true')) {
+    userId = 'dev-user-' + Date.now();
+    source = 'development fallback';
+    debugInfo.developmentFallback = true;
+    console.log('⚠️ Using development fallback user ID');
+  }
+  
+  console.log('=== EXTRACTION RESULTS ===');
+  console.log('Final userId:', userId || 'NOT_FOUND');
+  console.log('Source:', source);
+  console.log('Debug info:', debugInfo);
+  console.log('================================');
+  
+  return { userId, source, debugInfo };
+};
+
+export const handler = async (event, context) => {
+  // Handle CORS preflight
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ message: 'CORS preflight' }),
+    };
+  }
+
+  console.log('=== NEON DB FUNCTION CALLED ===');
+  console.log('Method:', event.httpMethod);
+  console.log('Has body:', !!event.body);
+  console.log('Headers received:', Object.keys(event.headers || {}));
+  console.log('User agent:', event.headers['user-agent']);
+
+  try {
+    if (event.httpMethod !== 'POST') {
+      return {
+        statusCode: 405,
+        headers,
+        body: JSON.stringify({ error: 'Method not allowed' }),
+      };
+    }
+
+    let requestData;
+    try {
+      requestData = JSON.parse(event.body || '{}');
+    } catch (parseError) {
+      console.error('Error parsing request body:', parseError);
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid JSON in request body' }),
+      };
+    }
+
+    console.log('Request action:', requestData.action);
+
+    const { userId, source, debugInfo } = await extractUserId(event, context, requestData);
+
+    if (!userId) {
+      console.error('❌ No user ID found from any source');
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ 
+          error: 'User authentication required',
+          message: 'No user ID could be extracted from the request. Please ensure you are properly authenticated.',
+          debug: {
+            availableHeaders: Object.keys(event.headers || {}),
+            hasAuth: !!event.headers.authorization,
+            hasXUserId: !!event.headers['x-user-id'],
+            hasContext: !!context.clientContext?.user?.sub,
+            debugInfo,
+            timestamp: new Date().toISOString(),
+            suggestion: 'Try signing out and signing in again, or check that x-user-id header is being sent.'
+          }
+        }),
+      };
+    }
+
+    console.log(`✅ Authenticated user: ${userId} (from ${source})`);
+
+    const { action, data } = requestData;
+
+    if (!action) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Action parameter is required' }),
+      };
+    }
+
+    console.log('Processing action:', action, 'for user:', userId);
+
+    // Initialize database connection
+    const sql = getDatabaseConnection();
+
+    // Handle different actions
+    switch (action) {
+      case 'save_conversation':
+        return await handleSaveConversation(sql, userId, data);
+      
+      case 'get_conversations':
+        return await handleGetConversations(sql, userId);
+      
+      case 'clear_conversations':
+        return await handleClearConversations(sql, userId);
+      
+      case 'get_stats':
+        return await handleGetStats(sql, userId);
+
+      case 'get_recent_conversations':
+        return await handleGetRecentConversations(sql, userId, data);
+
+      case 'get_admin_config':
+        return await handleGetAdminConfig(sql, userId, data);
+
+      case 'update_admin_config':
+        return await handleUpdateAdminConfig(sql, userId, data);
+
+      case 'get_system_status':
+        return await handleGetSystemStatus(sql, userId, data);
+
+      case 'analyze_conversations_for_learning':
+        return await handleAnalyzeConversationsForLearning(sql, userId, data);
+
+      case 'health_check':
+        return await handleHealthCheck(sql, userId);
+
+      case 'add_training_resource':
+        return await handleAddTrainingResource(sql, userId, data);
+
+      case 'get_training_resources':
+        return await handleGetTrainingResources(sql, userId);
+
+      default:
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: `Invalid action: ${action}` }),
+        };
+    }
+  } catch (error) {
+    console.error('=== NEON DB FUNCTION ERROR ===');
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('==============================');
+    
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        error: 'Internal server error',
+        message: error.message,
+        timestamp: new Date().toISOString(),
+        suggestion: 'Please try again. If the problem persists, check your authentication status.'
+      }),
+    };
+  }
+};
+
+/**
+ * Save conversation to Neon database
+ */
+async function handleSaveConversation(sql, userId, data) {
+  try {
+    console.log('💾 Saving conversation to Neon for user:', userId);
+
+    if (!data || !data.messages || !Array.isArray(data.messages)) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid conversation data - messages array required' }),
+      };
+    }
+
+    const { messages, metadata = {} } = data;
+
+    if (messages.length === 0) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Empty conversation - no messages to save' }),
+      };
+    }
+
+    console.log(`Processing ${messages.length} messages...`);
+
+    // Extract RAG information
+    const ragMessages = messages.filter(msg => 
+      msg.sources && msg.sources.length > 0
+    );
+    
+    const ragDocuments = [...new Set(
+      ragMessages.flatMap(msg => 
+        msg.sources?.map(source => source.documentId) || []
+      )
+    )];
+
+    console.log(`Found ${ragMessages.length} RAG messages with ${ragDocuments.length} unique documents`);
+
+    // Insert conversation record
+    const [conversation] = await sql`
+      INSERT INTO conversations (
+        user_id, 
+        messages, 
+        metadata, 
+        message_count, 
+        used_rag, 
+        rag_documents_referenced
+      )
+      VALUES (
+        ${userId},
+        ${JSON.stringify(messages)},
+        ${JSON.stringify(metadata)},
+        ${messages.length},
+        ${ragMessages.length > 0},
+        ${ragDocuments}
+      )
+      RETURNING id, created_at
+    `;
+
+    console.log('✅ Conversation saved successfully to Neon:', conversation.id);
+
+    return {
+      statusCode: 201,
+      headers,
+      body: JSON.stringify({
+        id: conversation.id,
+        created_at: conversation.created_at,
+        message: 'Conversation saved successfully to Neon database',
+        messageCount: messages.length,
+        ragUsed: ragMessages.length > 0,
+        ragDocuments: ragDocuments.length,
+        userId: userId,
+        source: 'neon-postgresql'
+      }),
+    };
+  } catch (error) {
+    console.error('❌ Error saving conversation to Neon:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get conversations from Neon database
+ */
+async function handleGetConversations(sql, userId) {
+  try {
+    console.log('📖 Loading conversations from Neon for user:', userId);
+
+    const conversations = await sql`
+      SELECT 
+        id,
+        messages,
+        metadata,
+        message_count,
+        used_rag,
+        rag_documents_referenced,
+        created_at,
+        updated_at
+      FROM conversations 
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+      LIMIT 100
+    `;
+
+    console.log(`✅ Loaded ${conversations.length} conversations from Neon`);
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        conversations: conversations.map(conv => ({
+          id: conv.id,
+          messages: conv.messages,
+          metadata: conv.metadata,
+          messageCount: conv.message_count,
+          used_rag: conv.used_rag,
+          rag_documents_referenced: conv.rag_documents_referenced,
+          created_at: conv.created_at,
+          updated_at: conv.updated_at
+        })),
+        total: conversations.length,
+        userId: userId,
+        source: 'neon-postgresql'
+      }),
+    };
+  } catch (error) {
+    console.error('❌ Error loading conversations from Neon:', error);
+    
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ 
+        conversations: [], 
+        total: 0,
+        message: 'No conversations found or error occurred',
+        error: error.message
+      }),
+    };
+  }
+}
+
+/**
+ * Clear all conversations for user
+ */
+async function handleClearConversations(sql, userId) {
+  try {
+    console.log('🗑️ Clearing conversations from Neon for user:', userId);
+
+    const result = await sql`
+      DELETE FROM conversations 
+      WHERE user_id = ${userId}
+    `;
+
+    console.log('✅ Conversations cleared successfully from Neon');
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ 
+        message: 'All conversations deleted successfully from Neon database',
+        deletedCount: result.count || 0,
+        userId: userId,
+        source: 'neon-postgresql'
+      }),
+    };
+  } catch (error) {
+    console.error('❌ Error clearing conversations from Neon:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get conversation statistics
+ */
+async function handleGetStats(sql, userId) {
+  try {
+    console.log('📊 Getting stats from Neon for user:', userId);
+
+    const [stats] = await sql`
+      SELECT 
+        COUNT(*) as total_conversations,
+        SUM(message_count) as total_messages,
+        COUNT(*) FILTER (WHERE used_rag = true) as rag_conversations,
+        MIN(created_at) as oldest_conversation,
+        MAX(created_at) as newest_conversation
+      FROM conversations 
+      WHERE user_id = ${userId}
+    `;
+
+    const ragUsagePercentage = stats.total_conversations > 0 ? 
+      Math.round((stats.rag_conversations / stats.total_conversations) * 100 * 100) / 100 : 0;
+    
+    const avgMessagesPerConversation = stats.total_conversations > 0 ?
+      Math.round((stats.total_messages / stats.total_conversations) * 100) / 100 : 0;
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        stats: {
+          totalConversations: parseInt(stats.total_conversations) || 0,
+          totalMessages: parseInt(stats.total_messages) || 0,
+          ragConversations: parseInt(stats.rag_conversations) || 0,
+          ragUsagePercentage,
+          avgMessagesPerConversation,
+          oldestConversation: stats.oldest_conversation,
+          newestConversation: stats.newest_conversation
+        },
+        userId: userId,
+        source: 'neon-postgresql'
+      }),
+    };
+  } catch (error) {
+    console.error('❌ Error getting stats from Neon:', error);
+    throw error;
+  }
+}
+
+/**
+ * Health check
+ */
+async function handleHealthCheck(sql, userId) {
+  try {
+    console.log('🏥 Performing Neon health check...');
+
+    // Test database connection
+    const [result] = await sql`SELECT NOW() as current_time, version() as db_version`;
+    
+    // Test table existence
+    const tables = await sql`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name IN ('conversations', 'rag_documents', 'rag_document_chunks')
+    `;
+
+    const hasConversationsTable = tables.some(t => t.table_name === 'conversations');
+    const hasRAGTables = tables.some(t => t.table_name === 'rag_documents');
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        status: 'healthy',
+        database: {
+          connected: true,
+          currentTime: result.current_time,
+          version: result.db_version
+        },
+        tables: {
+          conversations: hasConversationsTable,
+          rag_documents: hasRAGTables,
+          total: tables.length
+        },
+        userId: userId,
+        timestamp: new Date().toISOString(),
+        source: 'neon-postgresql'
+      }),
+    };
+  } catch (error) {
+    console.error('❌ Neon health check failed:', error);
+    
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        status: 'unhealthy',
+        error: error.message,
+        timestamp: new Date().toISOString(),
+        source: 'neon-postgresql'
+      }),
+    };
+  }
+}
+
+
+// Add this to your existing netlify/functions/neon-db.js file
 
 /**
  * Handle getting recent conversations for learning suggestions
@@ -19,7 +583,7 @@ async function handleGetRecentConversations(sql, userId, data) {
         rag_documents_referenced,
         created_at,
         updated_at
-      FROM conversations 
+      FROM conversations
       WHERE user_id = ${userId}
         AND message_count >= 2
       ORDER BY created_at DESC
@@ -48,15 +612,234 @@ async function handleGetRecentConversations(sql, userId, data) {
         purpose: 'learning-suggestions'
       }),
     };
-
   } catch (error) {
-    console.error('❌ Error loading recent conversations:', error);
+    console.error('❌ Error loading recent conversations for learning:', error);
+    
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ 
+        conversations: [], 
+        total: 0,
+        message: 'No recent conversations found or error occurred',
+        error: error.message,
+        userId: userId,
+        source: 'neon-postgresql'
+      }),
+    };
+  }
+}
+
+
+// Also add this helper function for conversation analysis
+async function handleAnalyzeConversationsForLearning(sql, userId, data) {
+  try {
+    const { limit = 5 } = data;
+    
+    console.log(`🔍 Analyzing conversations for learning insights - user: ${userId}`);
+
+    // Get detailed conversation data for analysis
+    const conversations = await sql`
+      SELECT 
+        id,
+        messages,
+        metadata,
+        message_count,
+        used_rag,
+        rag_documents_referenced,
+        created_at,
+        extract(epoch from (NOW() - created_at)) / 3600 as hours_ago
+      FROM conversations 
+      WHERE user_id = ${userId}
+        AND message_count >= 2  -- Only conversations with actual exchanges
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `;
+
+    // Extract topics and patterns for learning analysis
+    const analysis = {
+      totalConversations: conversations.length,
+      topics: new Set(),
+      complexity: 'basic',
+      avgMessageCount: 0,
+      recentActivity: conversations.length > 0 ? conversations[0].hours_ago : null,
+      ragUsage: conversations.filter(c => c.used_rag).length,
+      timeframe: {
+        oldest: conversations.length > 0 ? conversations[conversations.length - 1].created_at : null,
+        newest: conversations.length > 0 ? conversations[0].created_at : null
+      }
+    };
+
+    // Analyze conversation content
+    let totalMessages = 0;
+    conversations.forEach(conv => {
+      totalMessages += conv.message_count;
+      
+      // Extract topics from metadata if available
+      if (conv.metadata && conv.metadata.topics) {
+        conv.metadata.topics.forEach(topic => analysis.topics.add(topic));
+      }
+      
+      // Basic complexity assessment
+      if (conv.message_count > 10) {
+        analysis.complexity = 'advanced';
+      } else if (conv.message_count > 5 && analysis.complexity === 'basic') {
+        analysis.complexity = 'intermediate';
+      }
+    });
+
+    analysis.avgMessageCount = conversations.length > 0 ? totalMessages / conversations.length : 0;
+    analysis.topics = Array.from(analysis.topics);
+
+    console.log(`✅ Conversation analysis complete:`, {
+      conversations: analysis.totalConversations,
+      topics: analysis.topics.length,
+      complexity: analysis.complexity
+    });
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        conversations,
+        analysis,
+        userId: userId,
+        source: 'neon-postgresql',
+        analyzedAt: new Date().toISOString()
+      }),
+    };
+  } catch (error) {
+    console.error('❌ Error analyzing conversations for learning:', error);
+    
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
-        error: 'Failed to load recent conversations',
-        message: error.message
+        error: 'Failed to analyze conversations',
+        message: error.message,
+        userId: userId
+      }),
+    };
+  }
+}
+
+
+// Training resources handlers
+async function ensureTrainingResourcesTable(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS training_resources (
+      id SERIAL PRIMARY KEY,
+      user_id VARCHAR(255) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      url TEXT NOT NULL,
+      tag VARCHAR(100),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+  `;
+}
+
+export async function handleAddTrainingResource(sql, userId, data) {
+  try {
+    if (!data || !data.name || !data.url) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Name and URL are required' }),
+      };
+    }
+
+    await ensureTrainingResourcesTable(sql);
+
+    const { name, description = '', url, tag = null } = data;
+    const [resource] = await sql`
+      INSERT INTO training_resources (user_id, name, description, url, tag)
+      VALUES (${userId}, ${name}, ${description}, ${url}, ${tag})
+      RETURNING id, user_id, name, description, url, tag, created_at, updated_at
+    `;
+
+    return {
+      statusCode: 201,
+      headers,
+      body: JSON.stringify({ resource }),
+    };
+  } catch (error) {
+    console.error('❌ Error adding training resource:', error);
+    if (error.code === '42P01') {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: 'training_resources table is missing',
+          message: error.message,
+        }),
+      };
+    }
+    if (error.code === '42703') {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: 'A required column is missing',
+          message: error.message,
+        }),
+      };
+    }
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        error: 'Failed to add training resource',
+        message: error.message,
+      }),
+    };
+  }
+}
+
+export async function handleGetTrainingResources(sql, userId) {
+  try {
+    await ensureTrainingResourcesTable(sql);
+    const resources = await sql`
+      SELECT id, user_id, name, description, url, tag, created_at, updated_at
+      FROM training_resources
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+    `;
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ resources }),
+    };
+  } catch (error) {
+    console.error('❌ Error loading training resources:', error);
+    if (error.code === '42P01') {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: 'training_resources table is missing',
+          message: error.message,
+        }),
+      };
+    }
+    if (error.code === '42703') {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({
+          error: 'A required column is missing',
+          message: error.message,
+        }),
+      };
+    }
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        error: 'Failed to load training resources',
+        message: error.message,
       }),
     };
   }
@@ -68,10 +851,9 @@ async function handleGetRecentConversations(sql, userId, data) {
 async function handleGetAdminConfig(sql, userId, data) {
   try {
     const { configKey = 'learning_suggestions' } = data;
-    
+
     console.log(`⚙️ Loading admin config: ${configKey} for user: ${userId}`);
 
-    // First check if admin_config table exists, create if not
     await sql`
       CREATE TABLE IF NOT EXISTS admin_config (
         id SERIAL PRIMARY KEY,
@@ -83,10 +865,9 @@ async function handleGetAdminConfig(sql, userId, data) {
       )
     `;
 
-    // Get the configuration
     const configs = await sql`
       SELECT config_value, updated_at, updated_by
-      FROM admin_config 
+      FROM admin_config
       WHERE config_key = ${configKey}
     `;
 
@@ -95,7 +876,6 @@ async function handleGetAdminConfig(sql, userId, data) {
       config = configs[0].config_value;
       console.log(`✅ Loaded admin config for ${configKey}`);
     } else {
-      // Return default configuration
       config = {
         learningChatCount: 5,
         enableAISuggestions: true,
@@ -116,7 +896,6 @@ async function handleGetAdminConfig(sql, userId, data) {
         source: 'neon-postgresql'
       }),
     };
-
   } catch (error) {
     console.error('❌ Error loading admin config:', error);
     return {
@@ -136,10 +915,9 @@ async function handleGetAdminConfig(sql, userId, data) {
 async function handleUpdateAdminConfig(sql, userId, data) {
   try {
     const { configKey = 'learning_suggestions', config } = data;
-    
+
     console.log(`⚙️ Updating admin config: ${configKey} for user: ${userId}`);
 
-    // Ensure admin_config table exists
     await sql`
       CREATE TABLE IF NOT EXISTS admin_config (
         id SERIAL PRIMARY KEY,
@@ -151,12 +929,11 @@ async function handleUpdateAdminConfig(sql, userId, data) {
       )
     `;
 
-    // Insert or update the configuration
     await sql`
       INSERT INTO admin_config (config_key, config_value, updated_by, updated_at)
       VALUES (${configKey}, ${JSON.stringify(config)}, ${userId}, CURRENT_TIMESTAMP)
-      ON CONFLICT (config_key) 
-      DO UPDATE SET 
+      ON CONFLICT (config_key)
+      DO UPDATE SET
         config_value = ${JSON.stringify(config)},
         updated_by = ${userId},
         updated_at = CURRENT_TIMESTAMP
@@ -175,7 +952,6 @@ async function handleUpdateAdminConfig(sql, userId, data) {
         message: 'Configuration updated successfully'
       }),
     };
-
   } catch (error) {
     console.error('❌ Error updating admin config:', error);
     return {
@@ -196,9 +972,8 @@ async function handleGetSystemStatus(sql, userId, data) {
   try {
     console.log(`📊 Loading system status for admin dashboard - user: ${userId}`);
 
-    // Get database statistics
     const conversationStats = await sql`
-      SELECT 
+      SELECT
         COUNT(*) as total_conversations,
         COUNT(DISTINCT user_id) as unique_users,
         AVG(message_count) as avg_messages_per_conversation,
@@ -211,9 +986,8 @@ async function handleGetSystemStatus(sql, userId, data) {
       FROM admin_config
     `;
 
-    // Get recent activity (last 7 days)
     const recentActivity = await sql`
-      SELECT 
+      SELECT
         DATE(created_at) as date,
         COUNT(*) as conversations
       FROM conversations
@@ -222,7 +996,6 @@ async function handleGetSystemStatus(sql, userId, data) {
       ORDER BY date DESC
     `;
 
-    // Calculate health scores
     const dbHealth = {
       status: 'healthy',
       connectionTime: '< 100ms',
@@ -260,7 +1033,6 @@ async function handleGetSystemStatus(sql, userId, data) {
         timestamp: new Date().toISOString()
       }),
     };
-
   } catch (error) {
     console.error('❌ Error loading system status:', error);
     return {
@@ -274,19 +1046,3 @@ async function handleGetSystemStatus(sql, userId, data) {
   }
 }
 
-// Update your main handler function to include these new cases:
-/*
-Add these cases to your existing switch statement in the main handler:
-
-case 'get_recent_conversations':
-  return await handleGetRecentConversations(sql, userId, data);
-
-case 'get_admin_config':
-  return await handleGetAdminConfig(sql, userId, data);
-
-case 'update_admin_config':
-  return await handleUpdateAdminConfig(sql, userId, data);
-
-case 'get_system_status':
-  return await handleGetSystemStatus(sql, userId, data);
-*/
