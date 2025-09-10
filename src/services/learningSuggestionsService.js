@@ -1,5 +1,8 @@
 // src/services/learningSuggestionsService.js - ENHANCED VERSION WITH CONFIGURABLE MODELS
-import { getToken } from './authService';
+// Token acquisition is handled via a provider function that the application
+// must set at runtime. This avoids direct coupling with any particular Auth0
+// implementation and ensures the service only requests a token when one has
+// been properly initialized by the host application.
 
 class LearningSuggestionsService {
   constructor() {
@@ -7,6 +10,22 @@ class LearningSuggestionsService {
     this.cache = new Map();
     this.cacheTTL = 5 * 60 * 1000; // 5 minutes cache
     this.defaultChatCount = 5; // Default number of conversations to analyze
+    // Function that returns a Promise resolving to an auth token. Should be
+    // provided by the application (e.g., Auth0's getAccessTokenSilently).
+    this.tokenProvider = null;
+  }
+
+  // Allow the host application to supply a token provider function
+  setTokenProvider(provider) {
+    this.tokenProvider = provider;
+  }
+
+  // Helper to obtain a token using the configured provider
+  async getAuthToken() {
+    if (typeof this.tokenProvider !== 'function') {
+      throw new Error('Auth token provider not set');
+    }
+    return await this.tokenProvider();
   }
 
   /**
@@ -76,7 +95,7 @@ class LearningSuggestionsService {
    */
   async fetchRecentConversations(userId, limit) {
     try {
-      const token = getToken();
+      const token = await this.getAuthToken();
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
@@ -115,11 +134,12 @@ class LearningSuggestionsService {
       const prompt = this.createLearningPrompt(conversationAnalysis);
 
       // Call ChatGPT API using 4o-mini model (configured for learning suggestions)
+      const token = await this.getAuthToken();
       const response = await fetch('/.netlify/functions/chatgpt-learning', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini', // Use 4o-mini for cost-effective learning suggestions
@@ -365,11 +385,12 @@ Return the response in valid JSON format as an array of suggestion objects.`;
    */
   async getAdminConfig() {
     try {
+      const token = await this.getAuthToken();
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           action: 'get_admin_config',
@@ -396,11 +417,12 @@ Return the response in valid JSON format as an array of suggestion objects.`;
    */
   async updateAdminConfig(config) {
     try {
+      const token = await this.getAuthToken();
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           action: 'update_admin_config',

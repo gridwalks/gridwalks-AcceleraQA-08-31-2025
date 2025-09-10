@@ -24,6 +24,8 @@ import learningSuggestionsService from '../services/learningSuggestionsService';
 
 const AdminScreen = ({ onClose }) => {
   const { user, getAccessTokenSilently } = useAuth0();
+  // Ensure the learning suggestions service can obtain tokens
+  learningSuggestionsService.setTokenProvider(getAccessTokenSilently);
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(false);
   const [systemStatus, setSystemStatus] = useState({});

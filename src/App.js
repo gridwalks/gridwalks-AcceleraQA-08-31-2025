@@ -16,6 +16,10 @@ import learningSuggestionsService from './services/learningSuggestionsService';
 function App() {
   const { isAuthenticated, user, getAccessTokenSilently } = useAuth0();
 
+  // Provide the Auth0 token retrieval function to the learning suggestions service
+  // so that it can authenticate its requests without managing Auth0 directly.
+  learningSuggestionsService.setTokenProvider(getAccessTokenSilently);
+
   // Conversation state
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
