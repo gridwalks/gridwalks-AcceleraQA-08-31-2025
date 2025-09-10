@@ -61,12 +61,10 @@ const extractUserId = async (event, context) => {
         if (parts.length === 3) {
           // Standard JWT (JWS): header.payload.signature
           try {
-            let payload = parts[1];
-            // Add padding if needed
-            while (payload.length % 4) {
-              payload += '=';
-            }
-            
+            let payload = parts[1]
+              .replace(/-/g, '+')
+              .replace(/_/g, '/');
+            while (payload.length % 4) payload += '=';
             const decoded = Buffer.from(payload, 'base64').toString('utf8');
             const parsed = JSON.parse(decoded);
             
@@ -81,7 +79,11 @@ const extractUserId = async (event, context) => {
               console.log('✅ Extracted user ID from JWT');
             }
           } catch (jwtError) {
-            console.log('3-part JWT parsing error:', jwtError.message);
+            console.error('3-part JWT parsing error:', {
+              message: jwtError.message,
+              payloadSnippet: parts[1]?.slice(0, 20),
+              stack: jwtError.stack,
+            });
             debugInfo.jwtError = jwtError.message;
           }
         } else if (parts.length === 5) {

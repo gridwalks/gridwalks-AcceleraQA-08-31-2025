@@ -39,7 +39,7 @@ class LearningSuggestionsService {
       console.log('🎓 Getting learning suggestions for user:', userId);
 
       // Get admin configuration for chat count
-      const adminConfig = await this.getAdminConfig();
+      const adminConfig = await this.getAdminConfig(userId);
       const analysisCount = chatCount || adminConfig.learningChatCount || this.defaultChatCount;
       
       console.log(`📊 Analyzing last ${analysisCount} conversations for learning suggestions`);
@@ -100,7 +100,8 @@ class LearningSuggestionsService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId
         },
         body: JSON.stringify({
           action: 'get_recent_conversations',
@@ -383,14 +384,15 @@ Return the response in valid JSON format as an array of suggestion objects.`;
   /**
    * Get admin configuration including chat count for learning suggestions
    */
-  async getAdminConfig() {
+  async getAdminConfig(userId) {
     try {
       const token = await this.getAuthToken();
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId
         },
         body: JSON.stringify({
           action: 'get_admin_config',
@@ -415,14 +417,15 @@ Return the response in valid JSON format as an array of suggestion objects.`;
   /**
    * Update admin configuration for learning suggestions
    */
-  async updateAdminConfig(config) {
+  async updateAdminConfig(config, userId) {
     try {
       const token = await this.getAuthToken();
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': userId
         },
         body: JSON.stringify({
           action: 'update_admin_config',
