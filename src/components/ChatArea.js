@@ -1,20 +1,35 @@
 // src/components/ChatArea.js - DEPLOYMENT READY (fixes DatabaseOff issue)
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Database, BookOpen } from 'lucide-react';
 
 const ChatArea = ({
   messages,
-  inputMessage,
-  setInputMessage,
+  onSendMessage,
   isLoading,
-  handleSendMessage,
-  handleKeyPress,
-  messagesEndRef,
   ragEnabled,
   setRAGEnabled,
-  isSaving
+  isSaving = false
 }) => {
+  const [inputMessage, setInputMessage] = useState('');
+  const messagesEndRef = useRef(null);
+
+  const handleSendMessage = () => {
+    if (!inputMessage.trim()) return;
+    onSendMessage(inputMessage);
+    setInputMessage('');
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
   return (
     <div className="h-full flex flex-col bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Chat Header with RAG Toggle */}
