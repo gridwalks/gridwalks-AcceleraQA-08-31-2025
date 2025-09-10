@@ -133,7 +133,7 @@ export const validateEnvironment = () => {
     const value = process.env[varName];
     return !value || value.trim() === '' || value === 'your_value_here';
   });
-  
+
   if (missing.length > 0) {
     console.error('❌ CONFIGURATION ERROR: Missing required environment variables:');
     missing.forEach(varName => {
@@ -149,15 +149,15 @@ export const validateEnvironment = () => {
     console.error('• OpenAI API Keys: https://platform.openai.com/account/api-keys');
     console.error('• Auth0 Dashboard: https://manage.auth0.com/');
     console.error('• Netlify Environment Variables: https://docs.netlify.com/configure-builds/environment-variables/');
-    
-    return false;
+
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
   
   // Validate Auth0 domain format
   if (AUTH0_CONFIG.DOMAIN && !AUTH0_CONFIG.DOMAIN.includes('.auth0.com')) {
     console.error('❌ CONFIGURATION ERROR: Invalid Auth0 domain format');
     console.error('   Expected format: your-tenant.auth0.com or your-tenant.us.auth0.com');
-    return false;
+    throw new Error('Invalid Auth0 domain format');
   }
   
   // Validate OpenAI API key format
@@ -165,9 +165,9 @@ export const validateEnvironment = () => {
   if (apiKey && !apiKey.startsWith('sk-')) {
     console.error('❌ CONFIGURATION ERROR: Invalid OpenAI API key format');
     console.error('   Expected format: sk-proj-... or sk-...');
-    return false;
+    throw new Error('Invalid OpenAI API key format');
   }
-  
+
   console.log('✅ Environment validation passed');
   return true;
 };
