@@ -10,7 +10,8 @@ export const OPENAI_CONFIG = {
   MODEL: 'gpt-4',
   MAX_TOKENS: 1200,
   TEMPERATURE: 0.7,
-  SYSTEM_PROMPT: `You are AcceleraQA, an AI assistant specialized in pharmaceutical quality and compliance. 
+  REQUEST_TIMEOUT_MS: 15000,
+  SYSTEM_PROMPT: `You are AcceleraQA, an AI assistant specialized in pharmaceutical quality and compliance.
 
 Your expertise includes:
 
@@ -108,6 +109,7 @@ TROUBLESHOOTING STEPS:
 3. Upgrade your plan if needed`,
 
   NETWORK_ERROR: '🌐 Network error. Please check your internet connection and try again.',
+  REQUEST_TIMEOUT: `⏱️ Request timed out after ${OPENAI_CONFIG.REQUEST_TIMEOUT_MS / 1000} seconds. Please try again.`,
   GENERIC_ERROR: 'Sorry, I encountered an error. Please try again.',
   
   AUTH_ERROR: `🔐 Authentication error occurred. 
