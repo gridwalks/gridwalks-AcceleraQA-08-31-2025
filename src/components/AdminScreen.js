@@ -53,7 +53,8 @@ const AdminScreen = ({ onClose }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'x-user-id': user.sub
         },
         body: JSON.stringify({
           action: 'get_system_status'
@@ -73,7 +74,7 @@ const AdminScreen = ({ onClose }) => {
 
   const loadLearningConfig = async () => {
     try {
-      const config = await learningSuggestionsService.getAdminConfig();
+      const config = await learningSuggestionsService.getAdminConfig(user.sub);
       setLearningConfig(prev => ({
         ...prev,
         ...config
@@ -86,7 +87,7 @@ const AdminScreen = ({ onClose }) => {
   const saveLearningConfig = async () => {
     setIsLoading(true);
     try {
-      const success = await learningSuggestionsService.updateAdminConfig(learningConfig);
+      const success = await learningSuggestionsService.updateAdminConfig(learningConfig, user.sub);
       if (success) {
         setConfigSaved(true);
         setTimeout(() => setConfigSaved(false), 3000);
