@@ -8,6 +8,7 @@ import Header from './components/Header';
 import ChatInterface from './components/ChatArea';
 import AdminScreen from './components/AdminScreen';
 import ResourcesView from './components/ResourcesView';
+import AuthScreen from './components/AuthScreen';
 
 // Services
 import learningSuggestionsService from './services/learningSuggestionsService';
@@ -221,6 +222,10 @@ function App() {
       </div>
     );
   };
+
+  if (!isAuthenticated) {
+    return <AuthScreen />;
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
