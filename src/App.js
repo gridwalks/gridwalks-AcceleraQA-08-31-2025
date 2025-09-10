@@ -98,6 +98,7 @@ function App() {
   const loadConversations = async () => {
     if (!isAuthenticated || !user) return;
     try {
+      const token = await getAccessTokenSilently();
       const result = await neonService.makeAuthenticatedRequest('/.netlify/functions/neon-db', {
         method: 'POST',
 
@@ -125,6 +126,7 @@ function App() {
   const saveConversation = async (msgs, conversationId = null, isNewConversation = false) => {
     if (!isAuthenticated || !user || msgs.length === 0) return null;
     try {
+      const token = await getAccessTokenSilently();
       await neonService.makeAuthenticatedRequest('/.netlify/functions/neon-db', {
         method: 'POST',
 
