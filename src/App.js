@@ -12,6 +12,7 @@ import AuthScreen from './components/AuthScreen';
 
 // Services
 import learningSuggestionsService from './services/learningSuggestionsService';
+import { AUTH0_CONFIG } from './config/constants';
 
 function App() {
   const { isAuthenticated, user, getAccessTokenSilently } = useAuth0();
@@ -97,13 +98,26 @@ function App() {
   const loadConversations = async () => {
     if (!isAuthenticated || !user) return;
     try {
-      const token = await getAccessTokenSilently();
+      let token = null;
+      try {
+        token = await getAccessTokenSilently({
+          authorizationParams: { audience: AUTH0_CONFIG.AUDIENCE }
+        });
+      } catch (err) {
+        console.warn('Token retrieval failed for loadConversations:', err.message);
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-user-id': user.sub
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/.netlify/functions/neon-db', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({
           action: 'get_conversations',
           userId: user.sub
@@ -125,13 +139,26 @@ function App() {
   const saveConversation = async (msgs, conversationId = null, isNewConversation = false) => {
     if (!isAuthenticated || !user || msgs.length === 0) return null;
     try {
-      const token = await getAccessTokenSilently();
+      let token = null;
+      try {
+        token = await getAccessTokenSilently({
+          authorizationParams: { audience: AUTH0_CONFIG.AUDIENCE }
+        });
+      } catch (err) {
+        console.warn('Token retrieval failed for saveConversation:', err.message);
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-user-id': user.sub
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch('/.netlify/functions/neon-db', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({
           action: conversationId ? 'update_conversation' : 'save_conversation',
           userId: user.sub,

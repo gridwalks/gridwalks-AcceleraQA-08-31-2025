@@ -115,6 +115,12 @@ http://localhost:3000, https://your-app.netlify.app
 
 **Note:** `REACT_APP_AUTH0_ROLES_CLAIM` must match the custom claim added by your Auth0 Action/Rule.
 
+### Token Fallback Behaviour
+
+When requesting access tokens, the application now specifies the API audience so Auth0 returns a JWT containing the `sub` claim.  
+If a JWT cannot be decoded client‑side (for example, encrypted JWE tokens), requests must include an `x-user-id` header with the user's `sub`.  
+All API calls will attempt to proceed even when an access token is unavailable, allowing backend functions to fall back to the `x-user-id` header.
+
 ### 5. Development
 ```bash
 npm start

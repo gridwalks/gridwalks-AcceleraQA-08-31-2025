@@ -4,6 +4,9 @@
 // implementation and ensures the service only requests a token when one has
 // been properly initialized by the host application.
 
+import { AUTH0_CONFIG } from '../config/constants';
+import { getUserId } from './authService';
+
 class LearningSuggestionsService {
   constructor() {
     this.apiUrl = '/.netlify/functions/neon-db';
@@ -25,7 +28,11 @@ class LearningSuggestionsService {
     if (typeof this.tokenProvider !== 'function') {
       throw new Error('Auth token provider not set');
     }
-    return await this.tokenProvider();
+    return await this.tokenProvider({
+      authorizationParams: {
+        audience: AUTH0_CONFIG.AUDIENCE
+      }
+    });
   }
 
   /**
@@ -73,7 +80,7 @@ class LearningSuggestionsService {
       }
 
       // Generate suggestions using ChatGPT-4o-mini
-      const suggestions = await this.generateAISuggestions(meaningfulConversations);
+      const suggestions = await this.generateAISuggestions(meaningfulConversations, userId);
 
       // Cache the results
       this.cache.set(cacheKey, {
@@ -95,13 +102,26 @@ class LearningSuggestionsService {
    */
   async fetchRecentConversations(userId, limit) {
     try {
-      const token = await this.getAuthToken();
+      let token = null;
+      try {
+        token = await this.getAuthToken();
+      } catch (err) {
+        console.warn('Token retrieval failed for fetchRecentConversations:', err.message);
+      }
+
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      if (userId) {
+        headers['x-user-id'] = userId;
+      }
+
       const response = await fetch(this.apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({
           action: 'get_recent_conversations',
           userId: userId,
@@ -110,7 +130,7 @@ class LearningSuggestionsService {
       });
 
       const result = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(result.error || 'Failed to fetch conversations');
       }
@@ -125,7 +145,7 @@ class LearningSuggestionsService {
   /**
    * Generate AI-powered learning suggestions using ChatGPT-4o-mini
    */
-  async generateAISuggestions(conversations) {
+  async generateAISuggestions(conversations, userId) {
     try {
       // Analyze conversation content to extract learning context
       const conversationAnalysis = this.analyzeConversations(conversations);
@@ -134,13 +154,26 @@ class LearningSuggestionsService {
       const prompt = this.createLearningPrompt(conversationAnalysis);
 
       // Call ChatGPT API using 4o-mini model (configured for learning suggestions)
-      const token = await this.getAuthToken();
+      let token = null;
+      try {
+        token = await this.getAuthToken();
+      } catch (err) {
+        console.warn('Token retrieval failed for generateAISuggestions:', err.message);
+      }
+
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      if (userId) {
+        headers['x-user-id'] = userId;
+      }
+
       const response = await fetch('/.netlify/functions/chatgpt-learning', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({
           model: 'gpt-4o-mini', // Use 4o-mini for cost-effective learning suggestions
           messages: [
@@ -385,13 +418,27 @@ Return the response in valid JSON format as an array of suggestion objects.`;
    */
   async getAdminConfig() {
     try {
-      const token = await this.getAuthToken();
+      let token = null;
+      try {
+        token = await this.getAuthToken();
+      } catch (err) {
+        console.warn('Token retrieval failed for getAdminConfig:', err.message);
+      }
+      const userId = await getUserId();
+
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      if (userId) {
+        headers['x-user-id'] = userId;
+      }
+
       const response = await fetch(this.apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({
           action: 'get_admin_config',
           configKey: 'learning_suggestions'
@@ -417,13 +464,27 @@ Return the response in valid JSON format as an array of suggestion objects.`;
    */
   async updateAdminConfig(config) {
     try {
-      const token = await this.getAuthToken();
+      let token = null;
+      try {
+        token = await this.getAuthToken();
+      } catch (err) {
+        console.warn('Token retrieval failed for updateAdminConfig:', err.message);
+      }
+      const userId = await getUserId();
+
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      if (userId) {
+        headers['x-user-id'] = userId;
+      }
+
       const response = await fetch(this.apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({
           action: 'update_admin_config',
           configKey: 'learning_suggestions',

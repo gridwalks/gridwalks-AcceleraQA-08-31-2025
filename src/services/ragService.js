@@ -24,8 +24,7 @@ class RAGService {
         token = await getToken();
         logger.debug('Token retrieved:', !!token);
       } catch (tokenError) {
-        logger.error('Failed to get token:', tokenError);
-        throw new Error('Authentication failed: Could not retrieve access token');
+        logger.warn('Failed to get token:', tokenError);
       }
 
       // Prepare headers with BOTH methods for maximum compatibility
@@ -100,8 +99,16 @@ class RAGService {
           // Continue anyway - the function should handle JWT parsing server-side
         }
       } else {
-        logger.error('No token available for authentication');
-        throw new Error('Authentication required: No access token available');
+        logger.warn('No token available; proceeding with x-user-id fallback if possible');
+        try {
+          const user = await authService.getUser();
+          if (user?.sub) {
+            headers['x-user-id'] = user.sub;
+            logger.debug('Added x-user-id header from profile without token');
+          }
+        } catch (profileError) {
+          logger.warn('Error fetching user profile for x-user-id:', profileError.message);
+        }
       }
 
       // ENHANCED: Add additional headers for debugging
