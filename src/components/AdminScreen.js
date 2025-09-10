@@ -21,6 +21,7 @@ import {
   Unlock
 } from 'lucide-react';
 import learningSuggestionsService from '../services/learningSuggestionsService';
+import neonService from '../services/neonService';
 
 const AdminScreen = ({ onClose }) => {
   const { user, getAccessTokenSilently } = useAuth0();
@@ -47,23 +48,8 @@ const AdminScreen = ({ onClose }) => {
   const loadSystemStatus = async () => {
     setIsLoading(true);
     try {
-      // Load system health status
-      const token = await getAccessTokenSilently();
-      const response = await fetch('/.netlify/functions/neon-db', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          action: 'get_system_status'
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        setSystemStatus(result.status);
-      }
+      const status = await neonService.getSystemStatus();
+      setSystemStatus(status);
     } catch (error) {
       console.error('Error loading system status:', error);
     } finally {
