@@ -226,3 +226,17 @@ export const validateEnvironment = () => {
   console.log('✅ Environment validation passed');
   return true;
 };
+
+// Default export for compatibility
+const authService = {
+  initializeAuth,
+  login,
+  logout,
+  getToken,
+  getTokenInfo,
+  getUser,
+  isAuthenticated,
+  validateEnvironment
+};
+
+export default authService;
