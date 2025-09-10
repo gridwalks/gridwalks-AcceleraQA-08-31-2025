@@ -1,4 +1,4 @@
-// src/services/authService.js - FIXED VERSION
+// src/services/authService.js - COMPLETE VERSION WITH ALL EXPORTS
 
 import { createAuth0Client } from '@auth0/auth0-spa-js';
 
@@ -227,6 +227,22 @@ export const validateEnvironment = () => {
   return true;
 };
 
+// ALIAS EXPORTS FOR COMPATIBILITY
+// These handle different naming conventions your code might be using
+export const handleLogin = login;
+export const handleLogout = logout;
+export const authenticateUser = login;
+export const signIn = login;
+export const signOut = logout;
+export const logoutUser = logout;
+export const loginUser = login;
+export const getAccessToken = getToken;
+export const getUserProfile = getUser;
+export const checkAuth = isAuthenticated;
+export const checkAuthentication = isAuthenticated;
+export const initAuth = initializeAuth;
+export const setupAuth = initializeAuth;
+
 // Default export for compatibility
 const authService = {
   initializeAuth,
@@ -236,7 +252,20 @@ const authService = {
   getTokenInfo,
   getUser,
   isAuthenticated,
-  validateEnvironment
+  validateEnvironment,
+  handleLogin: login,
+  handleLogout: logout,
+  authenticateUser: login,
+  signIn: login,
+  signOut: logout,
+  logoutUser: logout,
+  loginUser: login,
+  getAccessToken: getToken,
+  getUserProfile: getUser,
+  checkAuth: isAuthenticated,
+  checkAuthentication: isAuthenticated,
+  initAuth: initializeAuth,
+  setupAuth: initializeAuth
 };
 
 export default authService;
