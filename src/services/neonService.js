@@ -42,30 +42,26 @@ class NeonService {
         token = await getToken();
         console.log('Token retrieved:', !!token);
         console.log('Token length:', token?.length || 0);
-        
+
         if (token) {
           defaultHeaders['Authorization'] = `Bearer ${token}`;
           console.log('Added Authorization header');
         }
       } catch (tokenError) {
-        console.error('Failed to get token:', tokenError);
-        throw new Error(`Authentication failed: ${tokenError.message}`);
+        console.warn('Failed to get token:', tokenError);
       }
 
       try {
         // Get user ID using the new helper function
         userId = await getUserId();
         console.log('User ID retrieved:', userId ? userId.substring(0, 10) + '...' : 'null');
-        
+
         if (userId) {
           defaultHeaders['x-user-id'] = userId;
           console.log('Added x-user-id header');
-        } else {
-          throw new Error('User ID not available');
         }
       } catch (userIdError) {
-        console.error('Failed to get user ID:', userIdError);
-        throw new Error(`User identification failed: ${userIdError.message}`);
+        console.warn('Failed to get user ID:', userIdError);
       }
 
       // Fallback to stored user ID if available

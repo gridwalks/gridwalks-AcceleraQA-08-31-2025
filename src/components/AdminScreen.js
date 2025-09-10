@@ -21,7 +21,11 @@ import {
   Unlock
 } from 'lucide-react';
 import learningSuggestionsService from '../services/learningSuggestionsService';
+
+import { AUTH0_CONFIG } from '../config/constants';
+
 import neonService from '../services/neonService';
+
 
 const AdminScreen = ({ onClose }) => {
   const { user, getAccessTokenSilently } = useAuth0();
@@ -53,14 +57,36 @@ const AdminScreen = ({ onClose }) => {
       setSystemStatus(status);
 
       // Load system health status
-      const token = await getAccessTokenSilently();
+      let token = null;
+      try {
+        token = await getAccessTokenSilently({
+          authorizationParams: { audience: AUTH0_CONFIG.AUDIENCE }
+        });
+      } catch (err) {
+        console.warn('Token retrieval failed for loadSystemStatus:', err.message);
+      }
+
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      if (user?.sub) {
+        headers['x-user-id'] = user.sub;
+      }
+
       const response = await fetch('/.netlify/functions/neon-db', {
         method: 'POST',
+
+        headers,
+
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
           'x-user-id': user.sub
         },
+
         body: JSON.stringify({
           action: 'get_system_status'
         })
