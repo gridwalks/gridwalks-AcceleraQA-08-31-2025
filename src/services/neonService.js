@@ -1,544 +1,310 @@
 // src/services/neonService.js - FIXED VERSION
-import { getToken, getUserId } from './authService';
+
+import { getToken } from './authService';
 
 class NeonService {
   constructor() {
     this.apiUrl = '/.netlify/functions/neon-db';
     this.isInitialized = false;
-    this.userId = null;
-    this.cachedConversations = null;
+    this.currentUser = null;
   }
 
-  /**
-   * Initialize the service with user authentication
-   */
+  // Initialize service with user context
   async initialize(user) {
-    if (user && user.sub) {
-      this.userId = user.sub;
-      this.isInitialized = true;
-      console.log('NeonService initialized for user:', this.userId);
+    if (!user || !user.sub) {
+      throw new Error('Valid user object required for initialization');
+    }
+
+    this.currentUser = user;
+    this.isInitialized = true;
+    
+    console.log('✅ Neon service initialized for user:', user.sub);
+    
+    // Test connection
+    try {
+      await this.isServiceAvailable();
+      console.log('✅ Neon database connection verified');
+    } catch (error) {
+      console.warn('⚠️ Neon database connection test failed:', error.message);
+      // Don't throw here - service can still work in degraded mode
+    }
+
+    return true;
+  }
+
+  // Check if service is available
+  async isServiceAvailable() {
+    try {
+      const response = await this.makeRequest(this.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'test' })
+      });
+
+      return response.success || false;
+    } catch (error) {
+      console.warn('Neon service availability check failed:', error);
+      return false;
     }
   }
 
-  /**
-   * FIXED: Enhanced authenticated request with better error handling
-   */
-  async makeAuthenticatedRequest(endpoint, options = {}) {
+  // Make authenticated request to Neon API
+  async makeAuthenticatedRequest(url, options = {}) {
+    if (!this.isInitialized) {
+      throw new Error('Neon service not initialized. Call initialize() first.');
+    }
+
     try {
-      console.log('=== NEON SERVICE AUTHENTICATED REQUEST ===');
-      console.log('Endpoint:', endpoint);
-      console.log('Options action:', options.body ? JSON.parse(options.body).action : 'N/A');
-      
-      const defaultHeaders = {
-        'Content-Type': 'application/json',
-      };
-
-      // CRITICAL FIX: Always try to get fresh token and user ID
-      let token = null;
-      let userId = null;
-
-      try {
-        // Get token first
-        token = await getToken();
-        console.log('Token retrieved:', !!token);
-        console.log('Token length:', token?.length || 0);
-        
-        if (token) {
-          defaultHeaders['Authorization'] = `Bearer ${token}`;
-          console.log('Added Authorization header');
-        }
-      } catch (tokenError) {
-        console.error('Failed to get token:', tokenError);
-        throw new Error(`Authentication failed: ${tokenError.message}`);
+      // Get authentication token
+      const token = await getToken();
+      if (!token) {
+        throw new Error('No authentication token available');
       }
 
-      try {
-        // Get user ID using the new helper function
-        userId = await getUserId();
-        console.log('User ID retrieved:', userId ? userId.substring(0, 10) + '...' : 'null');
-        
-        if (userId) {
-          defaultHeaders['x-user-id'] = userId;
-          console.log('Added x-user-id header');
-        } else {
-          throw new Error('User ID not available');
-        }
-      } catch (userIdError) {
-        console.error('Failed to get user ID:', userIdError);
-        throw new Error(`User identification failed: ${userIdError.message}`);
-      }
-
-      // Fallback to stored user ID if available
-      if (!defaultHeaders['x-user-id'] && this.userId) {
-        defaultHeaders['x-user-id'] = this.userId;
-        console.log('Using stored user ID as fallback');
-      }
-
-      // Add debugging headers
-      defaultHeaders['X-Requested-With'] = 'XMLHttpRequest';
-      defaultHeaders['X-Client-Version'] = '2.1.0';
-      defaultHeaders['X-Timestamp'] = new Date().toISOString();
-
-      console.log('Request headers prepared:', Object.keys(defaultHeaders));
-      console.log('Has Authorization:', !!defaultHeaders['Authorization']);
-      console.log('Has x-user-id:', !!defaultHeaders['x-user-id']);
-
-      const response = await fetch(endpoint, {
+      // Make request with authentication
+      const response = await fetch(url, {
         ...options,
         headers: {
-          ...defaultHeaders,
-          ...options.headers,
-        },
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...options.headers
+        }
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-
       if (!response.ok) {
-        console.error('Request failed with status:', response.status);
-        
-        let errorData;
-        try {
-          errorData = await response.json();
-          console.error('Error response data:', errorData);
-        } catch (parseError) {
-          console.error('Could not parse error response:', parseError);
-          errorData = { 
-            error: `HTTP ${response.status}: ${response.statusText}`,
-            details: 'Could not parse error response'
-          };
-        }
-
-        // Enhanced error messages
-        if (response.status === 401) {
-          throw new Error(`Authentication failed: ${errorData.error || 'Unauthorized'}. Please try signing out and signing in again.`);
-        } else if (response.status === 403) {
-          throw new Error(`Access forbidden: ${errorData.error || 'Insufficient permissions'}`);
-        } else if (response.status >= 500) {
-          throw new Error(`Server error: ${errorData.error || 'Internal server error'}. Please try again later.`);
-        } else {
-          throw new Error(errorData.error || `Request failed with status ${response.status}`);
-        }
+        const errorText = await response.text();
+        console.error('Neon API error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Neon API request failed: ${response.status} ${response.statusText}`);
       }
 
-      const result = await response.json();
-      console.log('Request successful, response keys:', Object.keys(result));
-      console.log('=== NEON REQUEST COMPLETED ===');
-      return result;
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Neon API request was not successful');
+      }
+
+      return data;
 
     } catch (error) {
-      console.error('=== NEON REQUEST FAILED ===');
-      console.error('Error type:', error.constructor.name);
-      console.error('Error message:', error.message);
-      console.error('============================');
+      console.error('Authenticated request failed:', error);
       throw error;
     }
   }
 
-  /**
-   * Save a conversation to Neon database
-   */
-  async saveConversation(messages, metadata = {}) {
-    if (!this.isInitialized) {
-      throw new Error('NeonService not initialized');
-    }
-
-    console.log('Saving conversation to Neon...', { 
-      messageCount: messages.length,
-      userId: this.userId 
-    });
-    
+  // Make unauthenticated request (for testing)
+  async makeRequest(url, options = {}) {
     try {
-      const validMessages = messages
-        .filter(msg =>
-          msg &&
-          msg.id &&
-          (msg.type || msg.role) &&
-          msg.content &&
-          msg.timestamp
-        )
-        .map(msg => ({
-          ...msg,
-          type: msg.type || (msg.role === 'assistant' ? 'ai' : msg.role),
-        }));
-
-      if (validMessages.length === 0) {
-        console.warn('No valid messages to save');
-        return { success: false, error: 'No valid messages' };
+      const response = await fetch(url, options);
+      
+      if (!response.ok) {
+        throw new Error(`Request failed: ${response.status} ${response.statusText}`);
       }
 
-      const ragMessages = validMessages.filter(
-        msg => msg.sources && msg.sources.length > 0
-      );
-      
-      const ragDocuments = [...new Set(
-        ragMessages.flatMap(msg => 
-          msg.sources?.map(source => source.documentId) || []
-        )
-      )];
+      return await response.json();
+    } catch (error) {
+      console.error('Request failed:', error);
+      throw error;
+    }
+  }
+
+  // Save conversation to Neon database
+  async saveConversation(messages) {
+    if (!messages || messages.length === 0) {
+      console.log('No messages to save');
+      return { success: true };
+    }
+
+    try {
+      console.log(`💾 Saving ${messages.length} messages to Neon database...`);
 
       const payload = {
         action: 'save_conversation',
-        data: {
-          messages: validMessages.map(msg => ({
-            id: msg.id,
-            type: msg.type,
-            content: msg.content,
-            timestamp: msg.timestamp,
-            resources: msg.resources || [],
-            sources: msg.sources || [],
-            isStudyNotes: msg.isStudyNotes || false
-          })),
-          metadata: {
-            topics: this.extractTopics(validMessages),
-            messageCount: validMessages.length,
-            lastActivity: new Date().toISOString(),
-            ragUsed: ragMessages.length > 0,
-            ragDocuments: ragDocuments,
-            ragMessageCount: ragMessages.length,
-            sessionId: Date.now().toString(),
-            userAgent: navigator.userAgent,
-            ...metadata
-          }
-        }
+        user_id: this.currentUser.sub,
+        messages: messages.map(msg => ({
+          id: msg.id,
+          type: msg.type,
+          content: msg.content,
+          timestamp: msg.timestamp || new Date().toISOString(),
+          resources: msg.resources || []
+        }))
       };
 
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
-      console.log('Conversation saved successfully to Neon:', result);
-      
-      this.cachedConversations = null;
-      
+      console.log('✅ Conversation saved successfully');
       return result;
+
     } catch (error) {
-      console.error('Failed to save conversation to Neon:', error);
+      console.error('❌ Failed to save conversation to Neon:', error);
       throw new Error(`Failed to save conversation: ${error.message}`);
     }
   }
 
-  /**
-   * Load all conversations from Neon database
-   */
-  async loadConversations(useCache = true) {
-    if (!this.isInitialized) {
-      console.warn('NeonService not initialized, returning empty array');
-      return [];
-    }
-
-    if (useCache && this.cachedConversations) {
-      console.log('Returning cached conversations:', this.cachedConversations.length);
-      return this.cachedConversations;
-    }
-
-    console.log('Loading conversations from Neon for user:', this.userId);
-    
+  // Load conversations from Neon database
+  async loadConversations() {
     try {
+      console.log('📥 Loading conversations from Neon database...');
+
+      const payload = {
+        action: 'load_conversations',
+        user_id: this.currentUser.sub
+      };
+
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         method: 'POST',
-        body: JSON.stringify({
-          action: 'get_conversations'
-        })
+        body: JSON.stringify(payload)
       });
 
-      console.log(`Loaded ${result.total || 0} conversations from Neon`);
-      
-      const messages = this.conversationsToMessages(result.conversations || []);
-      
-      this.cachedConversations = messages;
-      
+      const messages = result.messages || [];
+      console.log(`✅ Loaded ${messages.length} messages from Neon database`);
+
       return messages;
+
     } catch (error) {
-      console.error('Failed to load conversations from Neon:', error);
+      console.error('❌ Failed to load conversations from Neon:', error);
       
-      if (error.message.includes('Authentication failed') || error.message.includes('401')) {
-        console.warn('Authentication required for loading conversations');
-        return [];
-      }
-      
-      console.warn('Returning empty conversations due to error:', error.message);
+      // Return empty array instead of throwing - allows app to continue
+      console.log('📝 Returning empty conversation history due to load error');
       return [];
     }
   }
 
-  /**
-   * Delete all conversations from Neon database
-   */
-  async clearConversations() {
-    if (!this.isInitialized) {
-      throw new Error('NeonService not initialized');
-    }
-
-    console.log('Clearing all conversations from Neon for user:', this.userId);
-    
-    try {
-      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'clear_conversations'
-        })
-      });
-
-      console.log('All conversations cleared successfully from Neon');
-      
-      this.cachedConversations = null;
-      
-      return result;
-    } catch (error) {
-      console.error('Failed to clear conversations from Neon:', error);
-      throw new Error(`Failed to clear conversations: ${error.message}`);
-    }
-  }
-
-  /**
-   * Auto-save current conversation with debouncing
-   */
-  async autoSaveConversation(messages, metadata = {}) {
-    if (!this.isInitialized || !messages || messages.length === 0) {
-      return;
-    }
-
-    if (this.autoSaveTimeout) {
-      clearTimeout(this.autoSaveTimeout);
-    }
-
-    this.autoSaveTimeout = setTimeout(async () => {
-      try {
-        const nonWelcomeMessages = messages.filter(msg => {
-          const msgType = msg.type || msg.role;
-          return !(msgType === 'ai' && msg.content.includes('Welcome to AcceleraQA'));
-        });
-
-        if (nonWelcomeMessages.length >= 2) {
-          console.log('Auto-saving conversation to Neon...');
-          await this.saveConversation(messages, {
-            ...metadata,
-            autoSaved: true,
-            autoSaveTime: new Date().toISOString()
-          });
-        }
-      } catch (error) {
-        console.warn('Auto-save to Neon failed:', error);
-      }
-    }, 3000);
-  }
-
-  /**
-   * Convert server conversation format to client message format
-   */
-  conversationsToMessages(conversations) {
-    if (!Array.isArray(conversations)) {
-      return [];
-    }
-
-    const allMessages = conversations.flatMap(conversation =>
-      (conversation.messages || []).map(msg => ({
-        ...msg,
-        type: msg.type === 'assistant' ? 'ai' : msg.type,
-        isStored: true,
-        isCurrent: false,
-        conversationId: conversation.id,
-        conversationCreated: conversation.created_at,
-        ragUsed: conversation.used_rag || false,
-        ragDocuments: conversation.rag_documents_referenced || []
-      }))
-    );
-
-    allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-    console.log(`Converted ${conversations.length} conversations to ${allMessages.length} messages`);
-    return allMessages;
-  }
-
-  /**
-   * Extract topics from messages for metadata
-   */
-  extractTopics(messages) {
-    const topics = new Set();
-    
-    messages.forEach(msg => {
-      const msgType = msg.type || msg.role;
-      if (msgType === 'user' && msg.content) {
-        const content = msg.content.toLowerCase();
-        
-        const pharmaTopics = [
-          'gmp', 'gcp', 'glp', 'validation', 'capa', 'fda', 'ich', 
-          'regulatory', 'compliance', 'quality', 'manufacturing',
-          'clinical', 'laboratory', 'cfr', 'part 11', 'audit'
-        ];
-        
-        pharmaTopics.forEach(topic => {
-          if (content.includes(topic)) {
-            topics.add(topic.toUpperCase());
-          }
-        });
-      }
-    });
-    
-    return Array.from(topics);
-  }
-
-  /**
-   * Training resources management
-   */
-  async addTrainingResource(resource) {
-    try {
-      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'add_training_resource',
-          data: resource
-        })
-      });
-      return result.resource;
-    } catch (error) {
-      console.error('Failed to add training resource:', error);
-      throw error;
-    }
-  }
-
-  async getTrainingResources() {
-    try {
-      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'get_training_resources' })
-      });
-      return result.resources || [];
-    } catch (error) {
-      console.error('Failed to load training resources:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Load overall system status information
-   */
-  async getSystemStatus() {
-    try {
-      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'get_system_status' })
-      });
-      return result.status || {};
-    } catch (error) {
-      console.error('Failed to load system status:', error);
-      return {};
-    }
-  }
-
-  /**
-   * Check if the service is available
-   */
-  async isServiceAvailable() {
-    try {
-      console.log('Checking Neon service availability...');
-
-      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'health_check'
-        })
-      });
-
-      console.log('Neon service is available');
-      return { ok: true };
-    } catch (error) {
-      console.warn('Neon service not available:', error.message);
-      return { ok: false, error: error.message };
-    }
-  }
-
-  /**
-   * Get conversation statistics including RAG usage
-   */
+  // Get conversation statistics
   async getConversationStats() {
-    if (!this.isInitialized) {
-      return this.getEmptyStats();
-    }
+    try {
+      const payload = {
+        action: 'get_stats',
+        user_id: this.currentUser.sub
+      };
 
+      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      return result.stats || {};
+
+    } catch (error) {
+      console.error('❌ Failed to get conversation stats:', error);
+      return {
+        total_messages: 0,
+        total_conversations: 0,
+        last_activity: null
+      };
+    }
+  }
+
+  // Delete conversations
+  async deleteConversations() {
+    try {
+      console.log('🗑️ Deleting all conversations...');
+
+      const payload = {
+        action: 'delete_conversations',
+        user_id: this.currentUser.sub
+      };
+
+      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      console.log('✅ Conversations deleted successfully');
+      return result;
+
+    } catch (error) {
+      console.error('❌ Failed to delete conversations:', error);
+      throw new Error(`Failed to delete conversations: ${error.message}`);
+    }
+  }
+
+  // Health check
+  async healthCheck() {
     try {
       const result = await this.makeAuthenticatedRequest(this.apiUrl, {
         method: 'POST',
         body: JSON.stringify({
-          action: 'get_stats'
+          action: 'health_check',
+          user_id: this.currentUser.sub
         })
       });
 
-      return result.stats || this.getEmptyStats();
+      return {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        ...result
+      };
+
     } catch (error) {
-      console.error('Failed to get conversation stats from Neon:', error);
-      return this.getEmptyStats();
+      return {
+        status: 'unhealthy',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
     }
   }
 
-  /**
-   * Get empty stats object
-   */
-  getEmptyStats() {
-    return {
-      totalConversations: 0,
-      totalMessages: 0,
-      ragConversations: 0,
-      ragUsagePercentage: 0,
-      oldestConversation: null,
-      newestConversation: null,
-    };
-  }
+  // Batch operations for performance
+  async batchSaveMessages(messageGroups) {
+    try {
+      console.log(`💾 Batch saving ${messageGroups.length} message groups...`);
 
-  /**
-   * Get cache status
-   */
-  getCacheStatus() {
-    return {
-      isInitialized: this.isInitialized,
-      userId: this.userId,
-      hasCachedConversations: !!this.cachedConversations,
-      cachedMessageCount: this.cachedConversations?.length || 0,
-      lastCacheTime: this.lastCacheTime || null
-    };
-  }
+      const payload = {
+        action: 'batch_save',
+        user_id: this.currentUser.sub,
+        message_groups: messageGroups
+      };
 
-  /**
-   * Cleanup method
-   */
-  cleanup() {
-    if (this.autoSaveTimeout) {
-      clearTimeout(this.autoSaveTimeout);
-      this.autoSaveTimeout = null;
+      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      console.log('✅ Batch save completed successfully');
+      return result;
+
+    } catch (error) {
+      console.error('❌ Batch save failed:', error);
+      throw new Error(`Batch save failed: ${error.message}`);
     }
-    this.cachedConversations = null;
+  }
+
+  // Get current user
+  getCurrentUser() {
+    return this.currentUser;
+  }
+
+  // Check initialization status
+  isServiceInitialized() {
+    return this.isInitialized;
+  }
+
+  // Reset service
+  reset() {
     this.isInitialized = false;
-    this.userId = null;
+    this.currentUser = null;
+    console.log('🔄 Neon service reset');
   }
 }
 
+// Create and export singleton instance
 const neonService = new NeonService();
 
+// Helper function to initialize the service
+export const initializeNeonService = async (user) => {
+  return await neonService.initialize(user);
+};
+
+// Helper function to load conversations
+export const loadConversations = async () => {
+  return await neonService.loadConversations();
+};
+
 export default neonService;
-
-// Export convenience functions
-export const initializeNeonService = (user) => 
-  neonService.initialize(user);
-
-export const saveConversation = (messages, metadata) => 
-  neonService.saveConversation(messages, metadata);
-
-export const loadConversations = (useCache = true) => 
-  neonService.loadConversations(useCache);
-
-export const clearConversations = () => 
-  neonService.clearConversations();
-
-export const autoSaveConversation = (messages, metadata) => 
-  neonService.autoSaveConversation(messages, metadata);
-
-export const getConversationStats = () =>
-  neonService.getConversationStats();
-
-export const getSystemStatus = () =>
-  neonService.getSystemStatus();
-
-export const isServiceAvailable = () =>
-  neonService.isServiceAvailable();
