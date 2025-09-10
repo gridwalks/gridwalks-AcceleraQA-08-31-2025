@@ -240,6 +240,8 @@ class AuthService {
           returnTo: AUTH0_CONFIG.LOGOUT_URI
         }
       });
+      // Ensure the browser returns to the landing page after logging out
+      window.location.assign(AUTH0_CONFIG.LOGOUT_URI);
     } catch (error) {
       console.error('Logout error:', error);
       throw new Error('Failed to logout');
