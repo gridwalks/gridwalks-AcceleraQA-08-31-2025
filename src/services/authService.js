@@ -217,6 +217,15 @@ class AuthService {
   }
 
   async logout() {
+    // Ensure the Auth0 client is initialized before attempting logout
+    if (!this.auth0Client) {
+      try {
+        await this.initialize();
+      } catch (initError) {
+        console.error('Auth0 initialization failed during logout:', initError);
+      }
+    }
+
     if (!this.auth0Client) {
       throw new Error('Auth0 client not initialized');
     }
@@ -225,7 +234,7 @@ class AuthService {
       // Clear cached token
       this.cachedToken = null;
       this.tokenExpiry = null;
-      
+
       await this.auth0Client.logout({
         logoutParams: {
           returnTo: AUTH0_CONFIG.LOGOUT_URI
