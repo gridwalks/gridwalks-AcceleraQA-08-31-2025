@@ -12,7 +12,11 @@ import AuthScreen from './components/AuthScreen';
 
 // Services
 import learningSuggestionsService from './services/learningSuggestionsService';
+
 import { AUTH0_CONFIG } from './config/constants';
+
+import neonService, { initializeNeonService } from './services/neonService';
+
 
 function App() {
   const { isAuthenticated, user, getAccessTokenSilently } = useAuth0();
@@ -87,7 +91,7 @@ function App() {
   // Load learning configuration
   const loadLearningConfig = async () => {
     try {
-      const config = await learningSuggestionsService.getAdminConfig();
+      const config = await learningSuggestionsService.getAdminConfig(user.sub);
       setLearningConfig((prev) => ({ ...prev, ...config }));
     } catch (err) {
       console.error('Error loading learning config:', err);
@@ -98,6 +102,7 @@ function App() {
   const loadConversations = async () => {
     if (!isAuthenticated || !user) return;
     try {
+
       let token = null;
       try {
         token = await getAccessTokenSilently({
@@ -118,17 +123,25 @@ function App() {
       const res = await fetch('/.netlify/functions/neon-db', {
         method: 'POST',
         headers,
+
+      const result = await neonService.makeAuthenticatedRequest('/.netlify/functions/neon-db', {
+        method: 'POST',
+
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-user-id': user.sub
+        },
+
+
         body: JSON.stringify({
           action: 'get_conversations',
           userId: user.sub
         })
       });
-      if (res.ok) {
-        const result = await res.json();
-        setConversations(result.conversations || []);
-        if (result.conversations?.length > 0 && learningSuggestions.length === 0) {
-          setTimeout(() => loadLearningSuggestions(user.sub), 1000);
-        }
+      setConversations(result.conversations || []);
+      if (result.conversations?.length > 0 && learningSuggestions.length === 0) {
+        setTimeout(() => loadLearningSuggestions(user.sub), 1000);
       }
     } catch (err) {
       console.error('Error loading conversations:', err);
@@ -139,6 +152,7 @@ function App() {
   const saveConversation = async (msgs, conversationId = null, isNewConversation = false) => {
     if (!isAuthenticated || !user || msgs.length === 0) return null;
     try {
+
       let token = null;
       try {
         token = await getAccessTokenSilently({
@@ -159,6 +173,17 @@ function App() {
       const response = await fetch('/.netlify/functions/neon-db', {
         method: 'POST',
         headers,
+
+      await neonService.makeAuthenticatedRequest('/.netlify/functions/neon-db', {
+        method: 'POST',
+
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-user-id': user.sub
+        },
+
+
         body: JSON.stringify({
           action: conversationId ? 'update_conversation' : 'save_conversation',
           userId: user.sub,
@@ -166,9 +191,7 @@ function App() {
           data: { messages: msgs, metadata: { ragEnabled, lastUpdated: new Date().toISOString() } }
         })
       });
-      if (response.ok) {
-        await loadConversations();
-      }
+      await loadConversations();
     } catch (err) {
       console.error('Error saving conversation:', err);
     }
@@ -177,6 +200,7 @@ function App() {
   // Sync on authentication
   useEffect(() => {
     if (isAuthenticated && user) {
+      initializeNeonService(user);
       loadLearningConfig().then(() => loadLearningSuggestions(user.sub));
       loadConversations();
     } else {

@@ -409,6 +409,22 @@ class NeonService {
   }
 
   /**
+   * Load overall system status information
+   */
+  async getSystemStatus() {
+    try {
+      const result = await this.makeAuthenticatedRequest(this.apiUrl, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'get_system_status' })
+      });
+      return result.status || {};
+    } catch (error) {
+      console.error('Failed to load system status:', error);
+      return {};
+    }
+  }
+
+  /**
    * Check if the service is available
    */
   async isServiceAvailable() {
@@ -516,6 +532,9 @@ export const autoSaveConversation = (messages, metadata) =>
 
 export const getConversationStats = () =>
   neonService.getConversationStats();
+
+export const getSystemStatus = () =>
+  neonService.getSystemStatus();
 
 export const isServiceAvailable = () =>
   neonService.isServiceAvailable();
