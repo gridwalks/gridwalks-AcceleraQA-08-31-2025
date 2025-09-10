@@ -3,7 +3,10 @@ import ReactDOM from 'react-dom/client';
 import { Auth0Provider } from '@auth0/auth0-react';
 import './index.css';
 import App from './App';
-import { AUTH0_CONFIG } from './config/constants';
+import { AUTH0_CONFIG, validateEnvironment } from './config/constants';
+
+// Validate required environment configuration before app initialization
+validateEnvironment();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
