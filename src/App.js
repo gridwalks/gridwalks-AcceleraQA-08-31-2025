@@ -86,7 +86,7 @@ function App() {
   // Load learning configuration
   const loadLearningConfig = async () => {
     try {
-      const config = await learningSuggestionsService.getAdminConfig();
+      const config = await learningSuggestionsService.getAdminConfig(user.sub);
       setLearningConfig((prev) => ({ ...prev, ...config }));
     } catch (err) {
       console.error('Error loading learning config:', err);
@@ -102,7 +102,8 @@ function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          'x-user-id': user.sub
         },
         body: JSON.stringify({
           action: 'get_conversations',
@@ -130,7 +131,8 @@ function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          'x-user-id': user.sub
         },
         body: JSON.stringify({
           action: conversationId ? 'update_conversation' : 'save_conversation',
