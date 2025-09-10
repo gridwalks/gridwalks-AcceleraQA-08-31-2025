@@ -12,6 +12,7 @@ import AuthScreen from './components/AuthScreen';
 
 // Services
 import learningSuggestionsService from './services/learningSuggestionsService';
+import neonService, { initializeNeonService } from './services/neonService';
 
 function App() {
   const { isAuthenticated, user, getAccessTokenSilently } = useAuth0();
@@ -97,25 +98,23 @@ function App() {
   const loadConversations = async () => {
     if (!isAuthenticated || !user) return;
     try {
-      const token = await getAccessTokenSilently();
-      const res = await fetch('/.netlify/functions/neon-db', {
+      const result = await neonService.makeAuthenticatedRequest('/.netlify/functions/neon-db', {
         method: 'POST',
+
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
           'x-user-id': user.sub
         },
+
         body: JSON.stringify({
           action: 'get_conversations',
           userId: user.sub
         })
       });
-      if (res.ok) {
-        const result = await res.json();
-        setConversations(result.conversations || []);
-        if (result.conversations?.length > 0 && learningSuggestions.length === 0) {
-          setTimeout(() => loadLearningSuggestions(user.sub), 1000);
-        }
+      setConversations(result.conversations || []);
+      if (result.conversations?.length > 0 && learningSuggestions.length === 0) {
+        setTimeout(() => loadLearningSuggestions(user.sub), 1000);
       }
     } catch (err) {
       console.error('Error loading conversations:', err);
@@ -126,14 +125,15 @@ function App() {
   const saveConversation = async (msgs, conversationId = null, isNewConversation = false) => {
     if (!isAuthenticated || !user || msgs.length === 0) return null;
     try {
-      const token = await getAccessTokenSilently();
-      const response = await fetch('/.netlify/functions/neon-db', {
+      await neonService.makeAuthenticatedRequest('/.netlify/functions/neon-db', {
         method: 'POST',
+
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
           'x-user-id': user.sub
         },
+
         body: JSON.stringify({
           action: conversationId ? 'update_conversation' : 'save_conversation',
           userId: user.sub,
@@ -141,9 +141,7 @@ function App() {
           data: { messages: msgs, metadata: { ragEnabled, lastUpdated: new Date().toISOString() } }
         })
       });
-      if (response.ok) {
-        await loadConversations();
-      }
+      await loadConversations();
     } catch (err) {
       console.error('Error saving conversation:', err);
     }
@@ -152,6 +150,7 @@ function App() {
   // Sync on authentication
   useEffect(() => {
     if (isAuthenticated && user) {
+      initializeNeonService(user);
       loadLearningConfig().then(() => loadLearningSuggestions(user.sub));
       loadConversations();
     } else {
