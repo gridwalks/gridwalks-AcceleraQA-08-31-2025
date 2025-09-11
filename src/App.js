@@ -11,7 +11,6 @@ import neonService from './services/neonService';
 import { initializeAuth, logout, validateEnvironment, getUser } from './services/authService';
 import { hasAdminRole } from './utils/auth';
 import { mergeCurrentAndStoredMessages, validateAndRepairMessages } from './utils/messageUtils';
-import './App.css';
 
 // Default resources that appear when no conversation history
 const DEFAULT_RESOURCES = [
