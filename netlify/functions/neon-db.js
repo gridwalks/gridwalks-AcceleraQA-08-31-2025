@@ -41,8 +41,16 @@ const verifyToken = (token) => {
       return reject(new Error(`Invalid JWT format - expected 3 parts, got ${parts.length}`));
     }
 
+    // Log expected audience and token audience before verification
+    const expectedAudience = process.env.AUTH0_AUDIENCE;
+    console.log('🎯 Expected audience:', expectedAudience);
+    const predecoded = jwt.decode(token, { complete: true });
+    if (predecoded && predecoded.payload && predecoded.payload.aud) {
+      console.log('👀 Token audience (unverified):', predecoded.payload.aud);
+    }
+
     jwt.verify(token, getKey, {
-      audience: process.env.AUTH0_AUDIENCE,
+      audience: expectedAudience,
       issuer: `https://${process.env.AUTH0_DOMAIN}/`,
       algorithms: ['RS256']
     }, (err, decoded) => {
@@ -51,6 +59,10 @@ const verifyToken = (token) => {
         reject(err);
       } else {
         console.log('✅ JWT verified successfully for user:', decoded.sub);
+        console.log('🔐 Verified token audience:', decoded.aud);
+        if (decoded.aud !== expectedAudience) {
+          console.warn(`⚠️ Audience mismatch: expected ${expectedAudience}, got ${decoded.aud}`);
+        }
         resolve(decoded);
       }
     });
