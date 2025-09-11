@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, Settings, FileText, Users, BarChart3, HelpCircle, User, LogOut, RefreshCw } from 'lucide-react';
 import ChatArea from './components/ChatArea';
+import EmergencyDiagnostic from './components/EmergencyDiagnostic';
 import Sidebar from './components/Sidebar';
 import AdminScreen from './components/AdminScreen';
 import EvaluationModal from './components/EvaluationModal';
@@ -11,6 +12,8 @@ import neonService from './services/neonService';
 import { initializeAuth, login, logout, validateEnvironment } from './services/authService';
 import { hasAdminRole } from './utils/auth';
 import { mergeCurrentAndStoredMessages, validateAndRepairMessages } from './utils/messageUtils';
+
+const SHOW_DIAGNOSTIC = process.env.REACT_APP_SHOW_DIAGNOSTIC === 'true';
 
 // Default resources that appear when no conversation history
 const DEFAULT_RESOURCES = [
@@ -32,6 +35,9 @@ const DEFAULT_RESOURCES = [
 ];
 
 function App() {
+  if (SHOW_DIAGNOSTIC) {
+    return <EmergencyDiagnostic />;
+  }
   // Authentication and user state
   const [user, setUser] = useState(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
