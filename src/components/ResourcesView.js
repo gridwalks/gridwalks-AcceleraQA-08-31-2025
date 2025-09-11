@@ -16,12 +16,18 @@ import {
   Award
 } from 'lucide-react';
 import learningSuggestionsService from '../services/learningSuggestionsService';
+import { getToken } from '../services/authService';
 
 const ResourcesView = ({ user, learningSuggestions = [], onRefreshSuggestions }) => {
   const [activeTab, setActiveTab] = useState('ai-suggestions');
   const [suggestions, setSuggestions] = useState(learningSuggestions);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
+
+  // Ensure the service can obtain auth tokens
+  useEffect(() => {
+    learningSuggestionsService.setTokenProvider(getToken);
+  }, []);
 
   // Static learning resources
   const staticResources = [
