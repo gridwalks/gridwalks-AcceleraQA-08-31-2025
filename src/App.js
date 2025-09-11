@@ -8,7 +8,7 @@ import AdminScreen from './components/AdminScreen';
 import EvaluationModal from './components/EvaluationModal';
 import openaiService from './services/openaiService';
 import neonService from './services/neonService';
-import { initializeAuth, logout, validateEnvironment, getUser } from './services/authService';
+import { initializeAuth, login, logout, validateEnvironment } from './services/authService';
 import { hasAdminRole } from './utils/auth';
 import { mergeCurrentAndStoredMessages, validateAndRepairMessages } from './utils/messageUtils';
 
@@ -374,7 +374,7 @@ function App() {
               Your AI-powered pharmaceutical quality and compliance assistant
             </p>
             <button
-              onClick={() => initializeAuth(setUser, setIsLoadingAuth)}
+              onClick={login}
               className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
               Sign In to Continue
