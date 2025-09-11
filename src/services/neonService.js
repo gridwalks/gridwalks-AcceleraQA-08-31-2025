@@ -149,6 +149,11 @@ class NeonService {
 
   // Load conversations from Neon database
   async loadConversations() {
+    if (!this.isInitialized || !this.currentUser) {
+      console.error('❌ Neon service not properly initialized for loadConversations');
+      return [];
+    }
+
     try {
       console.log('📥 Loading conversations from Neon database...');
 
