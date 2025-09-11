@@ -4,6 +4,11 @@ const { neon } = require('@neondatabase/serverless');
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 
+const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE;
+if (!AUTH0_AUDIENCE) {
+  throw new Error('AUTH0_AUDIENCE environment variable is not set');
+}
+
 // CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,7 +55,9 @@ const verifyToken = (token) => {
     }
 
     jwt.verify(token, getKey, {
-      audience: expectedAudience,
+
+      audience: AUTH0_AUDIENCE,
+
       issuer: `https://${process.env.AUTH0_DOMAIN}/`,
       algorithms: ['RS256']
     }, (err, decoded) => {
