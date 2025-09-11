@@ -1,11 +1,11 @@
 // src/components/AdminScreen.js - ENHANCED WITH LEARNING CENTER CONFIG
 import React, { useState, useEffect } from 'react';
-import { 
-  Settings, 
-  Database, 
-  Users, 
-  Activity, 
-  Shield, 
+import {
+  Settings,
+  Database,
+  Users,
+  Activity,
+  Shield,
   AlertTriangle,
   Save,
   RefreshCw,
@@ -19,6 +19,7 @@ import {
   Lock,
   Unlock
 } from 'lucide-react';
+import RAGConfigurationPage from './RAGConfigurationPage';
 import learningSuggestionsService from '../services/learningSuggestionsService';
 import neonService from '../services/neonService';
 import { getToken } from '../services/authService';
@@ -119,6 +120,7 @@ const AdminScreen = ({ user, onClose }) => {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Activity },
+    { id: 'rag', label: 'RAG Config', icon: Sliders },
     { id: 'learning', label: 'Learning Center', icon: Brain },
     { id: 'models', label: 'AI Models', icon: Zap },
     { id: 'database', label: 'Database', icon: Database },
@@ -629,6 +631,10 @@ const AdminScreen = ({ user, onClose }) => {
     </div>
   );
 
+  const renderRAGConfig = () => (
+    <RAGConfigurationPage user={user} onClose={() => setActiveTab('overview')} />
+  );
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
@@ -680,6 +686,7 @@ const AdminScreen = ({ user, onClose }) => {
             )}
 
             {activeTab === 'overview' && renderOverview()}
+            {activeTab === 'rag' && renderRAGConfig()}
             {activeTab === 'learning' && renderLearningCenter()}
             {activeTab === 'models' && renderAIModels()}
             {activeTab === 'database' && renderDatabase()}
