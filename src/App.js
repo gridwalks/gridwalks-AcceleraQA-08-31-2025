@@ -388,9 +388,9 @@ function App() {
   // Admin screen
   if (showAdmin) {
     return (
-      <AdminScreen 
-        user={user} 
-        onBack={handleCloseAdmin}
+      <AdminScreen
+        user={user}
+        onClose={handleCloseAdmin}
       />
     );
   }

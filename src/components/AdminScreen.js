@@ -1,6 +1,5 @@
 // src/components/AdminScreen.js - ENHANCED WITH LEARNING CENTER CONFIG
 import React, { useState, useEffect } from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
 import { 
   Settings, 
   Database, 
@@ -22,11 +21,11 @@ import {
 } from 'lucide-react';
 import learningSuggestionsService from '../services/learningSuggestionsService';
 import neonService from '../services/neonService';
+import { getToken } from '../services/authService';
 
-const AdminScreen = ({ onClose }) => {
-  const { user, getAccessTokenSilently } = useAuth0();
+const AdminScreen = ({ user, onClose }) => {
   // Ensure the learning suggestions service can obtain tokens
-  learningSuggestionsService.setTokenProvider(getAccessTokenSilently);
+  learningSuggestionsService.setTokenProvider(getToken);
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(false);
   const [systemStatus, setSystemStatus] = useState({});
@@ -53,7 +52,7 @@ const AdminScreen = ({ onClose }) => {
       setSystemStatus(status);
 
       // Load system health status
-      const token = await getAccessTokenSilently();
+      const token = await getToken();
       const response = await fetch('/.netlify/functions/neon-db', {
         method: 'POST',
         headers: {
