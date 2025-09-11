@@ -215,7 +215,7 @@ const AdminScreen = ({ user, onClose }) => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-900 mb-2">
                   Number of Recent Chats to Analyze
                 </label>
                 <input
@@ -227,7 +227,7 @@ const AdminScreen = ({ user, onClose }) => {
                     ...prev,
                     learningChatCount: parseInt(e.target.value)
                   }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Recommended: 5-10 conversations for optimal analysis
@@ -235,7 +235,7 @@ const AdminScreen = ({ user, onClose }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-900 mb-2">
                   Maximum Suggestions to Generate
                 </label>
                 <input
@@ -247,7 +247,7 @@ const AdminScreen = ({ user, onClose }) => {
                     ...prev,
                     maxSuggestions: parseInt(e.target.value)
                   }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Typically 4-6 suggestions work best
@@ -265,7 +265,7 @@ const AdminScreen = ({ user, onClose }) => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-900 mb-2">
                   Learning Suggestions Model
                 </label>
                 <select
@@ -274,7 +274,7 @@ const AdminScreen = ({ user, onClose }) => {
                     ...prev,
                     chatgptModel: e.target.value
                   }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="gpt-4o-mini">GPT-4o Mini (Recommended)</option>
                   <option value="gpt-4o">GPT-4o (Higher Quality)</option>
@@ -286,7 +286,7 @@ const AdminScreen = ({ user, onClose }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-900 mb-2">
                   Cache Timeout (minutes)
                 </label>
                 <input
@@ -298,7 +298,7 @@ const AdminScreen = ({ user, onClose }) => {
                     ...prev,
                     cacheTimeout: parseInt(e.target.value)
                   }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   How long to cache suggestions before regenerating
@@ -317,7 +317,7 @@ const AdminScreen = ({ user, onClose }) => {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">
+                  <label className="text-sm font-medium text-gray-900">
                     Enable AI Learning Suggestions
                   </label>
                   <p className="text-xs text-gray-500">
@@ -343,7 +343,7 @@ const AdminScreen = ({ user, onClose }) => {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">
+                  <label className="text-sm font-medium text-gray-900">
                     Auto-refresh Suggestions
                   </label>
                   <p className="text-xs text-gray-500">
