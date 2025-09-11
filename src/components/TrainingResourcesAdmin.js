@@ -51,46 +51,46 @@ const TrainingResourcesAdmin = () => {
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Name</label>
+          <label className="block text-sm font-medium text-gray-900">Name</label>
           <input
             type="text"
             name="name"
             value={form.name}
             onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            className="mt-1 block w-full rounded-md border-gray-300 text-gray-900 placeholder-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             placeholder="Training title"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">Description</label>
+          <label className="block text-sm font-medium text-gray-900">Description</label>
           <textarea
             name="description"
             value={form.description}
             onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            className="mt-1 block w-full rounded-md border-gray-300 text-gray-900 placeholder-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             rows={3}
             placeholder="Brief description"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">URL</label>
+          <label className="block text-sm font-medium text-gray-900">URL</label>
           <input
             type="url"
             name="url"
             value={form.url}
             onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            className="mt-1 block w-full rounded-md border-gray-300 text-gray-900 placeholder-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             placeholder="https://example.com/training"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">Tag</label>
+          <label className="block text-sm font-medium text-gray-900">Tag</label>
           <input
             type="text"
             name="tag"
             value={form.tag}
             onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            className="mt-1 block w-full rounded-md border-gray-300 text-gray-900 placeholder-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             placeholder="e.g., safety"
           />
         </div>
@@ -117,7 +117,7 @@ const TrainingResourcesAdmin = () => {
               <li key={res.id} className="p-4 border rounded-md">
                 <div className="font-medium">{res.name}</div>
                 {res.tag && (
-                  <span className="inline-block text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded mt-1">{res.tag}</span>
+                  <span className="inline-block text-xs bg-gray-200 text-gray-900 px-2 py-0.5 rounded mt-1">{res.tag}</span>
                 )}
                 {res.description && <p className="text-sm text-gray-500">{res.description}</p>}
                 {res.url && (

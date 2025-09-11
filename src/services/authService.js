@@ -2,7 +2,20 @@
 
 import { createAuth0Client } from '@auth0/auth0-spa-js';
 
-let auth0Client = null;
+// Exported so tests can mock the client and isAuthenticated function
+export let auth0Client = null;
+export let isAuthenticated = async () => {
+  if (!auth0Client) {
+    return false;
+  }
+
+  try {
+    return await auth0Client.isAuthenticated();
+  } catch (error) {
+    console.error('❌ Failed to check authentication:', error);
+    return false;
+  }
+};
 
 // Initialize Auth0 client
 export const initializeAuth = async (setUser, setIsLoadingAuth, onSuccess) => {
@@ -49,12 +62,12 @@ export const initializeAuth = async (setUser, setIsLoadingAuth, onSuccess) => {
       }
     }
 
-    // Check if user is authenticated
-    const isAuthenticated = await auth0Client.isAuthenticated();
-    console.log('🔍 Authentication status:', isAuthenticated);
+    // Check if user is authenticated and load profile with roles
+    const authenticated = await isAuthenticated();
+    console.log('🔍 Authentication status:', authenticated);
 
-    if (isAuthenticated) {
-      const user = await auth0Client.getUser();
+    if (authenticated) {
+      const user = await getUser();
       console.log('👤 Authenticated user:', user?.sub);
       setUser(user);
       if (onSuccess) onSuccess();
@@ -183,32 +196,27 @@ export const getUser = async () => {
   }
 
   try {
-    const isAuthenticated = await auth0Client.isAuthenticated();
-    if (!isAuthenticated) {
+    const authenticated = await isAuthenticated();
+    if (!authenticated) {
       return null;
     }
 
-    return await auth0Client.getUser();
+    const [user, claims] = await Promise.all([
+      auth0Client.getUser(),
+      auth0Client.getIdTokenClaims()
+    ]);
+
+    const claimName = process.env.REACT_APP_AUTH0_ROLES_CLAIM;
+    const roles = claimName && Array.isArray(claims?.[claimName])
+      ? claims[claimName]
+      : [];
+
+    return { ...user, roles };
   } catch (error) {
     console.error('❌ Failed to get user:', error);
     return null;
   }
 };
-
-// Check if user is authenticated
-export const isAuthenticated = async () => {
-  if (!auth0Client) {
-    return false;
-  }
-
-  try {
-    return await auth0Client.isAuthenticated();
-  } catch (error) {
-    console.error('❌ Failed to check authentication:', error);
-    return false;
-  }
-};
-
 // Validate environment setup
 export const validateEnvironment = () => {
   const required = [
@@ -238,20 +246,31 @@ export const logoutUser = logout;
 export const loginUser = login;
 export const getAccessToken = getToken;
 export const getUserProfile = getUser;
-export const checkAuth = isAuthenticated;
-export const checkAuthentication = isAuthenticated;
+export const checkAuth = (...args) => isAuthenticated(...args);
+export const checkAuthentication = (...args) => isAuthenticated(...args);
 export const initAuth = initializeAuth;
 export const setupAuth = initializeAuth;
 
 // Default export for compatibility
 const authService = {
+  get auth0Client() {
+    return auth0Client;
+  },
+  set auth0Client(client) {
+    auth0Client = client;
+  },
+  get isAuthenticated() {
+    return isAuthenticated;
+  },
+  set isAuthenticated(fn) {
+    isAuthenticated = fn;
+  },
   initializeAuth,
   login,
   logout,
   getToken,
   getTokenInfo,
   getUser,
-  isAuthenticated,
   validateEnvironment,
   handleLogin: login,
   handleLogout: logout,
@@ -262,8 +281,8 @@ const authService = {
   loginUser: login,
   getAccessToken: getToken,
   getUserProfile: getUser,
-  checkAuth: isAuthenticated,
-  checkAuthentication: isAuthenticated,
+  checkAuth: (...args) => isAuthenticated(...args),
+  checkAuthentication: (...args) => isAuthenticated(...args),
   initAuth: initializeAuth,
   setupAuth: initializeAuth
 };
