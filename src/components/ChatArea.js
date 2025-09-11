@@ -27,8 +27,7 @@ const EmergencyDiagnostic = () => {
     const envVars = {
       AUTH0_DOMAIN: process.env.REACT_APP_AUTH0_DOMAIN,
       AUTH0_CLIENT_ID: process.env.REACT_APP_AUTH0_CLIENT_ID,
-      OPENAI_API_KEY: process.env.REACT_APP_OPENAI_API_KEY,
-      NEON_DATABASE_URL: process.env.REACT_APP_NEON_DATABASE_URL
+      OPENAI_API_KEY: process.env.REACT_APP_OPENAI_API_KEY
     };
 
     const missingVars = Object.entries(envVars).filter(([key, value]) => !value);
@@ -75,20 +74,16 @@ const EmergencyDiagnostic = () => {
 
     // 5. Test Neon Database
     try {
-      if (envVars.NEON_DATABASE_URL) {
-        const response = await fetch('/.netlify/functions/neon-db', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'test' })
-        });
-        
-        if (response.ok) {
-          updateCheck('neon', 'success', 'Neon Database accessible ✓');
-        } else {
-          updateCheck('neon', 'warning', `Neon responding but status: ${response.status}`);
-        }
+      const response = await fetch('/.netlify/functions/neon-db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'test' })
+      });
+
+      if (response.ok) {
+        updateCheck('neon', 'success', 'Neon Database accessible ✓');
       } else {
-        updateCheck('neon', 'error', 'Neon database URL not configured');
+        updateCheck('neon', 'warning', `Neon responding but status: ${response.status}`);
       }
     } catch (error) {
       updateCheck('neon', 'error', `Neon database error: ${error.message}`);
