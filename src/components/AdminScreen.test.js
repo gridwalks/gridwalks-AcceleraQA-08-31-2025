@@ -63,7 +63,7 @@ describe('AdminScreen navigation', () => {
     const user = { roles: ['admin'] };
 
     await act(async () => {
-      ReactDOM.render(<AdminScreen user={user} onBack={() => {}} />, container);
+      ReactDOM.render(<AdminScreen user={user} onClose={() => {}} />, container);
     });
 
     const ragButton = Array.from(container.querySelectorAll('button')).find(btn =>

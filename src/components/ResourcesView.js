@@ -1,6 +1,5 @@
 // src/components/ResourcesView.js - ENHANCED WITH AI LEARNING SUGGESTIONS
 import React, { useState, useEffect } from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
 import { 
   BookOpen, 
   ExternalLink, 
@@ -18,8 +17,7 @@ import {
 } from 'lucide-react';
 import learningSuggestionsService from '../services/learningSuggestionsService';
 
-const ResourcesView = ({ learningSuggestions = [], onRefreshSuggestions }) => {
-  const { user, isAuthenticated } = useAuth0();
+const ResourcesView = ({ user, learningSuggestions = [], onRefreshSuggestions }) => {
   const [activeTab, setActiveTab] = useState('ai-suggestions');
   const [suggestions, setSuggestions] = useState(learningSuggestions);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -73,7 +71,7 @@ const ResourcesView = ({ learningSuggestions = [], onRefreshSuggestions }) => {
   }, [learningSuggestions]);
 
   const handleRefreshSuggestions = async () => {
-    if (!isAuthenticated || !user) return;
+    if (!user) return;
 
     setIsLoadingSuggestions(true);
     try {
